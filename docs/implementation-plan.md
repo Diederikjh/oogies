@@ -49,7 +49,8 @@ timestamps.
   [human getting-started guide](../GETTING_STARTED.md) and detailed
   [agent setup guide](../GETTING_STARTED_AGENTS.md) current in each milestone.
 - Keep credentials in the existing private backend file, including the confirmed
-  16-character login rule and the complete verification code.
+  16-character login rule for the original installation and the complete
+  verification code. Make that login policy explicit for other installations.
 - Keep the frontend without a login for now and make the eventual viewer
   available on the home LAN. Backend access provides camera access; browsers
   need not connect directly to the NVR.
@@ -102,6 +103,16 @@ Use Python for the HTTP API, configuration, viewer-session management and job
 coordination. Keep native SDK calls, decoder callbacks and video buffers in a
 C++ bridge. Evolve the bounded probe into a persistent worker that accepts
 commands and returns results, reusing the recorder connection across operations.
+
+Owner settings, including NVR IP/SDK port/timezone, belong in ignored
+`.local/nvr-config.json`; credentials remain separate. Support other Hikvision
+recorders through one small adapter and deterministic, versioned SDK profiles.
+Make the login-password truncation policy explicit rather than universal. Keep
+native dependencies isolated behind a stable worker contract and report
+per-feature capabilities. Implement the current profile first; add another
+implementation when a real device/SDK difference requires it. The
+[compatibility review](recorder-compatibility-review.md) records current coupling,
+the minimal extension points and verification criteria.
 
 Separate frontend navigation, API access, live overview, camera tiles, historical
 view, timeline, playback controls and shared media rendering. Use ordinary

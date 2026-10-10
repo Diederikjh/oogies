@@ -132,6 +132,14 @@ were added while recording this plan.
 
 ## Reproducibility and preservation
 
+The setup guides, agreed milestone order and API proposal were committed as
+`b9c7cca`. A subsequent [recorder compatibility review](docs/recorder-compatibility-review.md)
+assesses readiness for other Hikvision NVRs/SDKs. It confirms `.local/` owner
+configuration and recommends one small adapter with versioned SDK bundles,
+explicit authentication policies and independently reported capabilities.
+Current code remains a single-recorder prototype; no new NVR probes or feature
+implementation were performed for the review.
+
 The service is intended for other owners to clone and run on their own machines.
 The installing user supplies the NVR IP and SDK port in backend configuration,
 with credentials kept separate. The current prototype still hardcodes the
