@@ -360,6 +360,14 @@ Open <http://localhost:8088/>. Starting the server compiles the bridge but does
 not log in to the recorder. **Start live view** starts one SDK session for the
 first reported camera's substream. **Stop** ends that shared camera session.
 
+The **Aspect ratio** selection applies to live and recorded pictures and is
+remembered in this browser. The current camera's 16:9 default is confirmed by the
+owner's Android screenshot. Compare other installations with a known-good view;
+other cameras may require 4:3 or
+Original. See [picture proportions](docs/image-display-aspect.md). After updating
+backend code or mounts, use the launcher to stop/start the service so new Python
+modules and allowed asset routes are loaded.
+
 The current viewer is published only on the local machine. Other LAN computers
 cannot access it yet. Sessions have a ten-minute maximum by default; closing a
 tab does not yet implement the proposed viewer-lease cleanup. The planned

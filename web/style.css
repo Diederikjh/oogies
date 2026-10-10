@@ -8,7 +8,8 @@ nav{display:flex;gap:8px;margin-bottom:18px}button{font:inherit;font-size:14px;b
 button:hover:not(:disabled){background:#283a34}button:focus-visible{outline:2px solid #96e6c1;outline-offset:3px}button:disabled{opacity:.45;cursor:default}
 nav button{border-color:transparent;color:#98afa5;background:transparent}.selected{background:#213a30;color:#abe2c7}
 .viewer{position:relative;background:#070c0b;border:1px solid #2c3d35;border-radius:12px;height:clamp(240px,48vh,500px);overflow:hidden;display:flex;align-items:center;justify-content:center}
-.viewer img,.viewer video{width:100%;height:100%;object-fit:contain}.viewer img{image-rendering:auto}.viewer [hidden]{display:none}
+.viewer img,.viewer video{max-width:100%;max-height:100%;object-fit:fill;flex:none}.viewer img{image-rendering:auto}.viewer [hidden]{display:none}
+.view-options{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:13px;color:#98afa5}.view-options select{font:inherit;color:#d3e1db;background:#1c2926;border:1px solid #344440;border-radius:6px;padding:6px 10px}.view-options select:focus-visible{outline:2px solid #96e6c1;outline-offset:3px}
 #placeholder{text-align:center;color:#8a9e95;padding:30px}#placeholder h2{font-size:20px;font-weight:500;color:#cddcd4;margin:12px 0 8px}.camera-icon{font-size:32px;color:#5f8673}#placeholder p{font-size:14px}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 0}.actions{display:flex;gap:10px}.primary{background:#96dcb9;color:#0f2a1c;border-color:#96dcb9;font-weight:600}.primary:hover:not(:disabled){background:#b2f0d0}
 #metrics,.toolbar>span{font-size:13px;color:#96aaa0}#message,#recording-note{font-size:13px;color:#9dafaa;min-height:20px;margin:0 0 28px}

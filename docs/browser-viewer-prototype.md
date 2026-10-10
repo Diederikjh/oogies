@@ -1,5 +1,9 @@
 # Browser viewing prototype
 
+Update: [picture proportions](image-display-aspect.md) now use a shared frontend
+module with selectable 16:9/4:3/Original display ratios for live and recorded
+views. The encoded dimensions and saved files are unchanged.
+
 Verified on 10 October 2026 using Chromium inside Docker. Historical extraction
 was committed separately as `a123e1f` before this prototype was developed.
 

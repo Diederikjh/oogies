@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Home cameras · Driveway</title>
   <link rel="stylesheet" href="/style.css">
-  <script defer src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </head>
 <body>
   <main>
@@ -13,6 +13,9 @@
       <span class="badge" id="badge">Stopped</span></header>
     <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live view</button>
       <button id="recording-tab" aria-pressed="false">Recorded clip</button></nav>
+    <div class="view-options"><label for="picture-aspect">Aspect ratio</label>
+      <select id="picture-aspect"><option value="16:9">Widescreen (16:9)</option>
+        <option value="4:3">Standard (4:3)</option><option value="original">Original</option></select></div>
     <section id="live-panel" aria-label="Live camera">
       <div class="viewer"><img id="live-image" alt="Live video from the driveway camera" hidden>
         <div id="placeholder"><span class="camera-icon" aria-hidden="true">◉</span><h2>Ready when you are</h2>

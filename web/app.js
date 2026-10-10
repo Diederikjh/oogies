@@ -1,5 +1,24 @@
 "use strict";
+import {MediaDisplay} from "/shared/media-player.js";
+
 const byId = id => document.getElementById(id);
+// Reset choices from the comparison revision once; subsequent choices persist.
+const aspectPreference = "home-cameras.camera-1.display-aspect.v1";
+const displays = [new MediaDisplay(byId("live-image"), byId("live-panel").querySelector(".viewer")),
+                  new MediaDisplay(byId("recording"), byId("recording-panel").querySelector(".viewer"))];
+
+function setPictureAspect(mode, remember = false) {
+  const selected = ["16:9", "4:3", "original"].includes(mode) ? mode : "16:9";
+  byId("picture-aspect").value = selected;
+  for (const display of displays) display.setAspect(selected);
+  if (remember) {
+    try { localStorage.setItem(aspectPreference, selected); } catch (_) {}
+  }
+}
+
+let savedAspect = "16:9";
+try { savedAspect = localStorage.getItem(aspectPreference) || savedAspect; } catch (_) {}
+setPictureAspect(savedAspect);
 let attachedSession = null;
 let pending = false;
 let mode = "live";
@@ -84,5 +103,6 @@ byId("start").addEventListener("click", () => action("start"));
 byId("stop").addEventListener("click", () => action("stop"));
 byId("live-tab").addEventListener("click", () => showMode("live"));
 byId("recording-tab").addEventListener("click", () => showMode("recording"));
+byId("picture-aspect").addEventListener("change", event => setPictureAspect(event.target.value, true));
 refresh();
 setInterval(refresh, 1000);

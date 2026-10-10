@@ -91,4 +91,6 @@ python3 tools/run_hik_sdk.py check --decrypt --historical --skip-search --sdk-lo
 
 Networking was disabled and credentials were not mounted. The loaded SDK was
 6.1.9.48; initialization, decoder key setup and private SDK logging succeeded,
-with `login_calls: 0` and `decoder_error: 0`. Live behavior was not retested.
+with `login_calls: 0` and `decoder_error: 0`. Live behavior was not retested during
+the extraction itself. A subsequent [display-aspect check](image-display-aspect.md)
+verified the real viewer/adapter with one successful live session and cleanup.

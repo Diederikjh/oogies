@@ -255,10 +255,11 @@ class Handler(BaseHTTPRequestHandler):
             self.stream()
         elif path == "/recording.mp4":
             self.file(self.server.recording, "video/mp4", ranged=True)
-        elif path in ("/", "/app.js", "/style.css"):
+        elif path in ("/", "/app.js", "/style.css", "/shared/media-player.js"):
             name, content_type = {"/": ("index.html", "text/html; charset=utf-8"),
                                   "/app.js": ("app.js", "text/javascript"),
-                                  "/style.css": ("style.css", "text/css")}[path]
+                                  "/style.css": ("style.css", "text/css"),
+                                  "/shared/media-player.js": ("shared/media-player.js", "text/javascript")}[path]
             self.file(self.server.web / name, content_type)
         else:
             self.send_error(404)

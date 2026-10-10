@@ -112,6 +112,22 @@ Details and commands: [browser-viewer prototype](docs/browser-viewer-prototype.m
 
 ## Agreed milestone plan
 
+Before grid work, [image proportions](docs/image-display-aspect.md) were inspected
+using existing media. Live frames are 352 × 288; historical frames are 960 × 1088.
+The browser now has a shared media-display module and a 16:9/4:3/Original control
+for both live and recorded views, with a remembered browser preference. It fits
+the whole picture without cropping. The owner confirmed 16:9 matches this
+camera's Hik-Connect view; it is a confirmed display preference, not measured
+stream metadata or a global rule for other cameras.
+Eight Docker Chromium fixture cases and the ten offline unit tests passed.
+Initial correction used saved media only. After the owner supplied a matching
+Android screenshot, the service was relaunched and one brief live session
+confirmed moving frames at 16:9, unchanged 352 × 288 JPEGs and zero size-style
+updates during steady playback. The native report recorded one login, 84 decoded
+frames, 50 JPEGs and zero errors; Stop cleaned up. Recorded playback also showed
+16:9. The server remains available with the camera stopped. A versioned preference
+key clears old comparison choices once; new choices remain remembered.
+
 The first [Python SDK adapter seam](docs/sdk-adapter-seam.md) is implemented.
 One concrete HCNetSDK 6.1.9.48 adapter owns credential normalization, deterministic
 native build locations, launch arguments/stdin/library environment and runtime
@@ -121,7 +137,8 @@ use the shared selector. No plugin framework or second SDK was introduced.
 Ten offline unit tests passed, including a stub adapter with different launch
 settings and an untruncated password. The actual Docker SDK/decoder check also
 passed with private SDK logging enabled, networking disabled, no credentials
-mounted, zero login calls and zero decoder errors. Live behavior was not retested;
+mounted, zero login calls and zero decoder errors. The later aspect-ratio check
+above also verified the adapter with one real live session;
 recorder configuration, camera discovery and persistent per-stream workers remain
 next milestones. The 16-character policy is now assumed to belong to the SDK
 implementation rather than a user-configurable installation override.

@@ -33,6 +33,18 @@ def main():
     def status():
         with urlopen(args.url + "/api/status", timeout=5) as response:
             return json.load(response)
+    def display(element_id):
+        return driver.execute_script("""
+            const media = document.getElementById(arguments[0]);
+            const rect = media.getBoundingClientRect();
+            const viewport = media.parentElement.getBoundingClientRect();
+            return {width:rect.width, height:rect.height, ratio:rect.width/rect.height,
+                source_width:media.naturalWidth || media.videoWidth,
+                source_height:media.naturalHeight || media.videoHeight,
+                selected_ratio:document.getElementById('picture-aspect').value,
+                within_viewport:rect.left >= viewport.left && rect.right <= viewport.right + 1 &&
+                    rect.top >= viewport.top && rect.bottom <= viewport.bottom + 1};
+        """, element_id)
     try:
         driver.set_window_size(1280, 960)
         driver.get(args.url)
@@ -44,6 +56,9 @@ def main():
         wait.until(lambda d: d.execute_script("return document.getElementById('recording').readyState >= 2"))
         wait.until(lambda d: d.execute_script("return document.getElementById('recording').currentTime > 0.8"))
         result["recording"] = driver.execute_script("const v=document.getElementById('recording'); return {time:v.currentTime,width:v.videoWidth,height:v.videoHeight,frames:v.webkitDecodedFrameCount,duration:v.duration}")
+        result["recording_display"] = display("recording")
+        assert abs(result["recording_display"]["ratio"] - 16 / 9) < 0.01
+        assert result["recording_display"]["within_viewport"]
         driver.save_screenshot(str(output / "recording.png"))
         driver.find_element(By.ID, "live-tab").click()
         if args.live:
@@ -52,12 +67,24 @@ def main():
             wait.until(lambda d: status()["frames"] >= 20)
             wait.until(lambda d: d.execute_script("return document.getElementById('live-image').naturalWidth > 0"))
             first = status()
+            result["live_display"] = display("live-image")
+            assert abs(result["live_display"]["ratio"] - 16 / 9) < 0.01
+            assert result["live_display"]["within_viewport"]
+            assert (result["live_display"]["source_width"], result["live_display"]["source_height"]) == (first["width"], first["height"]), "Backend must not enlarge the JPEG raster"
+            driver.execute_script("""
+                window.aspectStyleChanges = 0;
+                window.aspectObserver = new MutationObserver(records => window.aspectStyleChanges += records.length);
+                window.aspectObserver.observe(document.getElementById('live-image'),
+                    {attributes:true, attributeFilter:['style']});
+            """)
             def pixels():
                 return driver.execute_script("const i=document.getElementById('live-image'),c=document.createElement('canvas'); c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext('2d').drawImage(i,0,0);return c.toDataURL('image/png')")
             before = hashlib.sha256(pixels().encode()).hexdigest()
             time.sleep(2)
             after = hashlib.sha256(pixels().encode()).hexdigest()
             assert before != after, "Displayed live pixels did not change"
+            result["steady_frame_layout_changes"] = driver.execute_script("window.aspectObserver.disconnect(); return window.aspectStyleChanges;")
+            assert result["steady_frame_layout_changes"] == 0, "Steady frames must not trigger layout style updates"
             driver.save_screenshot(str(output / "live.png"))
             # Duplicate Start must be idempotent; refresh must attach to the same source.
             request = Request(args.url + "/api/start", data=b"{}", headers={"Content-Type":"application/json"})

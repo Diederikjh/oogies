@@ -52,7 +52,12 @@ python3 tools/run_browser_viewer.py
 ```
 
 Open <http://localhost:8088/> and choose **Start live view**. **Stop** ends the
-camera stream. To stop the service:
+camera stream.
+
+Use **Aspect ratio** to choose 16:9, 4:3 or Original proportions for live and
+recorded views. Your browser remembers the selection.
+
+To stop the service:
 
 ```sh
 python3 tools/run_browser_viewer.py --stop
