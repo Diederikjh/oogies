@@ -16,9 +16,12 @@ def main():
     parser.add_argument("mode", choices=("check", "probe"))
     parser.add_argument("--capture-seconds", type=int, default=0)
     parser.add_argument("--sdk-log", action="store_true", help="Save private SDK debug logs")
+    parser.add_argument("--decrypt", action="store_true", help="Decode with PlayCtrl and the full verification code")
     args = parser.parse_args()
     if not 0 <= args.capture_seconds <= 60:
         parser.error("capture must be 0–60 seconds")
+    if args.mode == "probe" and args.decrypt and args.capture_seconds == 0:
+        parser.error("--decrypt requires a positive --capture-seconds for a live probe")
     sdk = ROOT / ".local/hik-sdk/sdk"
     if not (sdk / "lib/libhcnetsdk.so").is_file():
         parser.error("place the Linux 64-bit SDK (lib and header directories) in .local/hik-sdk/sdk")
@@ -45,6 +48,8 @@ def main():
                     "--capture-seconds", str(args.capture_seconds)])
     if args.sdk_log:
         command.append("--sdk-log")
+    if args.decrypt:
+        command.append("--decrypt")
     try:
         completed = subprocess.run(command, timeout=80 + args.capture_seconds)
     except subprocess.TimeoutExpired:

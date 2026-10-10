@@ -29,8 +29,8 @@ local web UI.
 - FFmpeg reported invalid VPS/SPS/PPS/NAL data and could not determine frame
   dimensions. No valid frames or usable capture were produced.
 - Stream encryption is enabled in the recorder UI. The decode errors are
-  consistent with encryption, but do not alone prove it is the cause. The
-  verification/encryption code has not yet been applied to a decoder.
+  consistent with encryption, but do not alone prove it is the cause. No
+  verification/encryption code was applied during that RTSP test.
 
 Details: [RTSP result](docs/rtsp-first16-results.md) and
 [authentication history](docs/authenticated-probe-results.md).
@@ -45,24 +45,36 @@ Details: [RTSP result](docs/rtsp-first16-results.md) and
   with CPU and memory limits still in place.
 - At 12:54:51 on 2026-10-10, one synchronous `NET_DVR_Login_V40` call on port
   8000 succeeded with SDK error 0, using the shared credential loader.
-- The test was login only, followed by logout and cleanup. SDK live preview,
-  capture and decryption have not yet been verified.
+- That initial test was login only, followed by logout and cleanup. A later
+  preview verified capture and decryption, as recorded below.
 
 Details: [SDK investigation](docs/sdk-docker-investigation.md),
 [SDK usage notes](docs/official-sdk-usage-notes.md) and
 [credential loader](docs/credential-loading.md).
 
-## Next: tackle the encrypted live stream
+## Encrypted live stream: successfully decoded
 
-Use the working SDK login for one bounded preview/capture attempt, investigate
-the SDK/PlayCtrl secret-key APIs, and determine how the full verification code
-maps to the stream's encryption key. Login-password truncation must not be
-applied to that code. The SDK documents a 16-byte client secret key, but its
-relationship to the configured verification code remains unverified.
+At 13:29:45 on 2026-10-10, a single SDK login and 20-second preview successfully
+decoded **300 YV12 frames at 352 × 288** from the first camera's substream.
+PlayCtrl reported encrypted video (type 2, AES-10-round) with a key present,
+and zero decoder/input errors. The saved frame was converted offline to PNG
+and visually confirmed as recognizable camera imagery with a valid timestamp.
 
-Success means obtaining and decoding actual live frames with valid dimensions
-and recognizable camera imagery. No recorder settings have been changed to
-disable encryption. Authentication attempts remain bounded to avoid lockouts.
+The working call is `PlayM4_SetSecretKey(port, 1, full_verification_code_utf8,
+128)` before opening the stream. Offline inspection of the supplied Hik-Connect
+APK established this call pattern; the live test confirmed it with the supplied
+Linux decoder. The complete verification code is preserved. The fixed `128`
+argument does not mean truncating that string to 16 characters.
+
+No recorder settings were changed to disable encryption. Authentication
+remains bounded to one login per probe. Details and reproduction commands:
+[encrypted-stream investigation](docs/encrypted-stream-investigation.md).
+
+## Next: browser-compatible streaming
+
+Build a minimal backend bridge from decrypted video to a browser-compatible
+stream. This remains an investigation milestone rather than the full web app.
+Main streams, other cameras, audio and long-running behavior are not yet tested.
 
 ## Reproducibility and preservation
 

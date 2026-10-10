@@ -39,9 +39,12 @@ def main():
     parser.add_argument("mode", choices=("check", "probe"))
     parser.add_argument("--capture-seconds", type=int, default=0)
     parser.add_argument("--sdk-log", action="store_true", help="Save private SDK debug logs")
+    parser.add_argument("--decrypt", action="store_true")
     args = parser.parse_args()
     if not 0 <= args.capture_seconds <= 60:
         parser.error("capture must be between 0 and 60 seconds")
+    if args.mode == "probe" and args.decrypt and not args.capture_seconds:
+        parser.error("decryption requires a positive capture duration")
     headers = list(Path("/sdk").rglob("HCNetSDK.h"))
     headers.sort(key=lambda path: ("incEn" not in str(path), str(path)))
     if not headers:
@@ -52,9 +55,13 @@ def main():
     library_dir = libraries[0].parent
     if library_dir != Path("/sdk/lib"):
         parser.error("SDK must be mounted with its lib directory at /sdk/lib")
+    playback_headers = list(Path("/sdk").rglob("LinuxPlayM4.h"))
+    if not playback_headers:
+        parser.error("vendor LinuxPlayM4.h not found")
     command = ["g++", "-std=c++17", "-D_LINUX_", "-I", str(headers[0].parent),
+               "-I", str(playback_headers[0].parent),
                "/probe/probe.cpp", "-L/sdk/lib", "-Wl,-rpath,/sdk/lib", "-lhcnetsdk",
-               "-lpthread", "-ldl", "-o", "/tmp/cam-sdk-probe"]
+               "-lPlayCtrl", "-lpthread", "-ldl", "-o", "/tmp/cam-sdk-probe"]
     compiled = subprocess.run(command, capture_output=True, text=True, timeout=45)
     if compiled.returncode:
         print(json.dumps({"stage": "compile", "login_calls": 0,
@@ -67,17 +74,29 @@ def main():
             credentials = load_credentials("/credentials/nvr.json")
         except ValueError as error:
             parser.error(str(error))
+        verification_code = credentials.get("verification_code", "") if args.decrypt else ""
+        if args.decrypt and (not verification_code or len(verification_code.encode("utf-8")) > 128
+                             or any(ord(c) < 32 or ord(c) == 127 for c in verification_code)):
+            parser.error("decryption requires a nonempty verification_code of at most 128 UTF-8 bytes without controls")
         stdin = "\n".join(("192.0.2.10", "8000", credentials["username"],
-                           credentials["password"], str(args.capture_seconds))) + "\n"
+                           credentials["password"], str(args.capture_seconds), verification_code)) + "\n"
     env = dict(os.environ, LD_LIBRARY_PATH="/sdk/lib:/sdk/lib/HCNetSDKCom")
     os.umask(0o077)
     log_dir = None
+    capture_dir = None
+    if args.mode == "probe" and args.capture_seconds:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        capture_dir = Path("/output") / f"sdk-capture-{stamp}-{uuid.uuid4().hex[:8]}"
+        capture_dir.mkdir(mode=0o700)
+        env["CAM_SDK_CAPTURE_DIR"] = str(capture_dir)
     if args.sdk_log:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         log_dir = Path("/output") / f"sdk-{args.mode}-{stamp}-{uuid.uuid4().hex[:8]}-logs"
         log_dir.mkdir(mode=0o700)
         env["CAM_SDK_LOG_DIR"] = str(log_dir) + "/"
     native_command = ["/tmp/cam-sdk-probe"] + (["check"] if args.mode == "check" else [])
+    if args.decrypt:
+        native_command.append("--decrypt")
     try:
         process = subprocess.run(native_command, input=stdin, capture_output=True,
                                  text=True, env=env, cwd="/sdk/lib",
@@ -95,7 +114,9 @@ def main():
             report = {"stage": "native runtime", "returncode": process.returncode,
                       "diagnostics": sanitize(process.stderr + process.stdout, credentials)[-6000:]}
         report["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
-        report["verification_code_used"] = False
+        report.setdefault("verification_code_used", False)
+        if capture_dir:
+            report["capture_directory"] = capture_dir.name
         if args.mode == "probe":
             report["password_first_16"] = True
         if log_dir:

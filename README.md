@@ -1,7 +1,8 @@
 # Home camera viewing investigation
 
-Current milestone: RTSP and HCNetSDK login both work; decoding the encrypted
-live stream is next. See [progress.md](progress.md) for verified results and
+Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
+substream decodes successfully with PlayCtrl and the full verification code.
+A minimal browser streaming bridge is next. See [progress.md](progress.md) for verified results and
 links to the detailed investigation notes.
 
 ## Git LFS through Docker
@@ -62,6 +63,9 @@ python3 tools/run_hik_sdk.py check
 
 The check initializes the SDK with networking disabled and does not log in.
 Live probes are separate, bounded actions and are not part of this setup.
+For an offline PlayCtrl/key-setter check, use `check --decrypt`. See
+[encrypted-stream investigation](docs/encrypted-stream-investigation.md) for
+the verified full-key call sequence and the separate live probe command.
 
 ## Private credentials and validation
 

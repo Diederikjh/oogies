@@ -2,8 +2,11 @@
 
 Status on 10 October 2026: SDK **6.1.9.48 login succeeds** using the shared
 credential loader's first-16-character login password. The user-supplied archive
-and Docker environment are validated. This latest attempt requested login only;
-SDK video acquisition and decryption have not yet been tested.
+and Docker environment are validated. A subsequent single login and 20-second
+preview successfully decoded 300 encrypted video frames at 352 × 288 with
+the full verification code. See
+[encrypted-stream investigation](encrypted-stream-investigation.md) for
+the verified PlayCtrl arguments and result.
 
 Earlier full-password tests with the original and new non-admin accounts
 returned SDK error 1. The new-account test reported three attempts remaining

@@ -1,5 +1,11 @@
 # Official Hikvision SDK usage references
 
+Update, 10 October 2026: login now works, and a PlayCtrl callback pipeline
+successfully decoded the encrypted substream using the full verification code.
+See [encrypted-stream investigation](encrypted-stream-investigation.md) for
+the verified call arguments. The research and earlier next-step advice below
+record the state before that successful test.
+
 Research date: 9 October 2026. No recorder requests or additional authentication
 attempts were made during this research. Sources below are vendor documentation
 and the official Linux64 SDK archive supplied by the user.

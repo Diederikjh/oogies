@@ -30,6 +30,12 @@ The SDK launcher mounts this one helper file read-only at
 The actual credential file remains a separate read-only mount. The offline
 SDK check does not mount credentials.
 
+With the SDK runner's `--decrypt` option, the full `verification_code` is
+sent privately over stdin to PlayCtrl's key setter, with no hashing or
+truncation. Empty, control-containing or greater-than-128-UTF-8-byte codes
+are rejected before login. This is separate from the 16-character login
+password rule. See [encrypted-stream investigation](encrypted-stream-investigation.md).
+
 The old RTSP `--password-first-16` flag remains accepted for compatibility;
 the rule now always applies, without needing the flag. The existing experimental
 raw RTSP option that explicitly substitutes `verification_code` still uses that
