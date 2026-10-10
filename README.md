@@ -2,8 +2,12 @@
 
 Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
 substream decodes successfully with PlayCtrl and the full verification code.
-A minimal browser streaming bridge is next. See [progress.md](progress.md) for verified results and
+Historical recording search and playback are next, before the web viewer.
+See [progress.md](progress.md) for verified results and
 links to the detailed investigation notes.
+
+The SDK's recording APIs and the proposed bounded playback experiment are
+documented in [historical-playback investigation](docs/historical-playback-investigation.md).
 
 ## Git LFS through Docker
 

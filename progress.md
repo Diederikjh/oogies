@@ -70,11 +70,26 @@ No recorder settings were changed to disable encryption. Authentication
 remains bounded to one login per probe. Details and reproduction commands:
 [encrypted-stream investigation](docs/encrypted-stream-investigation.md).
 
-## Next: browser-compatible streaming
+## Historical playback: documentation investigated
 
-Build a minimal backend bridge from decrypted video to a browser-compatible
-stream. This remains an investigation milestone rather than the full web app.
-Main streams, other cameras, audio and long-running behavior are not yet tested.
+The installed SDK provides recording search, time/filename playback, recorded
+data callbacks, playback controls and downloads. Both V40 and V50 APIs are
+present in its headers and exported by the Linux library. Recorded callbacks
+can feed PlayCtrl, and the APK's playback branch uses the same full encryption
+string. This remains a documented approach; no historical recorder requests
+or playback tests have been made yet.
+
+Details: [historical-playback investigation](docs/historical-playback-investigation.md).
+
+## Next: verify historical search and decoding
+
+Investigate historical footage before the live web viewer: confirm recorder
+time, search a bounded interval for camera 1, then decode a short returned
+historic range using PlayCtrl in file mode. Check which streams are actually
+recorded and whether the non-admin account has playback permissions.
+
+A browser streaming bridge follows this validation. Main streams, other
+cameras, audio and long-running behavior are not yet tested.
 
 ## Reproducibility and preservation
 

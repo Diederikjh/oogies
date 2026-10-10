@@ -143,8 +143,10 @@ python3 tools/run_hik_sdk.py probe --capture-seconds 20 --decrypt --sdk-log
 Local encrypted live video is demonstrably decodable using the vendor Linux
 PlayCtrl library and the existing verification code. The current diagnostic
 produces raw decoded frames; it does not yet serve browser video. The next
-milestone is a small bridge from decrypted frames to a browser-compatible
+web milestone is a small bridge from decrypted frames to a browser-compatible
 stream, with the credentials and verification code kept in the backend.
+Before that, the user has prioritized
+[historical recording search and playback](historical-playback-investigation.md).
 
 This result covers one camera substream and this SDK/firmware combination.
 Main streams, other cameras, audio, continuous reconnect behavior and the
