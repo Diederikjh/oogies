@@ -4,6 +4,8 @@ Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
 substream decodes successfully with PlayCtrl and the full verification code.
 Historical time playback also works: a five-second recording was extracted
 from one hour earlier. Recording search still needs compatibility investigation.
+The local browser prototype now displays moving live frames and plays that
+recorded MP4; see [browser-viewer prototype](docs/browser-viewer-prototype.md).
 See [progress.md](progress.md) for verified results and
 links to the detailed investigation notes.
 
@@ -11,6 +13,21 @@ The SDK's recording APIs and the proposed bounded playback experiment are
 documented in [historical-playback investigation](docs/historical-playback-investigation.md).
 The successful extraction and its reproduction command are in
 [historical-playback results](docs/historical-playback-results.md).
+
+## Open the browser viewer
+
+```sh
+python3 tools/run_browser_viewer.py
+```
+
+Open <http://localhost:8088/> and select **Start live view**. **Stop** ends the
+shared camera session. **Recorded clip** plays the extracted MP4. Sessions last
+up to ten minutes; page loading and refresh do not start another SDK login.
+Credentials stay in the Docker backend. To stop the web server:
+
+```sh
+python3 tools/run_browser_viewer.py --stop
+```
 
 ## Git LFS through Docker
 

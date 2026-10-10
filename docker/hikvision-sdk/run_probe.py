@@ -36,6 +36,33 @@ def sanitize(text, credentials):
     return text
 
 
+def compile_probe():
+    """Build the native diagnostic/bridge against the actual mounted vendor ABI."""
+    headers = list(Path("/sdk").rglob("HCNetSDK.h"))
+    headers.sort(key=lambda path: ("incEn" not in str(path), str(path)))
+    if not headers:
+        raise ValueError("HCNetSDK.h not found in mounted SDK")
+    libraries = list(Path("/sdk").rglob("libhcnetsdk.so"))
+    if not libraries:
+        raise ValueError("libhcnetsdk.so not found in mounted SDK")
+    library_dir = libraries[0].parent
+    if library_dir != Path("/sdk/lib"):
+        raise ValueError("SDK must be mounted with its lib directory at /sdk/lib")
+    playback_headers = list(Path("/sdk").rglob("LinuxPlayM4.h"))
+    if not playback_headers:
+        raise ValueError("vendor LinuxPlayM4.h not found")
+    command = ["g++", "-std=c++17", "-D_LINUX_", "-I", str(headers[0].parent),
+               "-I", str(playback_headers[0].parent),
+               "/probe/probe.cpp", "-L/sdk/lib", "-Wl,-rpath,/sdk/lib", "-lhcnetsdk",
+               "-lPlayCtrl", "-lpthread", "-ldl", "-o", "/tmp/cam-sdk-probe"]
+    compiled = subprocess.run(command, capture_output=True, text=True, timeout=45)
+    if compiled.returncode:
+        print(json.dumps({"stage": "compile", "login_calls": 0,
+                          "diagnostics": compiled.stderr[-8000:]}, indent=2))
+        raise SystemExit(2)
+    return "/tmp/cam-sdk-probe"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("check", "probe"))
@@ -53,28 +80,10 @@ def main():
         parser.error("historical extraction requires --decrypt and 1–10 capture seconds")
     if args.skip_search and not args.historical:
         parser.error("--skip-search requires --historical")
-    headers = list(Path("/sdk").rglob("HCNetSDK.h"))
-    headers.sort(key=lambda path: ("incEn" not in str(path), str(path)))
-    if not headers:
-        parser.error("HCNetSDK.h not found in mounted SDK")
-    libraries = list(Path("/sdk").rglob("libhcnetsdk.so"))
-    if not libraries:
-        parser.error("libhcnetsdk.so not found in mounted SDK")
-    library_dir = libraries[0].parent
-    if library_dir != Path("/sdk/lib"):
-        parser.error("SDK must be mounted with its lib directory at /sdk/lib")
-    playback_headers = list(Path("/sdk").rglob("LinuxPlayM4.h"))
-    if not playback_headers:
-        parser.error("vendor LinuxPlayM4.h not found")
-    command = ["g++", "-std=c++17", "-D_LINUX_", "-I", str(headers[0].parent),
-               "-I", str(playback_headers[0].parent),
-               "/probe/probe.cpp", "-L/sdk/lib", "-Wl,-rpath,/sdk/lib", "-lhcnetsdk",
-               "-lPlayCtrl", "-lpthread", "-ldl", "-o", "/tmp/cam-sdk-probe"]
-    compiled = subprocess.run(command, capture_output=True, text=True, timeout=45)
-    if compiled.returncode:
-        print(json.dumps({"stage": "compile", "login_calls": 0,
-                          "diagnostics": compiled.stderr[-8000:]}, indent=2))
-        raise SystemExit(2)
+    try:
+        compile_probe()
+    except ValueError as error:
+        parser.error(str(error))
     credentials = {}
     stdin = ""
     if args.mode == "probe":

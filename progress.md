@@ -93,14 +93,31 @@ settings changes. Recording discovery remains unresolved.
 Details: [historical-playback investigation](docs/historical-playback-investigation.md).
 Verified result and commands: [historical-playback results](docs/historical-playback-results.md).
 
-## Next: recording discovery and browser delivery
+## Browser viewer: moving live frames verified
+
+A local Docker-backed prototype now serves camera 1 at `http://localhost:8088/`.
+Start/Stop controls manage one shared SDK/PlayCtrl session, with the full
+verification code kept in the backend. Latest decoded frames are converted
+to JPEG and shown as MJPEG; the previously extracted MP4 also plays in the
+browser with native controls.
+
+Chromium verification observed changing displayed pixels, advancing recorded
+playback, and 49 live frames. Repeated Start and a refresh reused the same
+session. The native result confirms one login, 81 decoded frames, 50 JPEGs,
+encryption type 2 and zero decoder errors. Stop cleaned up that session; the
+web server remains running, with the camera stopped and ready for user Start.
+
+Details and commands: [browser-viewer prototype](docs/browser-viewer-prototype.md).
+
+## Next: incremental viewer improvements and recording discovery
 
 Investigate the recorder's compatibility with recording-search calls to support
 a historical calendar/list. Direct playback already works with the non-admin
 account and the recorded main stream.
 
-A browser streaming bridge can reuse the verified live and historical paths.
-Other cameras, audio and long-running behavior are not yet tested.
+The first browser bridge is verified. H.264 transport, other cameras, audio,
+arbitrary historical playback controls and long-running behavior remain future
+milestones.
 
 ## Reproducibility and preservation
 

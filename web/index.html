@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home cameras · Driveway</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">HOME CAMERAS</p><h1>Driveway</h1><p class="subtitle">Camera 1</p></div>
+      <span class="badge" id="badge">Stopped</span></header>
+    <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live view</button>
+      <button id="recording-tab" aria-pressed="false">Recorded clip</button></nav>
+    <section id="live-panel" aria-label="Live camera">
+      <div class="viewer"><img id="live-image" alt="Live video from the driveway camera" hidden>
+        <div id="placeholder"><span class="camera-icon" aria-hidden="true">◉</span><h2>Ready when you are</h2>
+          <p>Start the camera to see what’s happening now.</p></div></div>
+      <div class="toolbar"><div class="actions"><button class="primary" id="start">Start live view</button>
+        <button id="stop" disabled>Stop</button></div><span id="metrics">Camera is stopped</span></div>
+      <p id="message" role="status" aria-live="polite">Each live session lasts up to 10 minutes.</p>
+    </section>
+    <section id="recording-panel" aria-label="Recorded camera video" hidden>
+      <div class="viewer"><video id="recording" controls playsinline preload="none"></video></div>
+      <div class="toolbar"><div><strong>Historical test clip</strong><p class="subtitle" id="recording-time">Recorder time</p></div>
+        <span id="recording-duration">Camera 1</span></div>
+      <p id="recording-note">An extracted recording from the DVR. Press Play to view it.</p>
+    </section>
+    <footer><span class="dot"></span>Local camera viewer<span>Video only</span></footer>
+  </main>
+</body>
+</html>

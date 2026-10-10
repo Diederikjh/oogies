@@ -2,6 +2,7 @@
 #include "LinuxPlayM4.h"
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -46,6 +47,14 @@ static std::atomic<bool> clip_complete{false}, clip_failed{false};
 static int clip_fps = 0;
 static int clip_width = 0, clip_height = 0;
 static int first_clip_stamp = 0, last_clip_stamp = 0;
+static bool browser_requested = false;
+static volatile std::sig_atomic_t stop_requested = 0;
+static std::mutex browser_frame_mutex;
+static std::vector<char> browser_frame;
+static int browser_width = 0, browser_height = 0;
+static unsigned long long browser_sequence = 0, jpeg_frames = 0;
+
+static void request_stop(int) { stop_requested = 1; }
 
 static void CALLBACK on_decoded(int, char *data, int length, FRAME_INFO *info, void *, int) {
     if (!info || info->nType != T_YV12 || info->nWidth <= 0 || info->nHeight <= 0) return;
@@ -54,6 +63,14 @@ static void CALLBACK on_decoded(int, char *data, int length, FRAME_INFO *info, v
     frame_width = info->nWidth;
     frame_height = info->nHeight;
     ++decoded_frames;
+    if (browser_requested) {
+        std::lock_guard<std::mutex> guard(browser_frame_mutex);
+        browser_frame.assign(data, data + length);
+        browser_width = info->nWidth;
+        browser_height = info->nHeight;
+        ++browser_sequence;
+        return;
+    }
     std::lock_guard<std::mutex> guard(frame_mutex);
     if (!frame_saved) {
         std::ofstream frame(capture_path + "/first-frame.yv12", std::ios::binary);
@@ -150,12 +167,14 @@ static bool initialize_sdk() {
 static void CALLBACK on_stream(LONG, DWORD type, BYTE *data, DWORD length, void *) {
     if (type != NET_DVR_SYSHEAD && type != NET_DVR_STREAMDATA) return;
     std::lock_guard<std::mutex> guard(stream_mutex);
-    stream_file.write(reinterpret_cast<const char *>(data), length);
+    if (!browser_requested) stream_file.write(reinterpret_cast<const char *>(data), length);
     stream_bytes += length;
     ++stream_chunks;
     if (type == NET_DVR_SYSHEAD && system_header_bytes == 0) {
-        std::ofstream header(capture_path + "/system-header.bin", std::ios::binary);
-        header.write(reinterpret_cast<const char *>(data), length);
+        if (!browser_requested) {
+            std::ofstream header(capture_path + "/system-header.bin", std::ios::binary);
+            header.write(reinterpret_cast<const char *>(data), length);
+        }
         system_header_bytes = length;
     }
     if (!decode_requested || !decoder_error_stage.empty()) return;
@@ -344,10 +363,19 @@ int main(int argc, char **argv) {
         if (std::string(argv[i]) == "--decrypt") decode_requested = true;
         if (std::string(argv[i]) == "--historical") historical_requested = true;
         if (std::string(argv[i]) == "--skip-search") skip_search = true;
+        if (std::string(argv[i]) == "--browser-frames") browser_requested = true;
     }
+    std::signal(SIGTERM, request_stop);
+    std::signal(SIGINT, request_stop);
     if (argc >= 2 && std::string(argv[1]) == "check") {
         if (!initialize_sdk()) return 2;
         const bool decoder_ready = !decode_requested || prepare_decoder("DUMMYVERIFICATION");
+        bool jpeg_ready = true;
+        if (browser_requested) {
+            std::vector<char> dummy(32 * 32 * 3 / 2, static_cast<char>(128));
+            char filename[] = "/tmp/check-frame.jpg";
+            jpeg_ready = PlayM4_ConvertToJpegFile(dummy.data(), dummy.size(), 32, 32, T_YV12, filename);
+        }
         close_decoder();
         const DWORD version = NET_DVR_GetSDKBuildVersion();
         NET_DVR_Cleanup();
@@ -356,9 +384,10 @@ int main(int argc, char **argv) {
                   << (sdk_logging_enabled ? "true" : "false")
                   << ",\"decoder_checked\":" << (decode_requested ? "true" : "false")
                   << ",\"decoder_ready\":" << (decoder_ready ? "true" : "false")
+                  << ",\"jpeg_ready\":" << (jpeg_ready ? "true" : "false")
                   << ",\"decoder_error_stage\":\"" << decoder_error_stage
                   << "\",\"decoder_error\":" << decoder_error << "}" << std::endl;
-        return decoder_ready ? 0 : 2;
+        return decoder_ready && jpeg_ready ? 0 : 2;
     }
     std::string host, port_string, username, password, seconds_string;
     if (!std::getline(std::cin, host) || !std::getline(std::cin, port_string) ||
@@ -374,7 +403,8 @@ int main(int argc, char **argv) {
     }
     const int port = std::stoi(port_string);
     const int seconds = std::stoi(seconds_string);
-    if (port < 1 || port > 65535 || seconds < 0 || seconds > 60) return 2;
+    if (port < 1 || port > 65535 || seconds < 0 || seconds > (browser_requested ? 900 : 60)) return 2;
+    if (browser_requested && (!decode_requested || historical_requested || seconds < 1)) return 2;
     if (historical_requested && (!decode_requested || seconds < 1 || seconds > 10)) return 2;
     if (decode_requested) {
         if (!std::getline(std::cin, verification_code) || verification_code.empty() ||
@@ -442,19 +472,52 @@ int main(int argc, char **argv) {
     if (seconds > 0) {
         const char *directory = std::getenv("CAM_SDK_CAPTURE_DIR");
         capture_path = directory ? directory : "/output";
-        stream_file.open(capture_path + "/live-stream.bin", std::ios::binary | std::ios::trunc);
+        if (!browser_requested) stream_file.open(capture_path + "/live-stream.bin", std::ios::binary | std::ios::trunc);
         NET_DVR_PREVIEWINFO preview{};
         preview.lChannel = info.byChanNum ? info.byStartChan : info.byStartDChan;
         preview.dwStreamType = 1; // Substream of the first reported channel.
         preview.dwLinkMode = 0; // TCP.
         preview.bBlocked = FALSE;
         preview.byProtoType = 0; // Private protocol.
-        const LONG handle = stream_file ? NET_DVR_RealPlay_V40(user, &preview, on_stream, nullptr) : -1;
+        const LONG handle = (browser_requested || stream_file) ? NET_DVR_RealPlay_V40(user, &preview, on_stream, nullptr) : -1;
         const DWORD preview_error = handle < 0 ? NET_DVR_GetLastError() : 0;
+        bool jpeg_failed = false;
         if (handle >= 0) {
-            std::this_thread::sleep_for(std::chrono::seconds(seconds));
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+            unsigned long long published = 0;
+            while (!stop_requested && std::chrono::steady_clock::now() < deadline) {
+                if (browser_requested) {
+                    std::vector<char> frame;
+                    int width = 0, height = 0;
+                    unsigned long long sequence = 0;
+                    {
+                        std::lock_guard<std::mutex> guard(browser_frame_mutex);
+                        if (browser_sequence != published) {
+                            frame = browser_frame; width = browser_width; height = browser_height;
+                            sequence = browser_sequence;
+                        }
+                    }
+                    if (!frame.empty()) {
+                        std::string temporary = capture_path + "/frame.tmp.jpg";
+                        if (!PlayM4_ConvertToJpegFile(frame.data(), frame.size(), width, height, T_YV12, temporary.data()) ||
+                            std::rename(temporary.c_str(), (capture_path + "/frame.jpg").c_str()) != 0) {
+                            jpeg_failed = true;
+                            break;
+                        }
+                        std::ofstream metadata(capture_path + "/frame.tmp.json");
+                        metadata << "{\"sequence\":" << sequence << ",\"width\":" << width
+                                 << ",\"height\":" << height << "}";
+                        metadata.close();
+                        std::rename((capture_path + "/frame.tmp.json").c_str(), (capture_path + "/frame.json").c_str());
+                        published = sequence;
+                        ++jpeg_frames;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             NET_DVR_StopRealPlay(handle);
         }
+        if (jpeg_failed) { decoder_error_stage = "JPEG conversion"; decoder_error = 26; }
         close_decoder();
         stream_file.close();
         report << ",\"preview_started\":" << (handle >= 0 ? "true" : "false")
@@ -462,6 +525,7 @@ int main(int argc, char **argv) {
                   << ",\"captured_bytes\":" << stream_bytes.load()
                   << ",\"captured_chunks\":" << stream_chunks.load()
                   << ",\"system_header_bytes\":" << system_header_bytes;
+        if (browser_requested) report << ",\"jpeg_frames\":" << jpeg_frames;
         if (decode_requested) {
             report << ",\"verification_code_used\":" << (secret_key_set && player_opened ? "true" : "false")
                    << ",\"secret_key_set\":" << (secret_key_set ? "true" : "false")
