@@ -1,10 +1,14 @@
 # Viewer implementation plan
 
-Status: agreed milestone order; implementation remains incremental. Updated
-after the user's request to put the automatic live grid before motion-timeline
-investigation. The API and module layout in
-[backend-api-plan.md](backend-api-plan.md) are proposals for review, not existing
-endpoints or a finalized contract.
+Status: owner configuration, discovery and the initial live grid are implemented
+and verified on the current recorder. Next is motion-timeline feasibility. The
+[API document](backend-api-plan.md) distinguishes implemented live endpoints from
+historical proposals; [live-grid.md](live-grid.md) records observed capacity.
+
+Milestone 1's seven-camera live checks pass; a fully fresh remote/LFS installation
+and simultaneous SDK historical playback remain unverified. Milestone 2's initial
+grid, sharing, cleanup and expansion pass; expansion currently keeps overview
+quality. Main-stream switching and sustained recovery are later work.
 
 ## Primary use cases
 
@@ -58,7 +62,7 @@ timestamps.
   private diagnostic outputs.
 - Do not assume the recorder's reported channel capacity equals the number of
   configured/online cameras, or that its connection limit is known.
-- Retain MJPEG for the first grid milestone. Measure before deciding whether
+- Retain JPEG frames for the first grid milestone. Measure before deciding whether
   a H.264 transport is needed. Audio is a later capability.
 
 ## Milestones in the revised order
@@ -73,10 +77,11 @@ timestamps.
 
 ## Evidence and unresolved questions
 
-One encrypted live substream and historical time playback already work. The
-browser prototype displays changing live frames, plays the extracted H.264 MP4,
-and shares its single source across refreshes. It remains a one-camera diagnostic
-prototype with manual Start/Stop and a finite session.
+Seven encrypted previews now play simultaneously in the automatic grid, shared
+across two browser views using one login. Independent Pause and 90-second orphan
+lease expiry were verified. Historical time extraction and saved MP4 playback
+also work. Hardware maximum and historical playback alongside the grid remain
+unknown; short seven-camera samples used about 154 MiB and half one CPU core.
 
 General recording search returned SDK error 11; direct playback by time worked
 without search. This does not establish whether the motion-event search API
@@ -101,8 +106,9 @@ recorder is unnecessary.
 
 Use Python for the HTTP API, configuration, viewer-session management and job
 coordination. Keep native SDK calls, decoder callbacks and video buffers in a
-C++ bridge. Evolve the bounded probe into a persistent worker that accepts
-commands and returns results, reusing the recorder connection across operations.
+C++ bridge. The live grid now uses a persistent worker accepting per-source commands and
+lifecycle events, reusing one recorder connection. Historical operations currently
+remain separate bounded probes.
 
 Owner settings, including NVR IP/SDK port/timezone, belong in ignored
 `.local/nvr-config.json`; credentials remain separate. Support other Hikvision
@@ -117,8 +123,8 @@ the minimal extension points and verification criteria.
 The first [Python adapter seam](sdk-adapter-seam.md) is now implemented with one
 concrete SDK class and explicit dependency injection. It owns credential policy,
 bridge build/launch details and runtime selection. The broader recorder/worker
-interface remains provisional until a second SDK supplies evidence. No new
-authenticated session was run for this extraction.
+interface remains provisional until a second SDK supplies evidence. Grid discovery and per-source native contexts now use this seam through the
+configured SDK profile. A second SDK still needs real compatibility evidence.
 
 Separate frontend navigation, API access, live overview, camera tiles, historical
 view, timeline, playback controls and shared media rendering. Use ordinary
@@ -132,6 +138,5 @@ and [GETTING_STARTED_AGENTS.md](../GETTING_STARTED_AGENTS.md) alongside implemen
 Current Linux amd64 support and device-specific
 limitations remain explicit until broader compatibility is verified.
 
-No feature implementation or recorder request was made while recording this
-plan. See the [API proposal](backend-api-plan.md) for the intended calls and
-example browser flows.
+See the [API document](backend-api-plan.md) for current live calls and proposed
+historical flows. Both setup guides were updated with the grid implementation.

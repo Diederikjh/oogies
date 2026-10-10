@@ -10,8 +10,10 @@ Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
 substream decodes successfully with PlayCtrl and the full verification code.
 Historical time playback also works: a five-second recording was extracted
 from one hour earlier. Recording search still needs compatibility investigation.
-The local browser prototype now displays moving live frames and plays that
-recorded MP4; see [browser-viewer prototype](docs/browser-viewer-prototype.md).
+The browser now automatically displays a live grid: seven simultaneous previews
+were verified, shared across tabs through one SDK login. Offline inputs remain
+labeled tiles. See [live-grid notes](docs/live-grid.md) for the architecture,
+implemented API and measured capacity.
 See [progress.md](progress.md) for verified results and
 links to the detailed investigation notes.
 
@@ -30,10 +32,11 @@ The successful extraction and its reproduction command are in
 python3 tools/run_browser_viewer.py
 ```
 
-Open <http://localhost:8088/> and select **Start live view**. **Stop** ends the
-shared camera session. **Recorded clip** plays the extracted MP4. Sessions last
-up to ten minutes; page loading and refresh do not start another SDK login.
-Credentials stay in the Docker backend. To stop the web server:
+Open <http://localhost:8088/>; the grid starts automatically. **Pause view**
+releases only this page’s subscriptions. Abandoned views expire after 90 seconds
+by default; other viewers keep their streams. **Recorded clip** plays the private
+extracted MP4 when available. Expand uses overview quality. Credentials stay in
+the Docker backend. To stop the web server:
 
 ```sh
 python3 tools/run_browser_viewer.py --stop
@@ -102,6 +105,10 @@ For an offline PlayCtrl/key-setter check, use `check --decrypt`. See
 the verified full-key call sequence and the separate live probe command.
 
 ## Private credentials and validation
+
+Enter your NVR IP, SDK port and settings in `.local/nvr-config.json`; the viewer
+and authenticated SDK runner use that file. The schema is in
+[GETTING_STARTED_AGENTS.md](GETTING_STARTED_AGENTS.md).
 
 Live probes read `.local/nvr-credentials.json` with `username`, `password` and
 optional `verification_code` fields. Keep its permissions at `0600` and its

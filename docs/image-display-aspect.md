@@ -1,5 +1,9 @@
 # Camera picture proportions
 
+Current service update: the [live grid](live-grid.md) supersedes the single-camera
+frontend described below and retains the efficient browser aspect correction.
+
+
 Date: 10 October 2026. The Python adapter work preceding this investigation was
 committed as `b949ef9`. Initial display checks used saved media only. After the
 owner supplied a Hik-Connect screenshot, the actual service was restarted and

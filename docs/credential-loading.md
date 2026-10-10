@@ -31,7 +31,8 @@ All authenticated entry points now obtain prepared credentials from the adapter:
 - `tools/probe_rtsp_once.py`: bounded raw RTSP Digest diagnostic.
 - `tools/probe_web_session.py`: browser-compatible session login.
 - `docker/hikvision-sdk/run_probe.py`: vendor SDK wrapper inside Docker.
-- `docker/hikvision-sdk/browser_server.py`: browser viewer worker launch.
+- `docker/hikvision-sdk/grid_worker.py`: current persistent viewer worker launch.
+- `docker/hikvision-sdk/browser_server.py`: preserved earlier diagnostic worker.
 
 The SDK launchers mount the file reader at `/support/credentials.py` and the
 adapter package at `/support/sdk_adapters`, both read-only, and expose them

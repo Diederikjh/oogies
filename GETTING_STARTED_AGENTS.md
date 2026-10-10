@@ -8,20 +8,20 @@ startup commands or supported behavior changes.
 
 ## What works today
 
-The current prototype displays one encrypted camera substream in a browser.
+The current service displays discovered analog/IP substreams in an automatic live grid.
 The Python backend runs in Docker and uses a C++ bridge to Hikvision's SDK and
 PlayCtrl. The SDK archive is already tracked in this repository with Git LFS;
 there is no separate vendor download step.
 
 Live video has been verified on one Hikvision DS-7108HGHI-K1. Compatibility with
 other recorders, firmware and authentication settings is not yet established.
-The grid, motion timeline and arbitrary historical playback UI are planned;
+Motion timelines and arbitrary historical playback UI are planned;
 see [the implementation plan](docs/implementation-plan.md).
 
-**Current setup limitation:** the prototype still hardcodes recorder address
-`192.0.2.10` and SDK port `8000`. The steps below prepare a fresh checkout,
-but starting live view on another recorder must wait for the configuration
-support described below. The offline check does not contact a recorder.
+The service now reads the owner’s IP/SDK port from `.local/nvr-config.json`.
+Only the preserved HCNetSDK 6.1.9.48 profile is supported. Configuration support
+does not establish compatibility with every recorder. Offline SDK checks do not
+contact a device. See [live-grid implementation and results](docs/live-grid.md).
 
 ## Instructions for a setup agent
 
@@ -65,8 +65,8 @@ environment readiness from recorder connectivity and successful live video.
 
 Docker Compose, host Git LFS, host FFmpeg, host C++ compilers, Node.js and host
 Selenium are not prerequisites for the current prototype. Automated browser
-checks use a separate Docker image and are optional; the existing browser check
-also requires a saved historical clip, which a fresh checkout does not contain.
+checks use a separate Docker image and are optional. The grid check skips
+recorded playback when a fresh checkout has no private historical clip.
 
 ### Detect the existing environment
 
@@ -299,29 +299,48 @@ PY
 A pass confirms file permissions and format, not that the recorder accepts the
 account. Retain an existing credential file unless the owner wants it changed.
 
-## Recorder configuration — planned, not implemented
+## 4. Enter private recorder configuration
 
-Every installing user will enter their NVR IP address; the application must not
-require editing source code. The proposed `.local/nvr-config.json` starts with:
+Create `.local/nvr-config.json` using the owner's actual IP address and SDK port:
 
 ```json
 {
   "host": "192.0.2.10",
   "sdk_port": 8000,
-  "timezone": "Africa/Johannesburg"
+  "timezone": "Africa/Johannesburg",
+  "sdk_profile": "hcnet-6.1.9.48-linux64",
+  "max_live_sources": 8,
+  "lease_seconds": 90,
+  "camera_overrides": {}
 }
 ```
 
-This is an example of the intended configuration, **not a file the current
-prototype reads**. `host` is the user's recorder IP, `sdk_port` is its configured
-SDK/server port, and `timezone` describes the recorder's local clock. Credentials
-stay in the separate file above. The frontend receives camera IDs and media
-URLs from the backend; it does not need the recorder address.
+```sh
+chmod 600 .local/nvr-config.json
+python3 - <<'PYCONFIG'
+import sys
+sys.path.insert(0, 'tools')
+from nvr_config import load_config
+load_config()
+print('Recorder settings validate; no device connection attempted.')
+PYCONFIG
+```
 
-Configuration support is a requirement of the first milestone. It must replace
-the hardcoded address and port in both the viewer and authenticated SDK runner,
-validate settings before login, and document the login-password policy. Camera
-discovery will provide configured channels rather than requiring source edits.
+This is now implemented for the viewer and authenticated SDK diagnostic.
+Passwords remain in the separate credential file. Normalization belongs to the
+selected SDK adapter; `login_password_max_chars` is not a configuration field.
+`max_live_sources` is an application budget (1–16), not a hardware limit; seven
+concurrent previews have been verified on the original recorder. `lease_seconds`
+can be 10–300; default 90 with frontend renewal every 30 seconds. The timezone
+records the recorder's clock context for later historical range conversion;
+live OSD timestamps are unchanged.
+
+Optional `camera_overrides` keys are SDK channel numbers, for example:
+`"1": {"name":"Driveway", "aspect_ratio":"16:9"}` or
+`"4": {"enabled":false}`. Names and online state otherwise come from discovery.
+Only overview quality is implemented; Expand does not start a main stream.
+Restart the service after editing settings or credentials. See
+[the grid notes](docs/live-grid.md) for the implemented API and limits.
 
 ### Check Docker-to-recorder connectivity without authentication
 
@@ -343,91 +362,69 @@ PY
 
 Exit 0 is a pass. Timeout/refusal means connectivity is blocked; resolve the
 address, port or route before a login attempt. An open SDK port alone does not
-prove SDK or encryption compatibility. The hardcoded-address limitation still
-blocks live setup for a different recorder even if this check succeeds.
+prove SDK or encryption compatibility.
 
-## 4. Start and stop the current prototype
-
-These commands currently target the original hardcoded recorder. For another
-owner, use them after the configuration milestone has been implemented and
-this section updated accordingly.
+## 5. Start, verify and stop the viewer
 
 ```sh
 python3 tools/run_browser_viewer.py
 ```
 
-Open <http://localhost:8088/>. Starting the server compiles the bridge but does
-not log in to the recorder. **Start live view** starts one SDK session for the
-first reported camera's substream. **Stop** ends that shared camera session.
+The launcher publishes only `127.0.0.1:8088`. Startup compiles the native worker;
+it does not log in. Readiness can be checked without opening a browser page:
 
-The **Aspect ratio** selection applies to live and recorded pictures and is
-remembered in this browser. The current camera's 16:9 default is confirmed by the
-owner's Android screenshot. Compare other installations with a known-good view;
-other cameras may require 4:3 or
-Original. See [picture proportions](docs/image-display-aspect.md). After updating
-backend code or mounts, use the launcher to stop/start the service so new Python
-modules and allowed asset routes are loaded.
+```sh
+python3 - <<'PYHTTP'
+import json
+from urllib.request import urlopen
+for path in ('/', '/app.js', '/shared/frame-feed.js'):
+    with urlopen('http://localhost:8088' + path, timeout=5) as response:
+        assert response.status == 200
+with urlopen('http://localhost:8088/api/status', timeout=5) as response:
+    status = json.load(response)
+assert status['state'] == 'stopped'
+assert status['sdk_login_calls'] == 0
+print('HTTP ready; recorder has not been contacted.')
+PYHTTP
+```
 
-The current viewer is published only on the local machine. Other LAN computers
-cannot access it yet. Sessions have a ten-minute maximum by default; closing a
-tab does not yet implement the proposed viewer-lease cleanup. The planned
-90-second leases and independent viewer sessions are described in the
-[API proposal](docs/backend-api-plan.md).
+Allow up to 60 seconds for compilation/startup; inspect `docker logs
+cam-browser-viewer` if readiness fails. `--port` changes the HTTP port; change
+verification URLs accordingly. Docker resource limits remain 2 CPUs, 2 GiB and
+512 processes. No new images or host packages are required for this milestone.
 
-Stop the service with:
+**Opening the page starts live viewing automatically.** GET `/api/cameras` opens
+one SDK connection and performs read-only discovery; POST `/api/live/sessions`
+starts the selected previews. For live acceptance, open the page once, confirm
+all online tiles receive fresh moving frames, then Pause view. Two tabs should
+share sources, and pausing one must preserve the other. Authentication rejection
+ends the check; do not retry passwords or SDK profiles automatically. Report
+actual discovered channels, tested concurrency and per-camera failures.
+
+Closing a tab attempts to release its lease immediately. A killed/disconnected
+tab expires within about 90 seconds of its last heartbeat. Streams stop when
+their last subscriber leaves; the shared recorder login persists until shutdown.
+Switching to Recorded clip releases this page's live subscriptions. A fresh
+clone has no private clip and that tab is disabled; live grid setup needs no
+previous footage. The existing historical extraction command now uses the same
+private recorder configuration.
+
+Stop with:
 
 ```sh
 python3 tools/run_browser_viewer.py --stop
-```
-
-After the stop command returns, this must produce no container name:
-
-```sh
 docker ps --filter 'name=^/cam-browser-viewer$' --format '{{.Names}}'
 ```
 
-The launcher waits for auto-removal; an inspect of that container should then
-report it absent.
+The second command must produce no name. Shutdown stops previews/decoders and
+logs out. Stop/start after source/configuration changes; do not reuse an old
+container with missing support mounts.
 
-Optional startup flags are `--port 8088` and `--session-seconds 600` (maximum
-900). Stop an existing instance before changing its settings. To inspect
-startup diagnostics, use `docker logs cam-browser-viewer`.
-
-Once startup is applicable, verify HTTP readiness separately from live video:
-
-```sh
-python3 - <<'PY'
-import json
-from urllib.request import urlopen
-with urlopen('http://localhost:8088/', timeout=5) as response:
-    assert response.status == 200, 'Viewer page did not load'
-with urlopen('http://localhost:8088/api/status', timeout=5) as response:
-    status = json.load(response)
-assert status['state'] == 'stopped', 'An existing camera session needs separate handling'
-assert status['session'] is None, 'Unexpected native session at startup'
-print('Viewer HTTP checks passed; camera remains stopped.')
-PY
-```
-
-The launcher returns before compilation/server startup has necessarily
-finished. A connection refusal immediately after launch is not proof of a
-failure: inspect the container logs and retry the local HTTP check within a
-bounded startup window (up to 60 seconds). These GET requests do not log in.
-If using a different `--port`, change both URLs accordingly.
-
-For a live acceptance check on the intended recorder, start once and confirm
-the frame counter advances, received frames stay fresh and visible pixels
-change. Stop and verify status returns to `stopped`. Authentication rejection
-ends the check; report the SDK error rather than retrying passwords. If the
-agent cannot inspect the browser, report visual verification as pending rather
-than claiming video works from HTTP readiness alone.
-
-An existing historical MP4 under `.local/hik-sdk/results/` is mounted by the
-launcher for the **Recorded clip** view. A fresh clone has no saved camera
-footage; live viewing does not depend on a recorded clip. Instructions for a
-bounded historical extraction are in
-[historical-playback results](docs/historical-playback-results.md); the current
-authenticated runner shares the hardcoded recorder limitation.
+The current real-browser acceptance tool is `tools/check_live_grid.py`, run in
+the existing browser Docker image. It opens the automatic grid, checks sharing,
+proportions and playback, and releases its views. The old one-camera browser and
+saved-media aspect scripts describe the preceding frontend; use the grid tool
+for this milestone.
 
 ## Maintaining this guide
 
@@ -443,13 +440,12 @@ step. Never include credential values:
 - [ ] Private credential format, ownership and permissions verified.
 - [ ] Owner's recorder settings supported and Docker TCP connectivity verified.
 - [ ] Service starts and local HTTP readiness passes without starting a camera.
-- [ ] One live session displays moving frames, then cleans up after Stop.
+- [ ] Every online camera displays fresh frames, views share sources, and Pause/expiry releases only that viewer.
 - [ ] Service stop verified, or service deliberately left running for the owner.
 
 An agent can currently complete environment preparation on a supported machine.
-It must report recorder-specific setup as blocked if configuration support is
-needed but absent, or repository distribution as blocked if the remote/LFS
-object is unavailable. Do not describe an environment-only pass as a working
+Report repository distribution as blocked if the remote/LFS object is unavailable,
+and device compatibility as unverified until its actual live check passes. Do not describe an environment-only pass as a working
 installation for that owner's NVR.
 
 Each milestone must update these instructions and the

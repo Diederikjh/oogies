@@ -39,13 +39,16 @@ The concrete implementation supplies:
 | --- | --- |
 | `sdk_id`, `runtime_image` | Identify the implementation and its Docker runtime |
 | `load_credentials(path=None)` | Read validated credentials and prepare its login password |
-| `compile_bridge()` | Compile its native bridge inside the container |
+| `compile_bridge()` | Compile the bounded diagnostic bridge inside Docker |
+| `compile_live_bridge()` | Compile the persistent grid worker inside Docker |
 | `invocation(binary, ...)` | Return native command, private stdin, cwd and environment without launching |
 
 Credentials are sent only through stdin; the invocation's representation hides
 that field. The browser/runner retain process lifetime, timeout, output handling
 and cleanup. The C++ bridge retains actual SDK calls and decoding. Native output
-still uses the existing `CAM_SDK_REPORT`/latest-frame file protocol.
+uses `CAM_SDK_REPORT` for bounded probes. The grid uses `GRID_EVENT` JSON
+lifecycle events, text start/stop commands and per-camera latest-frame files; see
+[the grid contract](live-grid.md).
 
 There is no abstract base class, dynamic loader, speculative camera/history
 interface or extra SDK implementation. The invocation arguments describe the
@@ -71,10 +74,13 @@ implementation reveals a better boundary.
    both getting-started guides. Mocks establish the Python boundary, not device
    compatibility.
 
-The remaining work includes `.local/nvr-config.json`, selectable user-facing SDK
-profiles, camera discovery, per-stream native contexts and a persistent worker.
-The recorder address is still supplied by the existing callers. This change
-does not modify C++ behavior or introduce another authenticated device attempt.
+Owner `.local/nvr-config.json` now selects a known SDK profile and supplies the
+recorder address/port. Both host launcher and container use that selection;
+unknown profiles fail rather than falling back. One current profile is supplied.
+Camera discovery, per-stream contexts and the persistent worker are implemented
+in the live grid. A contributor needs its native event/frame contract or an
+explicit corresponding Python controller change when adding a different SDK.
+The boundary remains intentionally small, without a speculative plugin framework.
 
 ## Verification
 
@@ -94,3 +100,6 @@ Networking was disabled and credentials were not mounted. The loaded SDK was
 with `login_calls: 0` and `decoder_error: 0`. Live behavior was not retested during
 the extraction itself. A subsequent [display-aspect check](image-display-aspect.md)
 verified the real viewer/adapter with one successful live session and cleanup.
+
+The subsequent [grid verification](live-grid.md) passed seven concurrent previews,
+two views sharing one SDK login and independent lease expiry.

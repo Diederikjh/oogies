@@ -3,8 +3,37 @@
 Updated: 2026-10-10 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
-at `192.0.2.10` can be decoded for a future web viewer. The web application
-is a later phase.
+at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
+and historical use cases incrementally.
+
+## Current milestone: automatic live grid verified
+
+The aspect correction was committed as `95ec310`. The service now discovers inputs
+and automatically shows a responsive live grid. Nine configured inputs were
+found: seven online (six analog and SDK IP channel 34) and two offline. Progressive
+checks of 1, 2, 4 and all 7 previews passed using one SDK login. Independent decoder
+contexts share sources across viewer leases.
+
+Real Docker Chromium checks passed for moving frames, all seven displayed at
+16:9, desktop/mobile layout, expansion, two tabs sharing sources and independent
+Pause, plus saved historical playback. An unrenewed lease expired after 90 seconds
+while an independently renewed view kept playing. Short seven-camera samples used
+approximately 154 MiB and 50% of one CPU core; the hardware stream maximum and
+sustained resource use remain unverified.
+
+Owner IP/port/profile and limits now live in private `.local/nvr-config.json`.
+Frontend code is split into shared API/feed/media helpers, live overview/tiles
+and recorded-clip playback. One multiplexed JPEG connection per page avoids
+per-camera HTTP connection limits; browser scaling preserves native JPEG sizes.
+Expand remains overview quality. The last viewer leaving stops previews; the
+shared login persists until service shutdown.
+
+Eighteen offline unit tests passed, including source sharing, expiry, capacity,
+configuration and native failure cleanup. Setup guides and the [implemented grid API](docs/live-grid.md) describe this
+behavior. The next milestone is **motion-timeline feasibility**, including
+recording-search compatibility. Concurrent historical extraction with the grid,
+main-stream switching and a fresh remote/LFS clone remain untested. Evidence is
+private under `.local/grid-check/`; no captures or credentials enter Git.
 
 ## Authentication finding
 
@@ -94,7 +123,7 @@ settings changes. Recording discovery remains unresolved.
 Details: [historical-playback investigation](docs/historical-playback-investigation.md).
 Verified result and commands: [historical-playback results](docs/historical-playback-results.md).
 
-## Browser viewer: moving live frames verified
+## Earlier single-camera browser prototype
 
 A local Docker-backed prototype now serves camera 1 at `http://localhost:8088/`.
 Start/Stop controls manage one shared SDK/PlayCtrl session, with the full
@@ -139,11 +168,11 @@ settings and an untruncated password. The actual Docker SDK/decoder check also
 passed with private SDK logging enabled, networking disabled, no credentials
 mounted, zero login calls and zero decoder errors. The later aspect-ratio check
 above also verified the adapter with one real live session;
-recorder configuration, camera discovery and persistent per-stream workers remain
-next milestones. The 16-character policy is now assumed to belong to the SDK
+recorder configuration, camera discovery and persistent per-stream workers were
+the next milestones and are now implemented above. The 16-character policy is now assumed to belong to the SDK
 implementation rather than a user-configurable installation override.
 
-The next work follows this order, with the automatic live grid ahead of motion
+The agreed plan follows this order, with the automatic live grid ahead of motion
 timeline investigation as requested:
 
 1. Recorder configuration, camera discovery and capacity.
@@ -158,9 +187,9 @@ helpers, live overview/tiles, history/timeline/playback controls and exports.
 
 The recorded plan is in [implementation-plan.md](docs/implementation-plan.md).
 A reviewable API proposal is in [backend-api-plan.md](docs/backend-api-plan.md).
-Those endpoints are proposed, not implemented. The immediate next milestone is
-camera discovery and tested capacity; no new recorder probes or feature code
-were added while recording this plan.
+Inventory and live-session endpoints are now implemented; historical
+timeline/playback/export endpoints remain proposals. Discovery and the initial
+grid are verified above; the next investigation is motion metadata.
 
 ## Reproducibility and preservation
 
@@ -174,9 +203,10 @@ implementation were performed for the review.
 
 The service is intended for other owners to clone and run on their own machines.
 The installing user supplies the NVR IP and SDK port in backend configuration,
-with credentials kept separate. The current prototype still hardcodes the
-original address/port; configuration support is now part of milestone 1. Python
-application logic with a persistent C++ SDK bridge is the planned backend split.
+with credentials kept separate. The viewer and authenticated SDK runner now
+read owner configuration; legacy RTSP/web investigation scripts retain the
+original address. Python application logic and a persistent C++ SDK bridge
+implement the current backend split.
 
 The root [GETTING_STARTED.md](GETTING_STARTED.md) gives a short human-facing setup
 overview; [GETTING_STARTED_AGENTS.md](GETTING_STARTED_AGENTS.md) contains detailed

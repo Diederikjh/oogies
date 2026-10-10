@@ -1,9 +1,11 @@
 # Hikvision recorder and SDK compatibility review
 
-Update: the first [Python SDK adapter seam](sdk-adapter-seam.md) is now implemented.
-Under the revised design, credential normalization belongs to the SDK adapter,
-not an owner-configurable override. The historical findings below describe the
-code before that extraction; only the current SDK has been checked.
+Update: the [Python SDK adapter seam](sdk-adapter-seam.md) and
+[configured live grid](live-grid.md) are now implemented. `.local/nvr-config.json`
+supplies owner settings and the SDK profile; discovery handles analog and direct
+IP inputs with per-source decoders. Other SDKs, non-direct IP modes and timestamp
+conversion still need evidence. The review below is the earlier design snapshot,
+not the current implementation status.
 
 Reviewed: 10 October 2026. Source/documentation review only; no new recorder
 requests or compatibility implementation. The preceding setup guides, milestone

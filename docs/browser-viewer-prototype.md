@@ -1,5 +1,9 @@
 # Browser viewing prototype
 
+Current service update: the [live grid](live-grid.md) supersedes the single-camera
+frontend described below and retains the efficient browser aspect correction.
+
+
 Update: [picture proportions](image-display-aspect.md) now use a shared frontend
 module with selectable 16:9/4:3/Original display ratios for live and recorded
 views. The encoded dimensions and saved files are unchanged.

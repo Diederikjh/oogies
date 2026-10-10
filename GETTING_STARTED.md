@@ -1,8 +1,8 @@
 # Getting started
 
 This project is a local browser viewer for Hikvision cameras. The current
-prototype shows one encrypted live camera stream. A camera grid and historical
-timeline are planned.
+service automatically shows discovered cameras in a live grid. Historical
+timeline browsing is planned.
 
 **Using a coding agent to set up your machine?** Give it
 [GETTING_STARTED_AGENTS.md](GETTING_STARTED_AGENTS.md). That guide contains the
@@ -31,31 +31,30 @@ run in Docker.
    `verification_code` field holds the full stream **Encryption Password**,
    which may differ from your login password. Keep the file private and outside
    Git.
-4. Enter your NVR settings once recorder configuration support is available.
+4. Enter your NVR settings in `.local/nvr-config.json`; see the agent guide for
+   its schema and optional camera overrides.
 5. Start the service, open the page and check that live images move.
 
 The [agent guide](GETTING_STARTED_AGENTS.md) has the exact commands for each step
 and instructions for installing missing prerequisites.
 
-**Current limitation:** the prototype still targets `192.0.2.10:8000`.
-Configurable recorder settings are the next milestone, so a fresh checkout
-cannot yet view a different NVR without source changes. No public repository
-remote has been configured yet. Live decoding has been verified on the original
-DS-7108HGHI-K1; broader compatibility remains to be tested.
+The current SDK has been verified on the original DS-7108HGHI-K1, including
+seven simultaneous analog/IP previews. Other recorder/firmware combinations need
+verification. No public repository remote has been configured yet.
 
-## Run the prepared prototype
+## Run the viewer
 
-Once setup is complete for the original recorder:
+Once configuration, credentials and the SDK are ready:
 
 ```sh
 python3 tools/run_browser_viewer.py
 ```
 
-Open <http://localhost:8088/> and choose **Start live view**. **Stop** ends the
-camera stream.
+Open <http://localhost:8088/>. The live grid starts automatically. **Pause view**
+releases your subscriptions; other viewers keep their cameras.
 
-Use **Aspect ratio** to choose 16:9, 4:3 or Original proportions for live and
-recorded views. Your browser remembers the selection.
+Each tile offers picture proportions and **Expand**. Expansion uses the same
+overview stream. Your browser remembers each camera’s aspect choice.
 
 To stop the service:
 
@@ -63,9 +62,10 @@ To stop the service:
 python3 tools/run_browser_viewer.py --stop
 ```
 
-The current viewer is available only on the machine running it. Camera sessions
-end after ten minutes by default; closing a tab does not yet stop its session
-automatically. A fresh clone has no saved footage for **Recorded clip**.
+The viewer is currently available only on the machine running it. A closed or
+killed tab’s subscriptions expire within about 90 seconds of its last renewal;
+the last subscriber leaving stops that camera stream. A fresh clone has no saved
+footage for **Recorded clip**.
 
 See [progress.md](progress.md) for verified results and the
 [implementation plan](docs/implementation-plan.md) for upcoming milestones.

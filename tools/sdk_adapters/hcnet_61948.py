@@ -36,14 +36,19 @@ class HcNetSdk61948:
 
     def compile_bridge(self):
         """Compile only against this bundle's known header/library locations."""
+        return self._compile("probe.cpp", "/tmp/cam-sdk-probe")
+
+    def compile_live_bridge(self):
+        return self._compile("live_grid.cpp", "/tmp/cam-sdk-grid")
+
+    def _compile(self, source, binary):
         headers = (Path("/sdk/incEn/HCNetSDK.h"),
                    Path("/sdk/QtDemo/includeCn/LinuxPlayM4.h"))
         libraries = (Path("/sdk/lib/libhcnetsdk.so"), Path("/sdk/lib/libPlayCtrl.so"))
         if not all(path.is_file() for path in headers + libraries):
             raise ValueError("current SDK bundle is missing its expected headers or libraries")
-        binary = "/tmp/cam-sdk-probe"
         command = ["g++", "-std=c++17", "-D_LINUX_", "-I", str(headers[0].parent),
-                   "-I", str(headers[1].parent), "/probe/probe.cpp", "-L/sdk/lib",
+                   "-I", str(headers[1].parent), "/probe/" + source, "-L/sdk/lib",
                    "-Wl,-rpath,/sdk/lib", "-lhcnetsdk", "-lPlayCtrl", "-lpthread",
                    "-ldl", "-o", binary]
         subprocess.run(command, capture_output=True, text=True, timeout=45, check=True)

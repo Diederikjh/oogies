@@ -1,36 +1,28 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Home cameras · Driveway</title>
-  <link rel="stylesheet" href="/style.css">
-  <script type="module" src="/app.js"></script>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home cameras · Live overview</title>
+  <link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
 </head>
 <body>
   <main>
-    <header><div><p class="eyebrow">HOME CAMERAS</p><h1>Driveway</h1><p class="subtitle">Camera 1</p></div>
-      <span class="badge" id="badge">Stopped</span></header>
-    <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live view</button>
+    <header><div><p class="eyebrow">HOME CAMERAS</p><h1>Live overview</h1>
+      <p class="subtitle">Your cameras, together</p></div><span id="grid-summary" class="badge">Connecting…</span></header>
+    <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live overview</button>
       <button id="recording-tab" aria-pressed="false">Recorded clip</button></nav>
-    <div class="view-options"><label for="picture-aspect">Aspect ratio</label>
-      <select id="picture-aspect"><option value="16:9">Widescreen (16:9)</option>
-        <option value="4:3">Standard (4:3)</option><option value="original">Original</option></select></div>
-    <section id="live-panel" aria-label="Live camera">
-      <div class="viewer"><img id="live-image" alt="Live video from the driveway camera" hidden>
-        <div id="placeholder"><span class="camera-icon" aria-hidden="true">◉</span><h2>Ready when you are</h2>
-          <p>Start the camera to see what’s happening now.</p></div></div>
-      <div class="toolbar"><div class="actions"><button class="primary" id="start">Start live view</button>
-        <button id="stop" disabled>Stop</button></div><span id="metrics">Camera is stopped</span></div>
-      <p id="message" role="status" aria-live="polite">Each live session lasts up to 10 minutes.</p>
+    <section id="live-panel" aria-label="Live camera overview">
+      <div class="toolbar"><p id="message" role="status" aria-live="polite">Discovering cameras…</p>
+        <div class="actions"><button id="start" disabled>Resume view</button><button id="stop" disabled>Pause view</button></div></div>
+      <div id="camera-grid" class="camera-grid"></div>
     </section>
     <section id="recording-panel" aria-label="Recorded camera video" hidden>
-      <div class="viewer"><video id="recording" controls playsinline preload="none"></video></div>
-      <div class="toolbar"><div><strong>Historical test clip</strong><p class="subtitle" id="recording-time">Recorder time</p></div>
-        <span id="recording-duration">Camera 1</span></div>
-      <p id="recording-note">An extracted recording from the DVR. Press Play to view it.</p>
+      <div class="viewer recording-viewer"><video id="recording" controls playsinline preload="none"></video></div>
+      <div class="toolbar"><div><strong>Historical test clip · Camera 1</strong><p class="subtitle" id="recording-time">Recorder time</p></div>
+        <label>Aspect ratio <select id="recording-aspect"><option value="16:9">16:9</option><option value="4:3">4:3</option><option value="original">Original</option></select></label></div>
+      <p class="subtitle">The previously extracted clip. Historical timeline browsing is the next milestone.</p>
     </section>
-    <footer><span class="dot"></span>Local camera viewer<span>Video only</span></footer>
+    <footer><span class="dot"></span>Local camera viewer<span>Video only · Overview quality</span></footer>
   </main>
 </body>
 </html>

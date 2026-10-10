@@ -1,8 +1,9 @@
-# Proposed backend API and frontend boundaries
+# Backend API and frontend boundaries
 
-Status: design proposal for discussion. None of the endpoints below have been
-implemented unless explicitly listed in the current-prototype section. The
-milestone sequence is in [implementation-plan.md](implementation-plan.md).
+Status: inventory and live-view leases are implemented. Historical timeline,
+playback-session and export APIs below remain proposals. The exact current live
+contract and verification are in [live-grid.md](live-grid.md); the milestone
+sequence is in [implementation-plan.md](implementation-plan.md).
 
 ## Design choices
 
@@ -23,131 +24,99 @@ playbacks consume their own resources, even if they share the recorder login.
 
 The API returns media descriptors rather than requiring frontend code to
 construct SDK/RTSP URLs. This lets later transports change while retaining the
-camera/session API. Initially live media uses MJPEG; historical viewing can reuse
+camera/session API. Live media uses one multiplexed JPEG feed per view; historical viewing could reuse
 decoded-frame streaming, while clip export uses H.264 MP4. Transport changes
 do not automatically provide SDK pause/seek behavior; those controls remain
 explicit backend operations.
 
-## Camera inventory and backend status — milestone 1
+## Implemented camera inventory and backend status — milestone 1
 
 | Method | Path | Meaning |
 | --- | --- | --- |
-| GET | `/api/cameras` | Configured cameras, names, online state and verified/unknown capabilities |
-| GET | `/api/status` | Recorder/backend readiness, source counts, tested capacity and resource status |
+| GET | `/api/cameras` | Configured cameras, names, online state and unknown historical capabilities |
+| GET | `/api/status` | Cached recorder state, admitted source/view counts, tested capacity and saved-clip metadata |
 
-Inventory and status reads use cached/current backend state, with bounded
-device refreshes through the shared recorder connection. They do not open
-preview streams. Distinguish an unknown capability from unsupported, and a
-configured offline camera from an unused channel.
+The first inventory request opens the shared SDK connection and discovers inputs;
+subsequent reads return the cache. Inventory opens no preview. Status does not
+contact the recorder. Added/reconnected inputs currently require service restart.
 
-Example inventory shape (illustrative values):
+Example inventory entry:
 
 ```json
 {
-  "cameras": [
-    {
-      "id": "camera-1",
-      "name": "Driveway",
-      "online": true,
-      "live_qualities": ["overview", "detail"],
-      "capabilities": {
-        "time_playback": "supported",
-        "motion_timeline": "unknown"
-      }
-    }
-  ]
+  "id": "camera-1",
+  "channel": 1,
+  "name": "Driveway",
+  "online": true,
+  "aspect_ratio": "16:9",
+  "live_qualities": ["overview"],
+  "capabilities": {"time_playback":"unknown", "motion_timeline":"unknown"}
 }
 ```
 
-`overview` normally maps to the substream; `detail` to the main stream. The
-backend validates what is actually available. The illustrative detail quality
-is not yet verified as a live stream on this recorder. Camera IDs remain stable
-if display names change; the backend maps IDs to recorder channels.
+Camera IDs map to SDK channels and remain stable when display names change.
+Only overview/substream quality is supported. Historical capabilities remain
+unknown per camera; one successful extraction is not blanket support.
+Status reports `device_stream_limit: null`, configured `source_limit`, observed
+`tested_concurrent_streams`, `sdk_login_calls`, `viewer_sessions` and
+`active_live_sources` (admitted source slots, including a failed slot). These
+counts describe this backend, not other recorder clients or a hardware maximum.
 
-Status should distinguish advertised limits, tested capacity and current usage:
-for example, `device_stream_limit: null`, `tested_concurrent_streams: 1`,
-`active_live_sources: 0`, `active_playbacks: 0`. Do not publish a guessed limit
-as a hardware fact. Counts describe backend usage separately from known total
-recorder connections, including other applications.
-
-## Live viewer sessions — milestone 2
+## Implemented live viewer sessions — milestone 2
 
 | Method | Path | Meaning |
 | --- | --- | --- |
-| POST | `/api/live/sessions` | Subscribe this browser view to selected cameras/qualities |
-| GET | `/api/live/sessions/{id}` | Per-camera states, freshness, dimensions and media descriptors |
-| PATCH | `/api/live/sessions/{id}` | Change requested cameras/qualities, or renew the viewer lease |
-| DELETE | `/api/live/sessions/{id}` | Release this viewer's subscriptions |
-| GET | `/media/live/{session_id}/{camera_id}` | Read an existing session's browser-ready stream |
+| POST | `/api/live/sessions` | Subscribe this browser view to selected camera substreams |
+| GET | `/api/live/sessions/{id}` | Per-camera states, freshness, dimensions and media descriptor |
+| PATCH | `/api/live/sessions/{id}` | Replace requested cameras, or `{}` to renew the lease |
+| DELETE | `/api/live/sessions/{id}` | Release only this viewer's subscriptions; repeat returns 204 |
+| GET | `/media/live/{id}/frames` | One multiplexed feed of JPEGs for this view |
 
-On overview load, fetch inventory and create a viewer session for the configured
-online cameras. Offline configured cameras remain labeled tiles. Stream starts
-are staggered within the tested capacity; they do not produce a burst of new
-SDK logins.
-
-Example request:
+On overview load, fetch inventory and create a view containing all discovered
+inputs, including offline tiles. Previews start sequentially through the same
+native worker and shared SDK login. An individual failure leaves other tiles active.
 
 ```http
 POST /api/live/sessions
 Content-Type: application/json
-Idempotency-Key: <one stable key for this browser view>
+Idempotency-Key: <per-document random key>
 ```
 
 ```json
-{
-  "cameras": [
-    {"id": "camera-1", "quality": "overview"},
-    {"id": "camera-2", "quality": "overview"}
-  ]
-}
+{"cameras":[{"id":"camera-1","quality":"overview"}]}
 ```
 
-Example `201 Created` response, with states allowed to advance asynchronously:
+Example 201 response (illustrative ID and expiry):
 
 ```json
 {
-  "id": "live-example",
-  "state": "starting",
-  "expires_at": "2026-10-10T13:31:30Z",
-  "cameras": [
-    {
-      "id": "camera-1",
-      "quality": "overview",
-      "state": "starting",
-      "last_frame_received_at": null,
-      "media": {
-        "transport": "mjpeg",
-        "url": "/media/live/live-example/camera-1"
-      },
-      "error": null
-    }
-  ]
+  "id":"live-example",
+  "expires_at":"2026-10-10T13:31:30+00:00",
+  "lease_seconds":90,
+  "cameras":[{
+    "id":"camera-1", "quality":"overview", "state":"starting",
+    "frames":0, "width":0, "height":0,
+    "last_frame_received_at":null, "frame_age_seconds":null, "error":null
+  }],
+  "media":{"transport":"jpeg-frames-v1", "url":"/media/live/live-example/frames"}
 }
 ```
 
-The abbreviated response demonstrates one camera; actual responses contain an
-entry for every requested camera. Possible camera states include starting,
-live, stale, offline, capacity_limited and error. A partially working grid keeps
-working cameras active and reports failures on their own tiles. A request
-rejected entirely for capacity returns 409.
-`last_frame_received_at` measures backend receipt/freshness; it is not a claim
-about the camera overlay's timestamp or historical playback position.
+States include starting, live, stale, offline, capacity_limited and error. Source
+budget overflow still creates a view and labels excess cameras; the viewer limit
+returns 409. Last-frame timestamps measure backend receipt, not camera OSD time.
+PATCH selection replaces the view's set. PATCH `{}` renews a configurable lease
+(default 90 seconds, renewed every 30). DELETE/expiry releases only this view;
+the last subscriber leaving stops that preview. The recorder login persists
+until service shutdown. Media GETs never create views or authenticate.
 
-PATCH with a `cameras` array replaces this viewer's requested set. PATCH `{}`
-only renews the lease. Proposed initial lease duration: 90 seconds, renewed by
-an active page every 30 seconds. DELETE releases only this view. The last
-subscriber leaving permits an idle source to stop; other viewers retain it.
-Expiry provides cleanup when a tab disappears without a reliable close request.
-Expired/suspended pages can acquire a new lease on return.
+The same idempotency key and selection reuses an active view; conflicting selection
+returns 409. A refreshed or copied tab creates its own document lease and shares
+existing sources. Eight viewer leases and one feed per lease are allowed.
 
-Refresh reuses or replaces the browser's lease without duplicating an existing
-upstream source. A repeated creation with the same idempotency key and body
-returns the same active session; a conflicting body returns 409. Media GETs
-never create sessions or trigger fresh logins independently.
-
-An enlarged view updates that camera's requested quality. If another browser
-still needs its overview stream, the backend retains it. A second quality may
-therefore consume an additional source; admission uses the capacity budget.
+Expand currently changes layout only and keeps overview quality. Main-stream
+quality switching remains future work and would require separate capacity admission.
+The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
 ## Recording and motion timeline data — milestones 3–4
 
@@ -283,7 +252,8 @@ ready result points only to its clip, never a workspace path or directory.
 
 ## Frontend files along functional boundaries
 
-Proposed layout; no file moves have been made:
+The current live modules follow these boundaries; history/timeline/control/export
+modules in this layout remain planned:
 
 ```text
 web/
@@ -292,13 +262,15 @@ web/
   style.css                      shared page styling
   shared/
     api.js                       request helpers, errors, timestamp serialization
-    media-player.js              media descriptor to MJPEG/video rendering
+    media-player.js              browser aspect/fit scaling
+    frame-feed.js                multiplexed JPEG transport
     status.js                    shared status presentation
   live/
     overview.js                  live viewer lease and subscriptions
     camera-tile.js               one tile and enlarged-view interaction
-    overview.css                 grid/tile styling
+                                 grid/tile styling currently in style.css
   history/
+    recorded-clip.js              implemented saved MP4 playback
     history-view.js              camera/date/range selection and query lifecycle
     timeline.js                  recording/motion bands and timeline interaction
     playback-controls.js         playback session, seek, pause and speed
@@ -313,25 +285,26 @@ transport selection but does not contain SDK or timeline-search logic.
 
 Backend boundaries should likewise separate camera inventory/status, live-session
 routes, history/timeline routes, playback routes and export jobs from the recorder
-adapter and decoder/source management. The existing global camera state in the
-prototype must become explicit per-camera/per-session contexts before a grid.
+adapter and decoder/source management. The live grid now has independent
+per-camera decoder contexts and shared sources referenced by per-view leases.
 
 ## Example browser flows
 
 **Overview:** GET cameras -> POST live session -> attach returned media URLs ->
-GET session status periodically + PATCH lease renewal -> PATCH selection when
-enlarging a tile -> DELETE this session on leaving the view when possible.
+GET session status periodically + PATCH lease renewal -> DELETE this session on
+leaving the view when possible. Expansion currently changes layout only.
 
 **History:** release this page's live subscriptions -> GET timeline for camera/
 range -> POST playback for a selected interval -> attach returned media ->
 PATCH seek/pause/resume -> DELETE playback on leaving. A separate POST export
 creates a downloadable clip without replacing another viewer's playback.
 
-## Current prototype versus proposal
+## Current implementation versus proposal
 
-Existing endpoints are `/api/status`, `/api/start`, `/api/stop`, `/stream.mjpeg`
-and `/recording.mp4`, for one shared camera and one saved clip. They do not yet
-provide the inventory, leases, multiple cameras, timeline or playback-session
-API above. Replace/transition the live controls in milestone 2, then introduce
-timeline/playback/export operations in later milestones after SDK feasibility
-checks. No implementation or recorder probes were performed for this proposal.
+Inventory, live leases and their feed above are implemented. `/recording.mp4`
+serves an existing private clip with byte-range support. The prior `/api/start`,
+`/api/stop` and `/stream.mjpeg` routes are no longer exposed by the default service.
+Timeline queries, independent SDK historical sessions and export jobs remain
+proposals pending motion/recording feasibility work. Shared response conventions
+above describe the eventual API; current live errors use a generic structured
+`error.code` plus safe message and do not expose raw SDK logs.

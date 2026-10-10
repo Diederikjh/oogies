@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the Docker browser prototype on localhost, without starting the camera."""
+"""Start the local live grid; opening its page subscribes to cameras."""
 import argparse
 import json
 import os
@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from sdk_adapters import get_sdk_adapter
+from nvr_config import load_config
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "cam-browser-viewer"
@@ -16,7 +17,6 @@ NAME = "cam-browser-viewer"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8088)
-    parser.add_argument("--session-seconds", type=int, default=600)
     parser.add_argument("--stop", action="store_true")
     args = parser.parse_args()
     adapter = get_sdk_adapter()
@@ -32,8 +32,10 @@ def main():
             time.sleep(0.1)
         parser.exit(2, "Viewer stopped; Docker cleanup is still in progress.\n")
         return
-    if not 1024 <= args.port <= 65535 or not 1 <= args.session_seconds <= 900:
-        parser.error("invalid port or session duration")
+    config = load_config()
+    adapter = get_sdk_adapter(config["sdk_profile"])
+    if not 1024 <= args.port <= 65535:
+        parser.error("invalid HTTP port")
     sdk = ROOT / ".local/hik-sdk/sdk"
     credentials = ROOT / ".local/nvr-credentials.json"
     if not (sdk / "lib/libhcnetsdk.so").is_file() or not credentials.is_file():
@@ -54,6 +56,8 @@ def main():
     for source, target, writable in ((sdk, "/sdk", False), (credentials, "/credentials/nvr.json", False),
             (ROOT / "tools/credentials.py", "/support/credentials.py", False),
             (ROOT / "tools/sdk_adapters", "/support/sdk_adapters", False),
+            (ROOT / "tools/nvr_config.py", "/support/nvr_config.py", False),
+            (ROOT / ".local/nvr-config.json", "/configuration/nvr.json", False),
             (ROOT / "docker/hikvision-sdk", "/probe", False), (ROOT / "web", "/web", False),
             (output, "/output", True)):
         command.extend(["--mount", f"type=bind,source={source},target={target}" + ("" if writable else ",readonly")])
@@ -71,10 +75,9 @@ def main():
                                    ("CAM_RECORDING_SECONDS", str(metadata["clip_duration_seconds"]))):
                     command.extend(["--env", key + "=" + value])
                 break
-    command.extend([adapter.runtime_image, "python3", "/probe/browser_server.py", "--port", str(args.port),
-                    "--session-seconds", str(args.session_seconds)])
+    command.extend([adapter.runtime_image, "python3", "/probe/grid_server.py", "--port", str(args.port)])
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
-    print(f"Open http://localhost:{args.port}/ and choose Start live view.")
+    print(f"Open http://localhost:{args.port}/ for the automatic live grid.")
 
 
 if __name__ == "__main__":

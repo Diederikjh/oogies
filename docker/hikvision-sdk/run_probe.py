@@ -11,6 +11,7 @@ import urllib.parse
 import uuid
 
 from sdk_adapters import get_sdk_adapter
+from nvr_config import load_config
 
 ERRORS = {
     0: "success", 1: "username/password rejected", 2: "operation not authorized",
@@ -63,7 +64,8 @@ def main():
         parser.error("historical extraction requires --decrypt and 1–10 capture seconds")
     if args.skip_search and not args.historical:
         parser.error("--skip-search requires --historical")
-    adapter = get_sdk_adapter()
+    config = load_config("/configuration/nvr.json") if args.mode == "probe" else None
+    adapter = get_sdk_adapter(config["sdk_profile"]) if config else get_sdk_adapter()
     try:
         binary = compile_probe(adapter)
     except ValueError as error:
@@ -87,7 +89,7 @@ def main():
         log_dir.mkdir(mode=0o700)
     try:
         invocation = adapter.invocation(binary, credentials=credentials,
-            host="192.0.2.10", port=8000, seconds=args.capture_seconds,
+            host=config["host"] if config else None, port=config["sdk_port"] if config else None, seconds=args.capture_seconds,
             check=args.mode == "check", decrypt=args.decrypt,
             historical=args.historical, skip_search=args.skip_search,
             capture_dir=capture_dir, log_dir=log_dir)
