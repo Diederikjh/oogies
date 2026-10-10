@@ -22,6 +22,8 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/shared/media-player.js": ("shared/media-player.js", "text/javascript"),
     "/shared/api.js": ("shared/api.js", "text/javascript"),
     "/shared/frame-feed.js": ("shared/frame-feed.js", "text/javascript"),
+    "/shared/display-preferences.js": ("shared/display-preferences.js", "text/javascript"),
+    "/settings/display-settings.js": ("settings/display-settings.js", "text/javascript"),
     "/live/overview.js": ("live/overview.js", "text/javascript"),
     "/live/camera-tile.js": ("live/camera-tile.js", "text/javascript"),
     "/history/recorded-clip.js": ("history/recorded-clip.js", "text/javascript")}

@@ -59,10 +59,10 @@ def main():
         assert before != hashlib.sha256(pixels().encode()).hexdigest()
         results["live_pixels_change"] = True
         driver.save_screenshot(str(output / "grid-desktop.png"))
-        driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .expand').click()
+        driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .camera-view').click()
         wait.until(lambda _: driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"]').get_attribute("class").endswith("is-expanded"))
         assert backend()["active_live_sources"] == len(online)
-        driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .expand').click()
+        driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .camera-view').click()
         driver.set_window_size(390, 844)
         wait.until(lambda _: all(pic["fits"] for pic in pictures() if pic["displayed"]))
         driver.save_screenshot(str(output / "grid-mobile.png"))

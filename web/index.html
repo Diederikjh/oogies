@@ -10,7 +10,8 @@
     <header><div><p class="eyebrow">HOME CAMERAS</p><h1>Live overview</h1>
       <p class="subtitle">Your cameras, together</p></div><span id="grid-summary" class="badge">Connecting…</span></header>
     <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live overview</button>
-      <button id="recording-tab" aria-pressed="false">Recorded clip</button></nav>
+      <button id="recording-tab" aria-pressed="false">Recorded clip</button>
+      <button id="settings-open" aria-haspopup="dialog">Settings</button></nav>
     <section id="live-panel" aria-label="Live camera overview">
       <div class="toolbar"><p id="message" role="status" aria-live="polite">Discovering cameras…</p>
         <div class="actions"><button id="start" disabled>Resume view</button><button id="stop" disabled>Pause view</button></div></div>
@@ -18,11 +19,16 @@
     </section>
     <section id="recording-panel" aria-label="Recorded camera video" hidden>
       <div class="viewer recording-viewer"><video id="recording" controls playsinline preload="none"></video></div>
-      <div class="toolbar"><div><strong>Historical test clip · Camera 1</strong><p class="subtitle" id="recording-time">Recorder time</p></div>
-        <label>Aspect ratio <select id="recording-aspect"><option value="16:9">16:9</option><option value="4:3">4:3</option><option value="original">Original</option></select></label></div>
+      <div class="toolbar"><div><strong>Historical test clip · Camera 1</strong><p class="subtitle" id="recording-time">Recorder time</p></div></div>
       <p class="subtitle">The previously extracted clip. Historical timeline browsing is the next milestone.</p>
     </section>
     <footer><span class="dot"></span>Local camera viewer<span>Video only · Overview quality</span></footer>
   </main>
+  <dialog id="display-settings" aria-labelledby="settings-title">
+    <div class="settings-heading"><h2 id="settings-title">Settings</h2><button id="settings-close" autofocus>Done</button></div>
+    <h3>Picture proportions</h3>
+    <p class="subtitle">Choose an aspect ratio for each camera. Changes apply immediately and are remembered in this browser, including recorded video for that camera.</p>
+    <div id="aspect-settings" class="aspect-settings"></div>
+  </dialog>
 </body>
 </html>

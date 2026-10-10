@@ -338,7 +338,10 @@ live OSD timestamps are unchanged.
 Optional `camera_overrides` keys are SDK channel numbers, for example:
 `"1": {"name":"Driveway", "aspect_ratio":"16:9"}` or
 `"4": {"enabled":false}`. Names and online state otherwise come from discovery.
-Only overview quality is implemented; Expand does not start a main stream.
+Only overview quality is implemented; clicking a picture toggles expansion
+without starting a main stream. Aspect controls live under Settings → Picture
+proportions, with per-camera browser preferences applied to live and recorded
+video.
 Restart the service after editing settings or credentials. See
 [the grid notes](docs/live-grid.md) for the implemented API and limits.
 

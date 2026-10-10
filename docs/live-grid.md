@@ -13,9 +13,12 @@ Seven pictures move simultaneously; offline inputs remain labeled tiles.
 Camera names are read from the recorder. Optional owner overrides can rename,
 hide or change a camera's default display proportions.
 
-Each tile has independent live/stale/offline/error/capacity state, aspect selection
-and an Expand control. Expand keeps the overview substream and creates no extra
-NVR connection. Main-stream quality switching is not implemented yet. Camera 1's
+Each tile has independent live/stale/offline/error/capacity state. Click its
+picture to expand/collapse; the picture is a button supporting Enter and Space,
+with an accessible action label and expansion state. Expansion keeps the overview
+substream and creates no extra NVR connection. Aspect selectors are under
+Settings → Picture proportions, with one saved browser preference per camera
+shared by its live and recorded views. Main-stream quality switching is not implemented yet. Camera 1's
 16:9 setting matches the owner's Hik-Connect screenshot; other cameras can use
 4:3 or Original. Browsers scale the original JPEGs without backend upscaling.
 
@@ -152,3 +155,29 @@ A real unrenewed lease expired after 90 seconds while a separate lease, renewed
 every 25 seconds, kept its camera live. Only the abandoned source stopped; the
 remaining view retained the same recorder login. Evidence: private
 `.local/grid-check/lease-expiry.json`.
+
+## Offline display-control check
+
+[check_display_controls.py](../tools/check_display_controls.py) injects a fake
+worker into the real HTTP/session layers and exercises the actual frontend.
+Synthetic JPEG/MP4 fixtures require no private footage or SDK binaries. It checks
+picture-click and keyboard expansion, the settings dialog, per-camera persistence,
+mobile fitting and the shared live/recorded preference. Seven checks passed with
+zero SDK logins and no browser errors. This covers UI behavior; device/decoder
+compatibility remains covered by the real-recorder checks above.
+
+Run with the existing browser image:
+
+```sh
+mkdir -p .local/display-controls-check
+docker run --rm --network none --read-only \
+  --user "$(id -u):$(id -g)" --cap-drop=ALL --security-opt=no-new-privileges \
+  --cpus=2 --memory=2g --pids-limit=512 --tmpfs /tmp:rw,exec,nosuid,size=256m \
+  --env XDG_CONFIG_HOME=/tmp/config --env XDG_CACHE_HOME=/tmp/cache \
+  --env PYTHONPATH=/support:/probe \
+  --mount "type=bind,source=$PWD/tools,target=/support,readonly" \
+  --mount "type=bind,source=$PWD/docker/hikvision-sdk,target=/probe,readonly" \
+  --mount "type=bind,source=$PWD/web,target=/web,readonly" \
+  --mount "type=bind,source=$PWD/.local/display-controls-check,target=/output" \
+  cam-hik-sdk-browser:local python3 /support/check_display_controls.py
+```

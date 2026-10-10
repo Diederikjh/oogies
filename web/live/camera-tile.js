@@ -1,4 +1,5 @@
 import {MediaDisplay} from "/shared/media-player.js";
+import {readAspect, saveAspect} from "/shared/display-preferences.js";
 
 const LABELS = {starting:"Connecting", live:"Live", stale:"Video delayed", offline:"Offline",
   error:"Unavailable", capacity_limited:"Stream limit", stopping:"Stopping", stopped:"Stopped"};
@@ -10,37 +11,36 @@ export class CameraTile {
     this.element.className = "camera-tile";
     this.element.dataset.cameraId = camera.id;
     this.element.innerHTML = `<div class="tile-heading"><h2></h2><span class="tile-badge">Connecting</span></div>
-      <div class="viewer"><img hidden><div class="tile-placeholder">Connecting to camera…</div></div>
-      <div class="tile-controls"><select aria-label="Picture proportions"><option value="16:9">16:9</option>
-        <option value="4:3">4:3</option><option value="original">Original</option></select>
-        <span class="tile-metrics">Overview</span><button class="expand" aria-expanded="false">Expand</button></div>`;
+      <button type="button" class="viewer camera-view" aria-expanded="false"><img hidden><span class="tile-placeholder">Connecting to camera…</span>
+        <span class="expand-hint" aria-hidden="true">Expand</span></button>
+      <div class="tile-controls"><span class="tile-metrics">Overview</span></div>`;
     this.element.querySelector("h2").textContent = camera.name;
     this.image = this.element.querySelector("img");
     this.image.alt = `Live video from ${camera.name}`;
     this.placeholder = this.element.querySelector(".tile-placeholder");
     this.badge = this.element.querySelector(".tile-badge");
     this.metrics = this.element.querySelector(".tile-metrics");
-    this.select = this.element.querySelector("select");
-    this.preference = `home-cameras.${camera.id}.display-aspect.v1`;
+    this.view = this.element.querySelector(".camera-view");
     grid.append(this.element);
-    this.display = new MediaDisplay(this.image, this.element.querySelector(".viewer"));
-    let aspect = camera.aspect_ratio || "16:9";
-    try { aspect = localStorage.getItem(this.preference) || aspect; } catch (_) {}
-    this.select.value = ["16:9", "4:3", "original"].includes(aspect) ? aspect : "16:9";
-    this.display.setAspect(this.select.value);
-    this.select.addEventListener("change", () => {
-      this.display.setAspect(this.select.value);
-      try { localStorage.setItem(this.preference, this.select.value); } catch (_) {}
-    });
-    this.element.querySelector(".expand").addEventListener("click", event => {
+    this.display = new MediaDisplay(this.image, this.view);
+    this.aspect = readAspect(camera.id, camera.aspect_ratio || "16:9");
+    this.display.setAspect(this.aspect);
+    this.view.setAttribute("aria-label", `Expand ${camera.name}`);
+    this.view.addEventListener("click", () => {
       const expanded = this.element.classList.toggle("is-expanded");
-      event.target.setAttribute("aria-expanded", String(expanded));
-      event.target.textContent = expanded ? "Collapse" : "Expand";
+      this.view.setAttribute("aria-expanded", String(expanded));
+      this.view.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} ${camera.name}`);
+      this.element.querySelector(".expand-hint").textContent = expanded ? "Collapse" : "Expand";
     });
     this.url = null;
     this.decoding = false;
     this.hasFrame = false;
     this.disposed = false;
+  }
+
+  setAspect(value) {
+    this.aspect = saveAspect(this.camera.id, value);
+    this.display.setAspect(this.aspect);
   }
 
   frame(jpeg) {

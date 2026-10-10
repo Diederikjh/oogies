@@ -1,6 +1,7 @@
 import {api} from "/shared/api.js";
 import {Overview} from "/live/overview.js";
 import {RecordedClip} from "/history/recorded-clip.js";
+import {DisplaySettings} from "/settings/display-settings.js";
 
 const byId = id => document.getElementById(id);
 let mode = "live";
@@ -11,8 +12,9 @@ const overview = new Overview(byId("camera-grid"), session => {
   byId("stop").disabled = !session;
   byId("start").disabled = Boolean(session);
   if (session) byId("message").textContent = "Overview streams are shared across browser viewers.";
-}, message => { byId("message").textContent = message; byId("start").disabled = false; });
+}, message => { byId("message").textContent = message; byId("start").disabled = false; }, () => settings.camerasReady());
 const recording = new RecordedClip(byId("recording-panel"));
+const settings = new DisplaySettings(byId("display-settings"), overview.tiles, recording);
 
 async function showMode(next) {
   mode = next;

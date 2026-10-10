@@ -2,6 +2,9 @@
 
 Current service update: the [live grid](live-grid.md) supersedes the single-camera
 frontend described below and retains the efficient browser aspect correction.
+Aspect selectors now live under Settings → Picture proportions rather than
+beside each view. Per-camera choices are remembered in this browser and shared
+with that camera’s recorded video.
 
 
 Date: 10 October 2026. The Python adapter work preceding this investigation was

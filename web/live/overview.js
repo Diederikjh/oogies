@@ -3,10 +3,11 @@ import {FrameFeed} from "/shared/frame-feed.js";
 import {CameraTile} from "/live/camera-tile.js";
 
 export class Overview {
-  constructor(grid, onStatus, onError) {
+  constructor(grid, onStatus, onError, onCameras = () => {}) {
     this.grid = grid;
     this.onStatus = onStatus;
     this.onError = onError;
+    this.onCameras = onCameras;
     this.tiles = new Map();
     this.session = null;
     this.feed = null;
@@ -26,6 +27,7 @@ export class Overview {
       for (const camera of inventory.cameras) {
         if (!this.tiles.has(camera.id)) this.tiles.set(camera.id, new CameraTile(camera, this.grid));
       }
+      this.onCameras();
       const selection = inventory.cameras.map(camera => ({id:camera.id, quality:"overview"}));
       const session = await api("/api/live/sessions", "POST", {cameras:selection}, {"Idempotency-Key":crypto.randomUUID()});
       if (generation !== this.generation) { await api(`/api/live/sessions/${session.id}`, "DELETE"); return; }

@@ -35,6 +35,20 @@ recording-search compatibility. Concurrent historical extraction with the grid,
 main-stream switching and a fresh remote/LFS clone remain untested. Evidence is
 private under `.local/grid-check/`; no captures or credentials enter Git.
 
+## Display controls refined
+
+Picture-proportion selectors now live under Settings → Picture proportions.
+The camera picture itself toggles expand/collapse and supports Enter/Space.
+Expansion retains the same overview source. Per-camera browser preferences are
+preserved, with Camera 1's choice shared by its live and recorded views.
+
+The focused Docker Chromium check uses a fake worker with the real HTTP handler,
+viewer leases, frame feed and frontend, plus synthetic JPEG/MP4 media. Seven
+interaction checks passed, including refresh persistence, independent preferences,
+modal focus/Escape, mobile fit and recorded-video proportions, with networking
+disabled, no credentials/SDK mounted, zero SDK logins and no browser errors.
+See [check_display_controls.py](tools/check_display_controls.py).
+
 ## Authentication finding
 
 The recorder's web password input accepts at most 16 characters. The password
