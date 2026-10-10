@@ -1,5 +1,10 @@
 # Historical recording search and playback with HCNetSDK
 
+Update: [historical playback was tested successfully](historical-playback-results.md)
+on 10 October 2026. Direct playback by time extracted a five-second clip.
+The optional V40 recording search returned error 11. The research and original
+experiment plan below describe the state before those tests.
+
 Research date: 10 October 2026. Documentation and offline SDK inspection only;
 no recorder login, recording search, playback or download was performed.
 Historical playback is the next investigation before building a web viewer.

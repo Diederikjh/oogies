@@ -2,12 +2,15 @@
 
 Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
 substream decodes successfully with PlayCtrl and the full verification code.
-Historical recording search and playback are next, before the web viewer.
+Historical time playback also works: a five-second recording was extracted
+from one hour earlier. Recording search still needs compatibility investigation.
 See [progress.md](progress.md) for verified results and
 links to the detailed investigation notes.
 
 The SDK's recording APIs and the proposed bounded playback experiment are
 documented in [historical-playback investigation](docs/historical-playback-investigation.md).
+The successful extraction and its reproduction command are in
+[historical-playback results](docs/historical-playback-results.md).
 
 ## Git LFS through Docker
 

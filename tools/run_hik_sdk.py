@@ -17,11 +17,17 @@ def main():
     parser.add_argument("--capture-seconds", type=int, default=0)
     parser.add_argument("--sdk-log", action="store_true", help="Save private SDK debug logs")
     parser.add_argument("--decrypt", action="store_true", help="Decode with PlayCtrl and the full verification code")
+    parser.add_argument("--historical", action="store_true", help="Extract footage one hour before the recorder's current clock")
+    parser.add_argument("--skip-search", action="store_true", help="Use direct time playback without a recording search")
     args = parser.parse_args()
     if not 0 <= args.capture_seconds <= 60:
         parser.error("capture must be 0–60 seconds")
     if args.mode == "probe" and args.decrypt and args.capture_seconds == 0:
         parser.error("--decrypt requires a positive --capture-seconds for a live probe")
+    if args.historical and (not args.decrypt or (args.mode == "probe" and not 1 <= args.capture_seconds <= 10)):
+        parser.error("historical extraction requires --decrypt and 1–10 capture seconds")
+    if args.skip_search and not args.historical:
+        parser.error("--skip-search requires --historical")
     sdk = ROOT / ".local/hik-sdk/sdk"
     if not (sdk / "lib/libhcnetsdk.so").is_file():
         parser.error("place the Linux 64-bit SDK (lib and header directories) in .local/hik-sdk/sdk")
@@ -50,8 +56,12 @@ def main():
         command.append("--sdk-log")
     if args.decrypt:
         command.append("--decrypt")
+    if args.historical:
+        command.append("--historical")
+    if args.skip_search:
+        command.append("--skip-search")
     try:
-        completed = subprocess.run(command, timeout=80 + args.capture_seconds)
+        completed = subprocess.run(command, timeout=(200 if args.historical else 80) + args.capture_seconds)
     except subprocess.TimeoutExpired:
         # The inner native-process deadline normally stops first; do not retry.
         subprocess.run(["docker", "rm", "--force", container_name],

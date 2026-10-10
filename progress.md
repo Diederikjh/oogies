@@ -70,26 +70,37 @@ No recorder settings were changed to disable encryption. Authentication
 remains bounded to one login per probe. Details and reproduction commands:
 [encrypted-stream investigation](docs/encrypted-stream-investigation.md).
 
-## Historical playback: documentation investigated
+## Historical playback: successfully extracted
 
 The installed SDK provides recording search, time/filename playback, recorded
 data callbacks, playback controls and downloads. Both V40 and V50 APIs are
 present in its headers and exported by the Linux library. Recorded callbacks
 can feed PlayCtrl, and the APK's playback branch uses the same full encryption
-string. This remains a documented approach; no historical recorder requests
-or playback tests have been made yet.
+string.
+
+At 14:51:50 on 2026-10-10, direct SDK time playback retrieved camera 1's main
+recording for **13:51:50–13:51:55**, exactly an hour earlier by the DVR clock.
+PlayCtrl decoded 75 frames at 960 × 1088 and 15 fps; offline FFmpeg produced
+a verified 5-second H.264 MP4. Its first frame visibly confirms the requested
+historical timestamp. The full verification code was configured, but this
+recording did not report an encryption flag, so its key requirement is unknown.
+
+Two bounded sessions were used: the initial recording search returned SDK
+error 11; the subsequent direct playback succeeded without a search. Login
+succeeded once in each session; there were no credential retries or recorder
+settings changes. Recording discovery remains unresolved.
 
 Details: [historical-playback investigation](docs/historical-playback-investigation.md).
+Verified result and commands: [historical-playback results](docs/historical-playback-results.md).
 
-## Next: verify historical search and decoding
+## Next: recording discovery and browser delivery
 
-Investigate historical footage before the live web viewer: confirm recorder
-time, search a bounded interval for camera 1, then decode a short returned
-historic range using PlayCtrl in file mode. Check which streams are actually
-recorded and whether the non-admin account has playback permissions.
+Investigate the recorder's compatibility with recording-search calls to support
+a historical calendar/list. Direct playback already works with the non-admin
+account and the recorded main stream.
 
-A browser streaming bridge follows this validation. Main streams, other
-cameras, audio and long-running behavior are not yet tested.
+A browser streaming bridge can reuse the verified live and historical paths.
+Other cameras, audio and long-running behavior are not yet tested.
 
 ## Reproducibility and preservation
 

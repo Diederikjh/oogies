@@ -5,12 +5,15 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 static std::atomic<unsigned long long> stream_bytes{0};
 static std::atomic<unsigned long long> stream_chunks{0};
@@ -34,6 +37,15 @@ static std::atomic<unsigned long long> encryption_events{0};
 static std::mutex frame_mutex;
 static bool frame_saved = false;
 static unsigned system_header_bytes = 0;
+static bool historical_requested = false;
+static bool skip_search = false;
+static int clip_seconds = 0;
+static std::ofstream clip_file;
+static std::atomic<unsigned> clip_frames{0};
+static std::atomic<bool> clip_complete{false}, clip_failed{false};
+static int clip_fps = 0;
+static int clip_width = 0, clip_height = 0;
+static int first_clip_stamp = 0, last_clip_stamp = 0;
 
 static void CALLBACK on_decoded(int, char *data, int length, FRAME_INFO *info, void *, int) {
     if (!info || info->nType != T_YV12 || info->nWidth <= 0 || info->nHeight <= 0) return;
@@ -47,6 +59,25 @@ static void CALLBACK on_decoded(int, char *data, int length, FRAME_INFO *info, v
         std::ofstream frame(capture_path + "/first-frame.yv12", std::ios::binary);
         frame.write(data, length);
         frame_saved = frame.good();
+    }
+    if (historical_requested && !clip_complete && !clip_failed) {
+        if (clip_frames == 0) {
+            if (info->nFrameRate < 1 || info->nFrameRate > 60) { clip_failed = true; return; }
+            clip_fps = info->nFrameRate;
+            clip_width = info->nWidth;
+            clip_height = info->nHeight;
+            first_clip_stamp = info->nStamp;
+        }
+        if (clip_width != info->nWidth || clip_height != info->nHeight ||
+            (clip_frames.load() + 1ull) * expected > 512ull * 1024 * 1024) {
+            clip_failed = true;
+            return;
+        }
+        clip_file.write(data, length);
+        if (!clip_file.good()) { clip_failed = true; return; }
+        last_clip_stamp = info->nStamp;
+        ++clip_frames;
+        if (clip_frames.load() >= static_cast<unsigned>(clip_seconds * clip_fps)) clip_complete = true;
     }
 }
 
@@ -69,7 +100,7 @@ static bool decoder_call(int success, const char *stage) {
 
 static bool prepare_decoder(const std::string &key) {
     if (!decoder_call(PlayM4_GetPort(&player_port), "GetPort")) return false;
-    if (!decoder_call(PlayM4_SetStreamOpenMode(player_port, STREAME_REALTIME), "SetStreamOpenMode")) return false;
+    if (!decoder_call(PlayM4_SetStreamOpenMode(player_port, historical_requested ? STREAME_FILE : STREAME_REALTIME), "SetStreamOpenMode")) return false;
     // Matches the supplied Hik-Connect APK: full UTF-8 string, type 1, 128 bits.
     // The length parameter is not the string's byte count. Do not hash/truncate it.
     secret_key_set = decoder_call(PlayM4_SetSecretKey(player_port, 1,
@@ -142,8 +173,178 @@ static void CALLBACK on_stream(LONG, DWORD type, BYTE *data, DWORD length, void 
     }
 }
 
+// Historical data arrives in bursts. Keep the SDK callback short and feed
+// PlayCtrl from the main thread, with bounded buffering and input backpressure.
+struct HistoryChunk { DWORD type; std::vector<BYTE> data; };
+static std::deque<HistoryChunk> history_queue;
+static std::mutex history_mutex;
+static size_t history_queue_bytes = 0;
+static std::atomic<bool> history_queue_overflow{false};
+
+static void CALLBACK on_history(LONG, DWORD type, BYTE *data, DWORD length, void *) {
+    if (type != NET_DVR_SYSHEAD && type != NET_DVR_STREAMDATA) return;
+    std::lock_guard<std::mutex> guard(history_mutex);
+    if (history_queue_bytes + length > 16 * 1024 * 1024) { history_queue_overflow = true; return; }
+    history_queue.push_back({type, std::vector<BYTE>(data, data + length)});
+    history_queue_bytes += length;
+}
+
+static std::time_t clock_value(const NET_DVR_TIME &value) {
+    std::tm time{};
+    time.tm_year = value.dwYear - 1900;
+    time.tm_mon = value.dwMonth - 1;
+    time.tm_mday = value.dwDay;
+    time.tm_hour = value.dwHour;
+    time.tm_min = value.dwMinute;
+    time.tm_sec = value.dwSecond;
+    // Calendar arithmetic on recorder wall time; do not apply the PC timezone.
+    return timegm(&time);
+}
+
+static NET_DVR_TIME recorder_time(std::time_t value) {
+    std::tm time{};
+    gmtime_r(&value, &time);
+    return {static_cast<DWORD>(time.tm_year + 1900), static_cast<DWORD>(time.tm_mon + 1),
+            static_cast<DWORD>(time.tm_mday), static_cast<DWORD>(time.tm_hour),
+            static_cast<DWORD>(time.tm_min), static_cast<DWORD>(time.tm_sec)};
+}
+
+static std::string time_text(const NET_DVR_TIME &value) {
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%04u-%02u-%02uT%02u:%02u:%02u", value.dwYear,
+                  value.dwMonth, value.dwDay, value.dwHour, value.dwMinute, value.dwSecond);
+    return buffer;
+}
+
+static bool extract_history(LONG user, LONG channel, int seconds, std::ostringstream &report) {
+    report << ",\"historical\":true,\"channel\":" << channel;
+    auto failure = [&](const char *stage, DWORD error) {
+        report << ",\"historical_error_stage\":\"" << stage << "\",\"historical_error\":" << error;
+        return false;
+    };
+    NET_DVR_TIME now{};
+    DWORD returned = 0;
+    if (!NET_DVR_GetDVRConfig(user, NET_DVR_GET_TIMECFG, -1, &now, sizeof(now), &returned))
+        return failure("read recorder clock", NET_DVR_GetLastError());
+    if (returned < sizeof(now) || now.dwYear < 2020 || now.dwMonth < 1 || now.dwMonth > 12)
+        return failure("invalid recorder clock", 17);
+    const std::time_t desired = clock_value(now) - 3600;
+    const NET_DVR_TIME begin = recorder_time(desired), end = recorder_time(desired + seconds);
+    report << ",\"recorder_now\":\"" << time_text(now) << "\",\"requested_begin\":\""
+           << time_text(begin) << "\",\"requested_end\":\"" << time_text(end) << "\"";
+    NET_DVR_FINDDATA_V40 selected{};
+    if (skip_search) report << ",\"search_skipped\":true,\"requested_stream_type\":0";
+    else {
+        NET_DVR_FILECOND_V40 conditions{};
+        conditions.lChannel = channel;
+        conditions.dwFileType = conditions.dwIsLocked = 0xff;
+        conditions.byStreamType = 0xff;
+        conditions.struStartTime = begin;
+        conditions.struStopTime = end;
+        const LONG search = NET_DVR_FindFile_V40(user, &conditions);
+        if (search < 0) return failure("find recordings", NET_DVR_GetLastError());
+        bool found = false;
+        unsigned results = 0;
+        LONG status = NET_DVR_ISFINDING;
+        const auto search_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (std::chrono::steady_clock::now() < search_deadline && results < 100) {
+            NET_DVR_FINDDATA_V40 item{};
+            status = NET_DVR_FindNextFile_V40(search, &item);
+            if (status == NET_DVR_ISFINDING) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); continue; }
+            if (status != NET_DVR_FILE_SUCCESS) break;
+            ++results;
+            if (clock_value(item.struStartTime) <= desired && clock_value(item.struStopTime) >= desired + seconds) {
+                selected = item;
+                found = true;
+                break;
+            }
+        }
+        NET_DVR_FindClose_V30(search);
+        report << ",\"search_results_checked\":" << results << ",\"search_status\":" << status
+               << ",\"recording_found\":" << (found ? "true" : "false");
+        if (!found) return failure("no recording covering requested interval", 33);
+        report << ",\"recording_begin\":\"" << time_text(selected.struStartTime)
+               << "\",\"recording_end\":\"" << time_text(selected.struStopTime)
+               << "\",\"recorded_stream_type\":" << static_cast<unsigned>(selected.byStreamType);
+    }
+    NET_DVR_VOD_PARA playback{};
+    playback.dwSize = sizeof(playback);
+    playback.struIDInfo.dwSize = sizeof(playback.struIDInfo);
+    playback.struIDInfo.dwChannel = channel;
+    playback.struBeginTime = begin;
+    playback.struEndTime = end;
+    playback.byStreamType = selected.byStreamType;
+    const LONG handle = NET_DVR_PlayBackByTime_V40(user, &playback);
+    if (handle < 0) return failure("create playback", NET_DVR_GetLastError());
+    const char *directory = std::getenv("CAM_SDK_CAPTURE_DIR");
+    capture_path = directory ? directory : "/output";
+    clip_seconds = seconds;
+    clip_file.open(capture_path + "/clip.yv12", std::ios::binary);
+    stream_file.open(capture_path + "/historical-stream.bin", std::ios::binary);
+    bool succeeded = false;
+    if (!clip_file || !stream_file) failure("open capture files", 34);
+    else if (!NET_DVR_SetPlayDataCallBack_V40(handle, on_history, nullptr)) failure("register playback callback", NET_DVR_GetLastError());
+    else {
+        DWORD offset = 0;
+        if (!NET_DVR_PlayBackControl_V40(handle, NET_DVR_PLAYSTART, &offset, sizeof(offset), nullptr, nullptr))
+            failure("start playback", NET_DVR_GetLastError());
+        else {
+            report << ",\"playback_started\":true";
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+            while (std::chrono::steady_clock::now() < deadline && !clip_complete && !clip_failed &&
+                   !history_queue_overflow && decoder_error_stage.empty()) {
+                HistoryChunk chunk;
+                {
+                    std::lock_guard<std::mutex> guard(history_mutex);
+                    if (!history_queue.empty()) {
+                        chunk = std::move(history_queue.front());
+                        history_queue.pop_front();
+                        history_queue_bytes -= chunk.data.size();
+                    }
+                }
+                if (chunk.data.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
+                if (chunk.type == NET_DVR_STREAMDATA && player_started) {
+                    stream_file.write(reinterpret_cast<char *>(chunk.data.data()), chunk.data.size());
+                    stream_bytes += chunk.data.size(); ++stream_chunks;
+                    while (!PlayM4_InputData(player_port, chunk.data.data(), chunk.data.size())) {
+                        const unsigned error = PlayM4_GetLastError(player_port);
+                        if (error != PLAYM4_BUF_OVER || std::chrono::steady_clock::now() >= deadline || clip_complete) {
+                            if (!clip_complete) decoder_call(FALSE, "InputData");
+                            break;
+                        }
+                        ++input_failures;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                } else on_stream(handle, chunk.type, chunk.data.data(), chunk.data.size(), nullptr);
+            }
+            NET_DVR_TIME osd{};
+            if (NET_DVR_GetPlayBackOsdTime(handle, &osd)) report << ",\"playback_osd_time\":\"" << time_text(osd) << "\"";
+            succeeded = clip_complete && !clip_failed && !history_queue_overflow && decoder_error_stage.empty();
+        }
+    }
+    NET_DVR_StopPlayBack(handle);
+    close_decoder();
+    clip_file.close(); stream_file.close();
+    report << ",\"verification_code_used\":" << (secret_key_set && player_opened ? "true" : "false")
+           << ",\"captured_bytes\":" << stream_bytes.load() << ",\"system_header_bytes\":" << system_header_bytes
+           << ",\"decoded_video_frames\":" << decoded_frames.load() << ",\"clip_frames\":" << clip_frames.load()
+           << ",\"clip_fps\":" << clip_fps << ",\"frame_width\":" << frame_width.load()
+           << ",\"frame_height\":" << frame_height.load() << ",\"first_clip_stamp_ms\":" << first_clip_stamp
+           << ",\"last_clip_stamp_ms\":" << last_clip_stamp << ",\"clip_complete\":" << (clip_complete ? "true" : "false")
+           << ",\"clip_write_failed\":" << (clip_failed ? "true" : "false")
+           << ",\"queue_overflow\":" << (history_queue_overflow ? "true" : "false")
+           << ",\"decoder_error_stage\":\"" << decoder_error_stage << "\",\"decoder_error\":" << decoder_error
+           << ",\"decoder_buffer_waits\":" << input_failures.load()
+           << ",\"video_encryption_type\":" << video_encryption.load();
+    return succeeded;
+}
+
 int main(int argc, char **argv) {
-    for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--decrypt") decode_requested = true;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--decrypt") decode_requested = true;
+        if (std::string(argv[i]) == "--historical") historical_requested = true;
+        if (std::string(argv[i]) == "--skip-search") skip_search = true;
+    }
     if (argc >= 2 && std::string(argv[1]) == "check") {
         if (!initialize_sdk()) return 2;
         const bool decoder_ready = !decode_requested || prepare_decoder("DUMMYVERIFICATION");
@@ -174,6 +375,7 @@ int main(int argc, char **argv) {
     const int port = std::stoi(port_string);
     const int seconds = std::stoi(seconds_string);
     if (port < 1 || port > 65535 || seconds < 0 || seconds > 60) return 2;
+    if (historical_requested && (!decode_requested || seconds < 1 || seconds > 10)) return 2;
     if (decode_requested) {
         if (!std::getline(std::cin, verification_code) || verification_code.empty() ||
             verification_code.size() > 128 || verification_code.find_first_of("\r\n\0", 0, 3) != std::string::npos) return 2;
@@ -228,6 +430,15 @@ int main(int argc, char **argv) {
               << ",\"digital_start_channel\":" << static_cast<unsigned>(info.byStartDChan)
               << ",\"main_protocol\":" << static_cast<unsigned>(info.byMainProto)
               << ",\"sub_protocol\":" << static_cast<unsigned>(info.bySubProto);
+    if (historical_requested) {
+        const bool extracted = extract_history(user, info.byChanNum ? info.byStartChan : info.byStartDChan, seconds, report);
+        report << "}";
+        std::cout << report.str() << std::endl;
+        close_decoder();
+        NET_DVR_Logout(user);
+        NET_DVR_Cleanup();
+        return extracted ? 0 : 2;
+    }
     if (seconds > 0) {
         const char *directory = std::getenv("CAM_SDK_CAPTURE_DIR");
         capture_path = directory ? directory : "/output";
