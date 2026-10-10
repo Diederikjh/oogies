@@ -11,7 +11,7 @@ const overview = new Overview(byId("camera-grid"), session => {
   byId("grid-summary").textContent = session ? `${live} live · ${total} cameras` : "View paused";
   byId("stop").disabled = !session;
   byId("start").disabled = Boolean(session);
-  if (session) byId("message").textContent = "Overview streams are shared across browser viewers.";
+  if (session) byId("message").textContent = "";
 }, message => { byId("message").textContent = message; byId("start").disabled = false; }, () => settings.camerasReady());
 const recording = new RecordedClip(byId("recording-panel"));
 const settings = new DisplaySettings(byId("display-settings"), overview.tiles, recording);

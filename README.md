@@ -1,4 +1,4 @@
-# Home camera viewing investigation
+# Oogies
 
 For a fresh checkout, start with [GETTING_STARTED.md](GETTING_STARTED.md).
 It gives the setup overview and current limitations. Detailed installation and
