@@ -1,0 +1,74 @@
+# Camera viewing investigation progress
+
+Updated: 2026-10-10 (South Africa time).
+
+Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
+at `192.0.2.10` can be decoded for a future web viewer. The web application
+is a later phase.
+
+## Authentication finding
+
+The recorder's web password input accepts at most 16 characters. The password
+in the credentials file was longer; using its first 16 characters resolved
+both RTSP and SDK authentication. This is verified for this recorder, rather
+than assumed to be a universal Hikvision rule.
+
+`tools/credentials.py::load_credentials()` now applies that limit to the login
+password for all authenticated probes. It preserves the username, the complete
+verification/encryption code, and the original credential file. Credentials
+remain private in `.local/nvr-credentials.json`; tests cover the boundary and
+preservation of those values. The new non-admin account also logs into the
+local web UI.
+
+## RTSP login: successful; video decoding unresolved
+
+- Port 554 is open; the tested path is `/Streaming/Channels/102` (camera 1,
+  substream) over RTSP/TCP.
+- At 12:46:11 on 2026-10-10, one FFmpeg session using the first 16 password
+  characters passed authentication and reached HEVC/H.265 processing.
+- FFmpeg reported invalid VPS/SPS/PPS/NAL data and could not determine frame
+  dimensions. No valid frames or usable capture were produced.
+- Stream encryption is enabled in the recorder UI. The decode errors are
+  consistent with encryption, but do not alone prove it is the cause. The
+  verification/encryption code has not yet been applied to a decoder.
+
+Details: [RTSP result](docs/rtsp-first16-results.md) and
+[authentication history](docs/authenticated-probe-results.md).
+
+## SDK login: successful in Docker
+
+- The original Linux64 HCNetSDK 6.1.9.48 package was downloaded manually after
+  the vendor site blocked automated downloads. The runtime and download tools
+  run in Docker; no new tools were installed on the host.
+- Offline loading and initialization passed. The SDK needs more than the
+  initial 128-thread/process container limit; the working runner allows 512
+  with CPU and memory limits still in place.
+- At 12:54:51 on 2026-10-10, one synchronous `NET_DVR_Login_V40` call on port
+  8000 succeeded with SDK error 0, using the shared credential loader.
+- The test was login only, followed by logout and cleanup. SDK live preview,
+  capture and decryption have not yet been verified.
+
+Details: [SDK investigation](docs/sdk-docker-investigation.md),
+[SDK usage notes](docs/official-sdk-usage-notes.md) and
+[credential loader](docs/credential-loading.md).
+
+## Next: tackle the encrypted live stream
+
+Use the working SDK login for one bounded preview/capture attempt, investigate
+the SDK/PlayCtrl secret-key APIs, and determine how the full verification code
+maps to the stream's encryption key. Login-password truncation must not be
+applied to that code. The SDK documents a 16-byte client secret key, but its
+relationship to the configured verification code remains unverified.
+
+Success means obtaining and decoding actual live frames with valid dimensions
+and recognizable camera imagery. No recorder settings have been changed to
+disable encryption. Authentication attempts remain bounded to avoid lockouts.
+
+## Reproducibility and preservation
+
+Source, investigation notes and credential tests are versioned. The complete
+original SDK ZIP, including its binaries, headers, examples and vendor
+documentation, is tracked with Git LFS under `vendor/hikvision/`.
+Credentials, native debug logs, APK analysis and camera captures stay in the
+ignored `.local/` directory. See [README](README.md) for Docker/LFS setup and
+restoring the SDK.
