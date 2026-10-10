@@ -74,3 +74,6 @@ See [progress.md](progress.md) for verified results and the
 Both getting-started guides will be updated as setup and behavior change.
 
 Contributors can start with [the Python SDK adapter seam](docs/sdk-adapter-seam.md).
+
+Developers can run [offline UI tests](docs/ui-testing.md) in Docker without a
+recorder or private configuration.

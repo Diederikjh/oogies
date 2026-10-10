@@ -429,6 +429,20 @@ proportions and playback, and releases its views. The old one-camera browser and
 saved-media aspect scripts describe the preceding frontend; use the grid tool
 for this milestone.
 
+## Optional: offline UI acceptance
+
+Run `python3 tools/run_ui_tests.py --build` to build the browser image and run the
+UI suite, then omit `--build` on later runs. This can be done before SDK/NVR setup:
+synthetic media and a fake worker exercise the actual browser/API/session layers
+with container networking disabled. No credentials, SDK archive or saved footage
+are mounted. See [UI testing](docs/ui-testing.md). UI success establishes browser
+behavior and does not establish compatibility with the owner's recorder.
+
+The [GitHub workflow](.github/workflows/ci.yml) runs the unit and UI suites on
+pushes and pull requests without recorder setup or Git LFS retrieval. It retains
+synthetic UI screenshots and the JSON report as run artifacts; details are in
+[the CI notes](docs/ui-testing.md#github-actions).
+
 ## Maintaining this guide
 
 The setup agent's final report should include this checklist with pass, fail,
@@ -466,3 +480,7 @@ explicit step using the configured recorder.
 As the architecture grows, document configuration keys and defaults, startup
 and shutdown commands, network binding, session cleanup, data retention,
 supported platforms, upgrades and any new prerequisites here.
+
+Before a GitHub push, run the [publication check](docs/publication-checks.md).
+The pre-push hook checks reachable history before the Docker Git LFS transfer.
+Private recorder configuration, credentials and captures must remain in `.local/`.

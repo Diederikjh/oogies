@@ -49,6 +49,80 @@ modal focus/Escape, mobile fit and recorded-video proportions, with networking
 disabled, no credentials/SDK mounted, zero SDK logins and no browser errors.
 See [check_display_controls.py](tools/check_display_controls.py).
 
+## Offline UI test suite
+
+The preceding settings/click-to-expand work was committed as `c25054b` before
+adding this suite. `python3 tools/run_ui_tests.py` runs Docker Chromium against
+the real frontend, HTTP API, live-session manager and multiplexed JPEG feed.
+The small server-construction seam accepts a worker; tests supply a simulated
+recorder with eight distinct animated cameras, an offline input and synthetic
+recorded video. The container has no network access, SDK, credentials or private
+configuration mounted, and does not use the owner's running viewer.
+
+Cases cover camera identity/movement, independent failures/stale states, capacity,
+settings/persistence/keyboard/mobile behavior, recorded playback, shared tabs,
+Pause/Resume, refresh/close cleanup, real ten-second lease expiry and startup
+navigation. The suite exposed and fixed returning to Live while discovery is
+pending: the requested start is now queued and Pause cancels it. Backend setup
+and SDK-dependent password/encryption behavior remain unchanged.
+
+All 13 UI cases and 18 existing unit tests passed. The runner saves JSON outcomes
+and synthetic screenshots in ignored `.local/ui-test-results/`. Setup guides and [UI testing](docs/ui-testing.md)
+document running the suite without recorder setup. Real SDK/device compatibility
+still requires its separate checks.
+
+## GitHub CI prepared
+
+`.github/workflows/ci.yml` runs independent unit and offline UI jobs on pushes,
+pull requests and manual dispatch. It uses the same commands as local testing,
+skips the SDK/LFS download and needs no recorder credentials. UI JSON results
+and synthetic screenshots are retained as GitHub run artifacts for 14 days,
+including ordinary test failures. GitHub checks local commits after they are
+pushed; newer pushes do not cancel older runs. Deployment remains a later step.
+
+Workflow syntax passed actionlint in Docker. All 18 unit tests and 13 UI tests
+passed using the workflow commands from a clean temporary source copy, initially
+without SDK, `.local/` or Git metadata. Evidence is private under
+`.local/ci-validation/`. Hosted Actions execution awaits a GitHub push; no repository remote
+or publishing action was configured here. See [CI notes](docs/ui-testing.md#github-actions).
+
+## Real service revalidated after the UI-testing seam
+
+The viewer was relaunched with `create_server` wired to the real SDK worker.
+HTTP/assets loaded; one SDK login discovered nine configured inputs. The current
+snapshot reports four online (channels 1, 6, 8 and 34) and five offline (2, 3, 4,
+5 and 7), compared with seven online in the initial grid experiment. The cause
+of that availability change was not investigated or attributed to the seam.
+
+A brief check retrieved valid JPEG packets for every available stream, confirmed
+two viewer leases share the same sources/login, and verified that deleting one
+lease preserves advancing frames for the other. The saved recording still serves
+HTTP byte ranges. Temporary leases were released; the service remains ready for
+the owner's browser. Private results: `.local/relaunch-check.json`. No credential
+retry or recorder settings change was performed.
+
+## Publication preparation
+
+The approved UI suite, CI workflow and production seam changes are committed
+with publication cleanup. General Gitleaks history scanning found no token or
+password leaks. Known-value checks found no saved login password, effective
+password prefix or full stream-encryption code in publishable files, Git objects
+or the SDK archive. Account-name substring matches were technical vocabulary;
+no literal credential assignment was found.
+
+Local recorder addresses and personal home paths were removed from source/notes.
+The remaining legacy diagnostics now read private configuration. Unpublished
+history is sanitized before the first push, with the original Git metadata and
+LFS objects preserved under ignored `.local/publication-backup/`. Commit IDs
+change; older IDs in investigation notes describe the original local history.
+The original SDK archive and private running-service configuration are preserved.
+
+A repeatable publication check is added to the pre-push/LFS hook and CI. It checks
+publishable files and branch/tag history, with private values kept out of reports.
+No GitHub remote or push is performed until the owner provides the repository.
+See [publication checks](docs/publication-checks.md). The offline suite now has
+21 unit cases, including three publication-check tests; UI coverage remains 13.
+
 ## Authentication finding
 
 The recorder's web password input accepts at most 16 characters. The password

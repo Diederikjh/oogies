@@ -103,3 +103,11 @@ verified the real viewer/adapter with one successful live session and cleanup.
 
 The subsequent [grid verification](live-grid.md) passed seven concurrent previews,
 two views sharing one SDK login and independent lease expiry.
+
+## Browser testing boundary
+
+The HTTP service now has a small `create_server(worker, sessions, ...)` factory.
+Offline [UI tests](ui-testing.md) inject a simulated worker while retaining the
+real HTTP, leases, frame transport and frontend. The SDK-specific adapter remains
+unchanged. A later fake native process could extend coverage through `GridWorker`
+and the adapter invocation boundary; that is not required for the current UI suite.

@@ -12,8 +12,9 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from probe_authenticated import HOST, ROOT, tag
+from probe_authenticated import ROOT, tag
 from sdk_adapters import get_sdk_adapter
+from nvr_config import load_config
 
 
 def values(document):
@@ -25,7 +26,9 @@ def digest(value):
 
 
 def main():
-    credentials = get_sdk_adapter().load_credentials()
+    config = load_config()
+    HOST = config["host"]
+    credentials = get_sdk_adapter(config["sdk_profile"]).load_credentials()
     cookies = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(cookies)

@@ -126,3 +126,20 @@ Run the existing credential checks with:
 ```sh
 python3 -m unittest discover -s tests -v
 ```
+
+## UI tests without a recorder
+
+Run `python3 tools/run_ui_tests.py --build` once to build the browser image, then
+`python3 tools/run_ui_tests.py`. The suite uses Docker Chromium, the real HTTP
+service and frontend, and a simulated worker with synthetic footage. No SDK or
+private configuration is mounted and networking is disabled. See
+[UI testing](docs/ui-testing.md) for coverage, single-case runs and result files.
+
+The [GitHub Actions workflow](.github/workflows/ci.yml) runs both suites on pushes
+and pull requests, with downloadable UI reports/screenshots. It uses synthetic
+footage and skips the SDK download; no recorder secrets are needed. A local
+commit is checked after pushing to GitHub. See [CI details](docs/ui-testing.md#github-actions).
+
+Before publishing, run `python3 tools/check_publication.py --history`; the
+pre-push hook also runs it. See [publication checks](docs/publication-checks.md)
+for scan scope and private history backups.

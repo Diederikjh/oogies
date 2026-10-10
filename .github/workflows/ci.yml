@@ -1,0 +1,57 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check publication privacy
+        run: python3 tools/check_publication.py --history
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+  ui:
+    name: Offline UI tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Verify Docker access
+        run: docker info
+
+      - name: Build browser image and run UI tests
+        run: python3 tools/run_ui_tests.py --build
+
+      - name: Upload UI report and screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ui-test-results
+          path: |
+            .local/ui-test-results/ui-tests.json
+            .local/ui-test-results/*.png
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

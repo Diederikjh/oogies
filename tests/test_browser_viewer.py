@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+RECORDER_CONFIG = {"host":"192.0.2.10", "sdk_port":8000}
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "docker/hikvision-sdk"))
 spec = importlib.util.spec_from_file_location("browser_server", ROOT / "docker/hikvision-sdk/browser_server.py")
@@ -54,7 +55,7 @@ class BrowserContractTests(unittest.TestCase):
         adapter = server.get_sdk_adapter()
         with tempfile.TemporaryDirectory() as directory, patch.object(adapter, "load_credentials", return_value={
                 "username":"test-user", "password":"test-password", "verification_code":"dummy-verification"}):
-            camera = server.Camera("fake-sdk", directory, spawn=spawn, adapter=adapter)
+            camera = server.Camera("fake-sdk", directory, spawn=spawn, adapter=adapter, config=RECORDER_CONFIG)
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
                 statuses = list(pool.map(lambda _: camera.start(), range(4)))
             self.assertEqual(len(created), 1)
@@ -91,7 +92,7 @@ class BrowserContractTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             camera = server.Camera("synthetic-bridge", directory, seconds=30,
-                                   spawn=spawn, adapter=StubAdapter())
+                                   spawn=spawn, adapter=StubAdapter(), config=RECORDER_CONFIG)
             try:
                 self.assertEqual(camera.start()["state"], "connecting")
                 self.assertEqual(processes[0].stdin.payload,
@@ -111,7 +112,7 @@ class BrowserContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.object(adapter, "load_credentials", return_value={
                 "username": "synthetic-user", "password": "synthetic-pass", "verification_code": ""}):
             with patch.object(server.subprocess, "Popen") as spawn:
-                camera = server.Camera("synthetic-bridge", directory, adapter=adapter, spawn=spawn)
+                camera = server.Camera("synthetic-bridge", directory, adapter=adapter, spawn=spawn, config=RECORDER_CONFIG)
                 with self.assertRaises(ValueError):
                     camera.start()
                 spawn.assert_not_called()

@@ -137,6 +137,18 @@ class Handler(BaseHandler):
                 self.server.feeds.discard(identifier)
 
 
+def create_server(worker, sessions, *, address, web, recording, recording_info=None):
+    """Wire the HTTP service without initializing an SDK or choosing a worker."""
+    server = ThreadingHTTPServer(address, Handler)
+    server.daemon_threads = True
+    port = server.server_port
+    server.allowed_hosts = {f"localhost:{port}", f"127.0.0.1:{port}"}
+    server.worker, server.sessions, server.feeds = worker, sessions, set()
+    server.web, server.recording = Path(web), Path(recording)
+    server.recording_info = recording_info or {}
+    return server
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8088)
@@ -149,13 +161,10 @@ def main():
     binary = adapter.compile_live_bridge()
     worker = GridWorker(binary, adapter, config, "/output")
     sessions = LiveSessions(worker, config["max_live_sources"], config["lease_seconds"])
-    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
-    server.daemon_threads = True
-    server.allowed_hosts = {f"localhost:{args.port}", f"127.0.0.1:{args.port}"}
-    server.worker, server.sessions, server.feeds = worker, sessions, set()
-    server.web, server.recording = Path("/web"), Path("/recording/historical-clip.mp4")
-    server.recording_info = {"recording_begin": os.environ.get("CAM_RECORDING_BEGIN"),
+    recording_info = {"recording_begin": os.environ.get("CAM_RECORDING_BEGIN"),
         "recording_end": os.environ.get("CAM_RECORDING_END"), "recording_seconds": os.environ.get("CAM_RECORDING_SECONDS")}
+    server = create_server(worker, sessions, address=("0.0.0.0", args.port),
+        web="/web", recording="/recording/historical-clip.mp4", recording_info=recording_info)
     threading.Thread(target=sessions.run_reaper, daemon=True).start()
     def shutdown(*_): threading.Thread(target=server.shutdown, daemon=True).start()
     signal.signal(signal.SIGTERM, shutdown); signal.signal(signal.SIGINT, shutdown)

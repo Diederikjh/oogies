@@ -14,9 +14,10 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from sdk_adapters import get_sdk_adapter
+from nvr_config import load_config
 
 ROOT = Path(__file__).resolve().parents[1]
-HOST = "192.0.2.10"
+HOST = None  # Set from private owner configuration in main().
 
 
 class BoundedDigestAuthHandler(urllib.request.HTTPDigestAuthHandler):
@@ -156,6 +157,7 @@ def media_test(credentials, channel, seconds, port=554, capture=False):
 
 
 def main():
+    global HOST
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("inspect", "probe", "decode"))
     parser.add_argument("--channel", type=int, default=102)
@@ -168,8 +170,10 @@ def main():
     if not 1 <= args.seconds <= 120 or not 101 <= args.channel <= 9999 or not 1 <= args.port <= 65535:
         parser.error("seconds must be 1–120, channel 101–9999 and port 1–65535")
     try:
-        credentials = get_sdk_adapter().load_credentials()
-    except ValueError as error:
+        config = load_config()
+        HOST = config["host"]
+        credentials = get_sdk_adapter(config["sdk_profile"]).load_credentials()
+    except (OSError, ValueError) as error:
         parser.error(str(error))
     if args.mode == "inspect":
         result = {"inspection": inspect(credentials)}

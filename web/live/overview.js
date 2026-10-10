@@ -17,9 +17,11 @@ export class Overview {
   }
 
   async start() {
-    if (this.busy || this.session) return;
-    this.busy = true;
     this.active = true;
+    if (this.busy) { this.startQueued = true; return; }
+    if (this.session) return;
+    this.busy = true;
+    this.startQueued = false;
     const generation = ++this.generation;
     try {
       const inventory = await api("/api/cameras");
@@ -38,10 +40,13 @@ export class Overview {
       this.pollTimer = setInterval(() => this.poll(), 1000);
       this.renewTimer = setInterval(() => this.renew(), Math.max(3000, session.lease_seconds * 1000 / 3));
     } catch (error) {
-      this.onError(error.message);
-      this.active = false;
+      if (generation === this.generation) {
+        this.onError(error.message);
+        this.active = false;
+      }
     } finally {
       this.busy = false;
+      if (this.startQueued && this.active) this.start();
     }
   }
 
@@ -69,6 +74,7 @@ export class Overview {
 
   async stop() {
     this.active = false;
+    this.startQueued = false;
     ++this.generation;
     clearInterval(this.pollTimer); clearInterval(this.renewTimer);
     this.feed?.close(); this.feed = null;

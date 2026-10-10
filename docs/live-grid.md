@@ -121,7 +121,7 @@ SDK-dependent password normalization remains in the adapter and cannot be
 overridden globally here. Only the current SDK is supported. Timezone records
 the device's clock context for later historical queries; live OSD is untouched.
 Settings are loaded at startup, so restart after editing the file. Legacy raw
-RTSP/web investigation scripts remain tied to the original investigation setup.
+RTSP/web diagnostics now also read the private recorder configuration.
 
 ## Verification and limits
 

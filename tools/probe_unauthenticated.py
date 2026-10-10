@@ -5,8 +5,9 @@ import concurrent.futures
 import http.client
 import json
 import socket
+from nvr_config import load_config
 
-HOST = "192.0.2.10"
+HOST = None  # Set from private owner configuration in main().
 TIMEOUT = 4
 
 
@@ -76,6 +77,8 @@ def rtsp_request(method, path):
 
 
 def main():
+    global HOST
+    HOST = load_config()["host"]
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         ports = list(pool.map(port_check, (80, 443, 554, 8000)))
     results = {"host": HOST, "ports": ports, "http": [], "rtsp": []}

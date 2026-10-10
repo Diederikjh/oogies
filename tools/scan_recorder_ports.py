@@ -8,8 +8,9 @@ import json
 from pathlib import Path
 import socket
 import time
+from nvr_config import load_config
 
-HOST = "192.0.2.10"
+HOST = None  # Set from private owner configuration in main().
 PORTS = (80, 443, 554, 8000, 8001, 8080, 8443, 8554, 10554)
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,6 +30,8 @@ def scan(port):
 
 
 def main():
+    global HOST
+    HOST = load_config()["host"]
     with ThreadPoolExecutor(max_workers=4) as pool:
         results = list(pool.map(scan, PORTS))
     report = {

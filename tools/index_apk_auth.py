@@ -10,9 +10,10 @@ from pathlib import Path
 import re
 import struct
 import zipfile
+import argparse
 
 ROOT = Path(__file__).resolve().parents[1]
-APK = Path('/home/your-user/Downloads/Hik-Connect.apk')
+APK = Path.home() / 'Downloads/Hik-Connect.apk'
 METHODS = {'NET_DVR_Login_V30', 'NET_DVR_Login_V40'}
 
 
@@ -83,10 +84,13 @@ def inspect(data, name):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--apk', type=Path, default=APK)
+    args = parser.parse_args()
     output = ROOT / '.local/apk-auth'
     output.mkdir(mode=0o700, parents=True, exist_ok=True)
     found = []
-    with zipfile.ZipFile(APK) as archive:
+    with zipfile.ZipFile(args.apk) as archive:
         for name in archive.namelist():
             if not re.fullmatch(r'classes\d*\.dex', name):
                 continue

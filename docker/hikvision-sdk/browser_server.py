@@ -17,6 +17,7 @@ import uuid
 
 from sdk_adapters import get_sdk_adapter
 from run_probe import compile_probe
+from nvr_config import load_config
 
 
 def byte_range(header, size):
@@ -40,9 +41,10 @@ def byte_range(header, size):
 
 
 class Camera:
-    def __init__(self, binary, output, seconds=600, spawn=subprocess.Popen, adapter=None):
+    def __init__(self, binary, output, seconds=600, spawn=subprocess.Popen, adapter=None, config=None):
         self.binary, self.output, self.seconds, self.spawn = binary, Path(output), seconds, spawn
         self.adapter = adapter if adapter is not None else get_sdk_adapter()
+        self.config = config
         self.condition = threading.Condition()
         self.process = None
         self.monitor = None
@@ -72,10 +74,11 @@ class Camera:
             if self.process is not None:
                 return self.status()
             credentials = self.adapter.load_credentials("/credentials/nvr.json")
+            config = self.config if self.config is not None else load_config("/configuration/nvr.json")
             session = uuid.uuid4().hex
             directory = self.output / ("browser-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + session[:8])
             invocation = self.adapter.invocation(self.binary, credentials=credentials,
-                host="192.0.2.10", port=8000, seconds=self.seconds,
+                host=config["host"], port=config["sdk_port"], seconds=self.seconds,
                 decrypt=True, browser_frames=True, capture_dir=directory)
             directory.mkdir(mode=0o700, parents=True)
             stdout = (directory / "native.stdout.log").open("wb")

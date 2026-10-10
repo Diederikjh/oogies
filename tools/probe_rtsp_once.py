@@ -9,8 +9,9 @@ import secrets
 import socket
 import urllib.request
 
-from probe_authenticated import HOST, ROOT
+from probe_authenticated import ROOT
 from sdk_adapters import get_sdk_adapter
+from nvr_config import load_config
 
 
 def read_response(reader):
@@ -80,7 +81,9 @@ def main():
         help="Credential-file field to use as the RTSP authentication password",
     )
     args = parser.parse_args()
-    credentials = get_sdk_adapter().load_credentials()
+    config = load_config()
+    HOST = config["host"]
+    credentials = get_sdk_adapter(config["sdk_profile"]).load_credentials()
     # Substitute in memory only; leave the user's credential file unchanged.
     credentials["password"] = credentials.get(args.password_field, "")
     report = {
