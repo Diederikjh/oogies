@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import time
 
+from sdk_adapters import get_sdk_adapter
+
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "cam-browser-viewer"
 
@@ -17,6 +19,7 @@ def main():
     parser.add_argument("--session-seconds", type=int, default=600)
     parser.add_argument("--stop", action="store_true")
     args = parser.parse_args()
+    adapter = get_sdk_adapter()
     if args.stop:
         subprocess.run(["docker", "stop", "--timeout", "20", NAME], check=True)
         # Docker may return before --rm has released the name.
@@ -50,6 +53,7 @@ def main():
                "--log-opt", "max-size=5m", "--log-opt", "max-file=2"]
     for source, target, writable in ((sdk, "/sdk", False), (credentials, "/credentials/nvr.json", False),
             (ROOT / "tools/credentials.py", "/support/credentials.py", False),
+            (ROOT / "tools/sdk_adapters", "/support/sdk_adapters", False),
             (ROOT / "docker/hikvision-sdk", "/probe", False), (ROOT / "web", "/web", False),
             (output, "/output", True)):
         command.extend(["--mount", f"type=bind,source={source},target={target}" + ("" if writable else ",readonly")])
@@ -67,7 +71,7 @@ def main():
                                    ("CAM_RECORDING_SECONDS", str(metadata["clip_duration_seconds"]))):
                     command.extend(["--env", key + "=" + value])
                 break
-    command.extend(["cam-hik-sdk-runtime:local", "python3", "/probe/browser_server.py", "--port", str(args.port),
+    command.extend([adapter.runtime_image, "python3", "/probe/browser_server.py", "--port", str(args.port),
                     "--session-seconds", str(args.session_seconds)])
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
     print(f"Open http://localhost:{args.port}/ and choose Start live view.")

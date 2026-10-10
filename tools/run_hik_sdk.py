@@ -7,6 +7,7 @@ import subprocess
 import uuid
 
 from credentials import DEFAULT_CREDENTIALS_FILE
+from sdk_adapters import get_sdk_adapter
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +21,7 @@ def main():
     parser.add_argument("--historical", action="store_true", help="Extract footage one hour before the recorder's current clock")
     parser.add_argument("--skip-search", action="store_true", help="Use direct time playback without a recording search")
     args = parser.parse_args()
+    adapter = get_sdk_adapter()
     if not 0 <= args.capture_seconds <= 60:
         parser.error("capture must be 0–60 seconds")
     if args.mode == "probe" and args.decrypt and args.capture_seconds == 0:
@@ -43,6 +45,7 @@ def main():
                "--mount", f"type=bind,source={sdk},target=/sdk,readonly",
                "--mount", f"type=bind,source={ROOT / 'docker/hikvision-sdk'},target=/probe,readonly",
                "--mount", f"type=bind,source={ROOT / 'tools/credentials.py'},target=/support/credentials.py,readonly",
+               "--mount", f"type=bind,source={ROOT / 'tools/sdk_adapters'},target=/support/sdk_adapters,readonly",
                "--env", "PYTHONPATH=/support",
                "--mount", f"type=bind,source={output},target=/output"]
     if args.mode == "probe":
@@ -50,7 +53,7 @@ def main():
         if not credentials.is_file():
             parser.error("credential file is missing")
         command.extend(["--mount", f"type=bind,source={credentials},target=/credentials/nvr.json,readonly"])
-    command.extend(["cam-hik-sdk-runtime:local", "python3", "/probe/run_probe.py", args.mode,
+    command.extend([adapter.runtime_image, "python3", "/probe/run_probe.py", args.mode,
                     "--capture-seconds", str(args.capture_seconds)])
     if args.sdk_log:
         command.append("--sdk-log")

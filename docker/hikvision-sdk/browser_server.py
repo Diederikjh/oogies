@@ -15,7 +15,7 @@ import time
 from urllib.parse import urlsplit
 import uuid
 
-from credentials import load_credentials
+from sdk_adapters import get_sdk_adapter
 from run_probe import compile_probe
 
 
@@ -40,8 +40,9 @@ def byte_range(header, size):
 
 
 class Camera:
-    def __init__(self, binary, output, seconds=600, spawn=subprocess.Popen):
+    def __init__(self, binary, output, seconds=600, spawn=subprocess.Popen, adapter=None):
         self.binary, self.output, self.seconds, self.spawn = binary, Path(output), seconds, spawn
+        self.adapter = adapter if adapter is not None else get_sdk_adapter()
         self.condition = threading.Condition()
         self.process = None
         self.monitor = None
@@ -70,24 +71,20 @@ class Camera:
             # Includes a process still shutting down: duplicate Start never logs in again.
             if self.process is not None:
                 return self.status()
-            credentials = load_credentials("/credentials/nvr.json")
-            key = credentials.get("verification_code", "")
-            if not key or len(key.encode()) > 128 or any(ord(c) < 32 or ord(c) == 127 for c in key):
-                raise ValueError("valid verification code required")
+            credentials = self.adapter.load_credentials("/credentials/nvr.json")
             session = uuid.uuid4().hex
             directory = self.output / ("browser-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + session[:8])
+            invocation = self.adapter.invocation(self.binary, credentials=credentials,
+                host="192.0.2.10", port=8000, seconds=self.seconds,
+                decrypt=True, browser_frames=True, capture_dir=directory)
             directory.mkdir(mode=0o700, parents=True)
             stdout = (directory / "native.stdout.log").open("wb")
             stderr = (directory / "native.stderr.log").open("wb")
             try:
-                process = self.spawn([self.binary, "--decrypt", "--browser-frames"],
+                process = self.spawn(invocation.command,
                                      stdin=subprocess.PIPE, stdout=stdout, stderr=stderr,
-                                     cwd="/sdk/lib", env=dict(os.environ,
-                                     LD_LIBRARY_PATH="/sdk/lib:/sdk/lib/HCNetSDKCom",
-                                     CAM_SDK_CAPTURE_DIR=str(directory)))
-                payload = "\n".join(("192.0.2.10", "8000", credentials["username"],
-                                     credentials["password"], str(self.seconds), key)) + "\n"
-                process.stdin.write(payload.encode())
+                                     cwd=invocation.cwd, env=invocation.env)
+                process.stdin.write(invocation.stdin.encode())
                 process.stdin.close()
             except Exception:
                 if "process" in locals():
@@ -349,11 +346,12 @@ def main():
     if not 1 <= args.session_seconds <= 900 or not 1024 <= args.port <= 65535:
         parser.error("session must be 1–900 seconds and port 1024–65535")
     os.umask(0o077)
-    binary = compile_probe()  # No initialization/login or device request at startup.
+    adapter = get_sdk_adapter()
+    binary = compile_probe(adapter)  # No initialization/login or device request at startup.
     server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
     server.daemon_threads = True
     server.allowed_hosts = {f"localhost:{args.port}", f"127.0.0.1:{args.port}"}
-    server.camera = Camera(binary, "/output", args.session_seconds)
+    server.camera = Camera(binary, "/output", args.session_seconds, adapter=adapter)
     server.web = Path("/web")
     server.recording = Path("/recording/historical-clip.mp4")
     server.recording_info = {"recording_begin": os.environ.get("CAM_RECORDING_BEGIN"),

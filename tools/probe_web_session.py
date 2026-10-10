@@ -13,7 +13,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from probe_authenticated import HOST, ROOT, tag
-from credentials import load_credentials
+from sdk_adapters import get_sdk_adapter
 
 
 def values(document):
@@ -25,7 +25,7 @@ def digest(value):
 
 
 def main():
-    credentials = load_credentials()
+    credentials = get_sdk_adapter().load_credentials()
     cookies = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(cookies)

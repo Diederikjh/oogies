@@ -105,9 +105,13 @@ the verified full-key call sequence and the separate live probe command.
 
 Live probes read `.local/nvr-credentials.json` with `username`, `password` and
 optional `verification_code` fields. Keep its permissions at `0600` and its
-parent directory at `0700`. The shared loader limits only the login password
+parent directory at `0700`. The current SDK adapter limits only the login password
 to its first 16 characters, preserving the full encryption code; see
 [credential-loading.md](docs/credential-loading.md).
+
+The current SDK's credential policy and native build/launch details are isolated
+behind a small [Python adapter seam](docs/sdk-adapter-seam.md), with contributor
+instructions for a later SDK implementation.
 
 Credentials, camera captures, SDK debug logs and APK analysis are ignored.
 Run the existing credential checks with:

@@ -1,5 +1,10 @@
 # Hikvision recorder and SDK compatibility review
 
+Update: the first [Python SDK adapter seam](sdk-adapter-seam.md) is now implemented.
+Under the revised design, credential normalization belongs to the SDK adapter,
+not an owner-configurable override. The historical findings below describe the
+code before that extraction; only the current SDK has been checked.
+
 Reviewed: 10 October 2026. Source/documentation review only; no new recorder
 requests or compatibility implementation. The preceding setup guides, milestone
 plan and API proposal were committed as `b9c7cca`.
@@ -52,13 +57,12 @@ Proposed configuration, not implemented:
   "host": "192.0.2.10",
   "sdk_port": 8000,
   "timezone": "Africa/Johannesburg",
-  "sdk_profile": "hcnet-6.1.9.48-linux64",
-  "login_password_max_chars": 16
+  "sdk_profile": "hcnet-6.1.9.48-linux64"
 }
 ```
 
-Retain the tested 16-character policy for this installation. A different
-verified installation may use `null` for no truncation. Validate native field
+Retain the tested 16-character policy in the current Python SDK adapter. A
+different SDK adapter owns its own normalization behavior. Validate native field
 byte lengths and encoding separately; never truncate the encryption password.
 Do not try alternate password policies or SDK profiles automatically after a
 login failure.
@@ -114,7 +118,7 @@ reports. These are evidence for the design, not additional device tests.
 
 ## Incremental delivery and verification
 
-Milestone 1 should add owner configuration, explicit password policy,
+Milestone 1 should add owner configuration, SDK-owned credential policy,
 deterministic current-profile loading and camera discovery. Verify alternate
 addresses/channel mappings/password policies offline without contacting an
 unintended recorder. Then confirm the original installation retains its proven

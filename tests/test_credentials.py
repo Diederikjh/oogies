@@ -6,6 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from credentials import load_credentials
+from sdk_adapters import get_sdk_adapter
 
 
 class CredentialPolicyTests(unittest.TestCase):
@@ -21,7 +22,8 @@ class CredentialPolicyTests(unittest.TestCase):
                     }
                     path.write_text(json.dumps(source), encoding="utf-8")
                     original_bytes = path.read_bytes()
-                    effective = load_credentials(path)
+                    self.assertEqual(load_credentials(path), source)
+                    effective = get_sdk_adapter().load_credentials(path)
                     self.assertEqual(effective["password"], source["password"][:16])
                     self.assertEqual(effective["username"], source["username"])
                     self.assertEqual(effective["verification_code"], source["verification_code"])

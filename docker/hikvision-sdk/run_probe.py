@@ -10,7 +10,7 @@ import subprocess
 import urllib.parse
 import uuid
 
-from credentials import load_credentials
+from sdk_adapters import get_sdk_adapter
 
 ERRORS = {
     0: "success", 1: "username/password rejected", 2: "operation not authorized",
@@ -36,31 +36,14 @@ def sanitize(text, credentials):
     return text
 
 
-def compile_probe():
-    """Build the native diagnostic/bridge against the actual mounted vendor ABI."""
-    headers = list(Path("/sdk").rglob("HCNetSDK.h"))
-    headers.sort(key=lambda path: ("incEn" not in str(path), str(path)))
-    if not headers:
-        raise ValueError("HCNetSDK.h not found in mounted SDK")
-    libraries = list(Path("/sdk").rglob("libhcnetsdk.so"))
-    if not libraries:
-        raise ValueError("libhcnetsdk.so not found in mounted SDK")
-    library_dir = libraries[0].parent
-    if library_dir != Path("/sdk/lib"):
-        raise ValueError("SDK must be mounted with its lib directory at /sdk/lib")
-    playback_headers = list(Path("/sdk").rglob("LinuxPlayM4.h"))
-    if not playback_headers:
-        raise ValueError("vendor LinuxPlayM4.h not found")
-    command = ["g++", "-std=c++17", "-D_LINUX_", "-I", str(headers[0].parent),
-               "-I", str(playback_headers[0].parent),
-               "/probe/probe.cpp", "-L/sdk/lib", "-Wl,-rpath,/sdk/lib", "-lhcnetsdk",
-               "-lPlayCtrl", "-lpthread", "-ldl", "-o", "/tmp/cam-sdk-probe"]
-    compiled = subprocess.run(command, capture_output=True, text=True, timeout=45)
-    if compiled.returncode:
+def compile_probe(adapter=None):
+    """Build through the selected Python adapter, preserving diagnostic output."""
+    try:
+        return (adapter if adapter is not None else get_sdk_adapter()).compile_bridge()
+    except subprocess.CalledProcessError as error:
         print(json.dumps({"stage": "compile", "login_calls": 0,
-                          "diagnostics": compiled.stderr[-8000:]}, indent=2))
+                          "diagnostics": (error.stderr or "")[-8000:]}, indent=2))
         raise SystemExit(2)
-    return "/tmp/cam-sdk-probe"
 
 
 def main():
@@ -80,24 +63,17 @@ def main():
         parser.error("historical extraction requires --decrypt and 1–10 capture seconds")
     if args.skip_search and not args.historical:
         parser.error("--skip-search requires --historical")
+    adapter = get_sdk_adapter()
     try:
-        compile_probe()
+        binary = compile_probe(adapter)
     except ValueError as error:
         parser.error(str(error))
     credentials = {}
-    stdin = ""
     if args.mode == "probe":
         try:
-            credentials = load_credentials("/credentials/nvr.json")
+            credentials = adapter.load_credentials("/credentials/nvr.json")
         except ValueError as error:
             parser.error(str(error))
-        verification_code = credentials.get("verification_code", "") if args.decrypt else ""
-        if args.decrypt and (not verification_code or len(verification_code.encode("utf-8")) > 128
-                             or any(ord(c) < 32 or ord(c) == 127 for c in verification_code)):
-            parser.error("decryption requires a nonempty verification_code of at most 128 UTF-8 bytes without controls")
-        stdin = "\n".join(("192.0.2.10", "8000", credentials["username"],
-                           credentials["password"], str(args.capture_seconds), verification_code)) + "\n"
-    env = dict(os.environ, LD_LIBRARY_PATH="/sdk/lib:/sdk/lib/HCNetSDKCom")
     os.umask(0o077)
     log_dir = None
     capture_dir = None
@@ -105,22 +81,21 @@ def main():
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         capture_dir = Path("/output") / f"sdk-capture-{stamp}-{uuid.uuid4().hex[:8]}"
         capture_dir.mkdir(mode=0o700)
-        env["CAM_SDK_CAPTURE_DIR"] = str(capture_dir)
     if args.sdk_log:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         log_dir = Path("/output") / f"sdk-{args.mode}-{stamp}-{uuid.uuid4().hex[:8]}-logs"
         log_dir.mkdir(mode=0o700)
-        env["CAM_SDK_LOG_DIR"] = str(log_dir) + "/"
-    native_command = ["/tmp/cam-sdk-probe"] + (["check"] if args.mode == "check" else [])
-    if args.decrypt:
-        native_command.append("--decrypt")
-    if args.historical:
-        native_command.append("--historical")
-    if args.skip_search:
-        native_command.append("--skip-search")
     try:
-        process = subprocess.run(native_command, input=stdin, capture_output=True,
-                                 text=True, env=env, cwd="/sdk/lib",
+        invocation = adapter.invocation(binary, credentials=credentials,
+            host="192.0.2.10", port=8000, seconds=args.capture_seconds,
+            check=args.mode == "check", decrypt=args.decrypt,
+            historical=args.historical, skip_search=args.skip_search,
+            capture_dir=capture_dir, log_dir=log_dir)
+    except ValueError as error:
+        parser.error(str(error))
+    try:
+        process = subprocess.run(invocation.command, input=invocation.stdin, capture_output=True,
+                                 text=True, env=invocation.env, cwd=invocation.cwd,
                                  timeout=(70 if args.historical else 25) + args.capture_seconds)
         reports = [line.removeprefix("CAM_SDK_REPORT ") for line in process.stdout.splitlines()
                    if line.startswith("CAM_SDK_REPORT ")]
@@ -159,7 +134,8 @@ def main():
                 report["clip_file"] = clip.name
                 report["clip_duration_seconds"] = report["clip_frames"] / report["clip_fps"]
         if args.mode == "probe":
-            report["password_first_16"] = True
+            report["password_first_16"] = getattr(adapter, "login_password_max_chars", None) == 16
+        report["sdk_adapter"] = adapter.sdk_id
         if log_dir:
             files = [p for p in log_dir.rglob("*") if p.is_file()]
             for path in files:

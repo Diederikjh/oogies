@@ -10,7 +10,7 @@ import socket
 import urllib.request
 
 from probe_authenticated import HOST, ROOT
-from credentials import load_credentials
+from sdk_adapters import get_sdk_adapter
 
 
 def read_response(reader):
@@ -80,7 +80,7 @@ def main():
         help="Credential-file field to use as the RTSP authentication password",
     )
     args = parser.parse_args()
-    credentials = load_credentials()
+    credentials = get_sdk_adapter().load_credentials()
     # Substitute in memory only; leave the user's credential file unchanged.
     credentials["password"] = credentials.get(args.password_field, "")
     report = {

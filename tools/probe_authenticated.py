@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
-from credentials import load_credentials
+from sdk_adapters import get_sdk_adapter
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = "192.0.2.10"
@@ -168,7 +168,7 @@ def main():
     if not 1 <= args.seconds <= 120 or not 101 <= args.channel <= 9999 or not 1 <= args.port <= 65535:
         parser.error("seconds must be 1–120, channel 101–9999 and port 1–65535")
     try:
-        credentials = load_credentials()
+        credentials = get_sdk_adapter().load_credentials()
     except ValueError as error:
         parser.error(str(error))
     if args.mode == "inspect":

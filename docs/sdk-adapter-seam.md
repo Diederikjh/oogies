@@ -1,0 +1,94 @@
+# The current Python SDK adapter seam
+
+Implemented on 10 October 2026. This is a small extraction of existing behavior,
+not a complete plugin framework or a finalized recorder interface.
+
+## Where the code lives
+
+- [sdk_adapters/__init__.py](../tools/sdk_adapters/__init__.py) selects the known
+  implementation through `get_sdk_adapter()`.
+- [hcnet_61948.py](../tools/sdk_adapters/hcnet_61948.py) implements the current
+  HCNetSDK 6.1.9.48 Linux64 integration.
+- [credentials.py](../tools/credentials.py) reads and validates the private file,
+  preserving its full password and verification code.
+- The browser session takes an `adapter` argument; the SDK runner builds and
+  launches through the selected adapter. Host launchers mount the adapter
+  package read-only and use its runtime image.
+
+The current adapter owns the first-16-character login policy, known compiler
+header/library locations, encryption-code validation, native arguments/stdin,
+library environment and runtime image. The existing RTSP/web diagnostics reuse
+its credential preparation to preserve the proven behavior on this installation;
+they retain their own protocol encoding and authentication code.
+
+The design now treats password normalization as SDK-dependent. The original
+16-character result was observed with this device/SDK combination; the cause
+has not been independently established across different versions. Keep the
+working rule in this adapter until another implementation provides evidence.
+Do not offer a global truncation override or mutate the stored credentials.
+
+## The small boundary used today
+
+`get_sdk_adapter()` currently returns only `HcNetSdk61948`; an unknown SDK ID
+raises an error. Selecting or constructing an adapter performs no file reads,
+compilation, SDK initialization or network requests.
+
+The concrete implementation supplies:
+
+| Member | Responsibility |
+| --- | --- |
+| `sdk_id`, `runtime_image` | Identify the implementation and its Docker runtime |
+| `load_credentials(path=None)` | Read validated credentials and prepare its login password |
+| `compile_bridge()` | Compile its native bridge inside the container |
+| `invocation(binary, ...)` | Return native command, private stdin, cwd and environment without launching |
+
+Credentials are sent only through stdin; the invocation's representation hides
+that field. The browser/runner retain process lifetime, timeout, output handling
+and cleanup. The C++ bridge retains actual SDK calls and decoding. Native output
+still uses the existing `CAM_SDK_REPORT`/latest-frame file protocol.
+
+There is no abstract base class, dynamic loader, speculative camera/history
+interface or extra SDK implementation. The invocation arguments describe the
+operations already present in the prototype. They can change when a second
+implementation reveals a better boundary.
+
+## Adding another SDK later
+
+1. Add one concrete module under `tools/sdk_adapters/`. Use the existing
+   implementation as a reference; do not inherit its password policy or assume
+   identical native dependencies merely because both SDKs are from Hikvision.
+2. Implement the small boundary required by existing callers. Return an
+   invocation object with `command`, `stdin`, `cwd` and `env`; it need not inherit
+   the current adapter or use its dataclass. Preserve the current bridge result
+   and latest-frame contract, or revise the boundary deliberately with tests.
+3. Add explicit selection in `get_sdk_adapter()`. Keep SDK selection consistent
+   between host launcher and container worker before exposing it through user
+   configuration. Do not choose a fallback SDK after authentication rejection.
+4. Preserve the SDK archive in Git LFS, document its build/runtime requirements
+   and run offline compile/load/decoder checks. A genuinely different ABI may
+   need another C++ bridge variant or Docker image.
+5. Verify the real recorder's live/history features independently and update
+   both getting-started guides. Mocks establish the Python boundary, not device
+   compatibility.
+
+The remaining work includes `.local/nvr-config.json`, selectable user-facing SDK
+profiles, camera discovery, per-stream native contexts and a persistent worker.
+The recorder address is still supplied by the existing callers. This change
+does not modify C++ behavior or introduce another authenticated device attempt.
+
+## Verification
+
+Ten offline unit tests passed, including preserved raw credentials/current SDK
+normalization, full encryption-code handling, unknown-SDK rejection, concurrent
+Start sharing, cleanup and a stub adapter that uses different launch settings
+and a password longer than 16 characters without changing the HTTP/session code.
+
+The refactored runner also passed this real vendor-library check in Docker:
+
+```sh
+python3 tools/run_hik_sdk.py check --decrypt --historical --skip-search --sdk-log
+```
+
+Networking was disabled and credentials were not mounted. The loaded SDK was
+6.1.9.48; initialization, decoder key setup and private SDK logging succeeded,
+with `login_calls: 0` and `decoder_error: 0`. Live behavior was not retested.

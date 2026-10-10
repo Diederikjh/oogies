@@ -13,9 +13,10 @@ in the credentials file was longer; using its first 16 characters resolved
 both RTSP and SDK authentication. This is verified for this recorder, rather
 than assumed to be a universal Hikvision rule.
 
-`tools/credentials.py::load_credentials()` now applies that limit to the login
-password for all authenticated probes. It preserves the username, the complete
-verification/encryption code, and the original credential file. Credentials
+The current Python SDK adapter now owns that limit for all authenticated probes.
+`tools/credentials.py::load_credentials()` only reads and validates the original
+values. The adapter preserves the username, the complete verification/encryption
+code, and the original credential file. Credentials
 remain private in `.local/nvr-credentials.json`; tests cover the boundary and
 preservation of those values. The new non-admin account also logs into the
 local web UI.
@@ -110,6 +111,20 @@ web server remains running, with the camera stopped and ready for user Start.
 Details and commands: [browser-viewer prototype](docs/browser-viewer-prototype.md).
 
 ## Agreed milestone plan
+
+The first [Python SDK adapter seam](docs/sdk-adapter-seam.md) is implemented.
+One concrete HCNetSDK 6.1.9.48 adapter owns credential normalization, deterministic
+native build locations, launch arguments/stdin/library environment and runtime
+image. The browser accepts an injected adapter; diagnostics and host launchers
+use the shared selector. No plugin framework or second SDK was introduced.
+
+Ten offline unit tests passed, including a stub adapter with different launch
+settings and an untruncated password. The actual Docker SDK/decoder check also
+passed with private SDK logging enabled, networking disabled, no credentials
+mounted, zero login calls and zero decoder errors. Live behavior was not retested;
+recorder configuration, camera discovery and persistent per-stream workers remain
+next milestones. The 16-character policy is now assumed to belong to the SDK
+implementation rather than a user-configurable installation override.
 
 The next work follows this order, with the automatic live grid ahead of motion
 timeline investigation as requested:

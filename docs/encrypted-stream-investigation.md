@@ -70,7 +70,7 @@ was initially an inference and is now supported by the successful live test.
 ## Working call sequence
 
 ```text
-load_credentials(): login password = first 16 characters;
+SDK adapter.load_credentials(): login password = first 16 characters;
                     verification_code = complete original string
 NET_DVR_Init
 PlayM4_GetPort

@@ -1,14 +1,13 @@
-"""Load recorder credentials with the confirmed 16-character login limit."""
+"""Read and validate private recorder credentials without SDK-specific changes."""
 
 import json
 from pathlib import Path
 
 DEFAULT_CREDENTIALS_FILE = Path(__file__).resolve().parents[1] / ".local/nvr-credentials.json"
-LOGIN_PASSWORD_MAX_CHARS = 16
 
 
 def load_credentials(path=None):
-    """Read credentials without changing the file; limit only the login password.
+    """Read credentials without changing the file or any password values.
 
     The username and verification/encryption code are preserved. Callers must
     keep credentials private and apply any protocol-specific encoding afterward.
@@ -28,5 +27,4 @@ def load_credentials(path=None):
             raise ValueError(f"control characters are not allowed in {key}")
     if "verification_code" in credentials and not isinstance(credentials["verification_code"], str):
         raise ValueError("verification_code must be a string")
-    credentials["password"] = credentials["password"][:LOGIN_PASSWORD_MAX_CHARS]
     return credentials

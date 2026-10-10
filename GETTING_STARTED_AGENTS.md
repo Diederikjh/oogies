@@ -264,10 +264,11 @@ On the original NVR UI, find the stream encryption password under **Network →
 Advanced Settings → Platform access → Encryption Password**. Press the eye
 icon to reveal it. Menu names may differ on another firmware version.
 
-The shared loader currently uses the first 16 characters of the login password,
-a behavior verified on the original recorder. It preserves the complete
-encryption password. That login rule is not verified for every Hikvision device;
-the reusable configuration must make this policy explicit.
+The current Python SDK adapter uses the first 16 characters of the login
+password and preserves the complete encryption password. The generic credential
+reader preserves both values unchanged. We treat normalization as SDK-dependent;
+the rule is verified only for the current device/SDK combination. Contributor
+instructions are in [the adapter seam notes](docs/sdk-adapter-seam.md).
 
 Credentials are read only by the backend and are excluded from Git. Captures,
 private logs and generated clips are also stored under ignored `.local/`.
