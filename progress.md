@@ -109,17 +109,47 @@ web server remains running, with the camera stopped and ready for user Start.
 
 Details and commands: [browser-viewer prototype](docs/browser-viewer-prototype.md).
 
-## Next: incremental viewer improvements and recording discovery
+## Agreed milestone plan
 
-Investigate the recorder's compatibility with recording-search calls to support
-a historical calendar/list. Direct playback already works with the non-admin
-account and the recorded main stream.
+The next work follows this order, with the automatic live grid ahead of motion
+timeline investigation as requested:
 
-The first browser bridge is verified. H.264 transport, other cameras, audio,
-arbitrary historical playback controls and long-running behavior remain future
-milestones.
+1. Recorder configuration, camera discovery and capacity.
+2. Automatic live grid.
+3. Motion timeline feasibility.
+4. Historical timeline viewer.
+5. Reliability and transport.
+
+Credentials remain in the backend file and frontend login is deferred for home
+LAN use. Frontend files may be split by logical function: shared API/media
+helpers, live overview/tiles, history/timeline/playback controls and exports.
+
+The recorded plan is in [implementation-plan.md](docs/implementation-plan.md).
+A reviewable API proposal is in [backend-api-plan.md](docs/backend-api-plan.md).
+Those endpoints are proposed, not implemented. The immediate next milestone is
+camera discovery and tested capacity; no new recorder probes or feature code
+were added while recording this plan.
 
 ## Reproducibility and preservation
+
+The service is intended for other owners to clone and run on their own machines.
+The installing user supplies the NVR IP and SDK port in backend configuration,
+with credentials kept separate. The current prototype still hardcodes the
+original address/port; configuration support is now part of milestone 1. Python
+application logic with a persistent C++ SDK bridge is the planned backend split.
+
+The root [GETTING_STARTED.md](GETTING_STARTED.md) gives a short human-facing setup
+overview; [GETTING_STARTED_AGENTS.md](GETTING_STARTED_AGENTS.md) contains detailed
+installation and verification instructions. Both must be maintained with
+architecture changes. Setup uses the SDK archive
+already in Git LFS, without a separate vendor download. Only documentation was
+changed to record these requirements; no recorder calls or feature code were added.
+
+The agent guide includes a prerequisite/install/verification checklist,
+with Docker explicitly required to work without sudo as the installing
+user. Offline SDK checks, private-file validation, Docker TCP reachability,
+HTTP readiness and live video acceptance are separate stages. Host installation
+recipes are documented for missing essentials; none were executed here.
 
 Source, investigation notes and credential tests are versioned. The complete
 original SDK ZIP, including its binaries, headers, examples and vendor

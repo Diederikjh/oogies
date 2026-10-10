@@ -1,5 +1,11 @@
 # Home camera viewing investigation
 
+For a fresh checkout, start with [GETTING_STARTED.md](GETTING_STARTED.md).
+It gives the setup overview and current limitations. Detailed installation and
+verification instructions for a setup agent are in
+[GETTING_STARTED_AGENTS.md](GETTING_STARTED_AGENTS.md). Both guides are maintained
+alongside architecture changes.
+
 Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
 substream decodes successfully with PlayCtrl and the full verification code.
 Historical time playback also works: a five-second recording was extracted
@@ -8,6 +14,10 @@ The local browser prototype now displays moving live frames and plays that
 recorded MP4; see [browser-viewer prototype](docs/browser-viewer-prototype.md).
 See [progress.md](progress.md) for verified results and
 links to the detailed investigation notes.
+
+Planned milestones are recorded in [implementation-plan.md](docs/implementation-plan.md),
+with the automatic live grid before motion-timeline investigation. The proposed
+API calls and frontend module boundaries are in [backend-api-plan.md](docs/backend-api-plan.md).
 
 The SDK's recording APIs and the proposed bounded playback experiment are
 documented in [historical-playback investigation](docs/historical-playback-investigation.md).
