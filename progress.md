@@ -8,6 +8,14 @@ and historical use cases incrementally.
 
 ## Compact History workspace
 
+The label-strip change was committed as `e88dab8`. A browser regression
+reproduced a clipped Motion events heading at desktop, narrow desktop and phone
+sizes: the collapsed flex item had a zero content-size basis. It now uses its
+natural heading/padding height without shrinking; the expanded list still fills
+the available space and scrolls independently.
+Three focused browser cases passed for collapsed geometry/keyboard reopening,
+expanded-list scrolling/seeking, and fresh mobile playback/marking.
+
 The confirmation animation was committed as `bd84642`. Start/End handles now
 occupy a fixed strip between the recording and motion bars. Both bars retain
 their normal height and selection shading; marking or clearing no longer changes

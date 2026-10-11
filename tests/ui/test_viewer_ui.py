@@ -538,6 +538,33 @@ class ViewerUITests(unittest.TestCase):
         self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1)
         self.history_playing(); self.assert_history_controls_in_view()
 
+    def test_history_collapsed_motion_heading_fits_and_reopens_at_all_sizes(self):
+        self.paused_history()
+        summary=self.element(".history-events-panel summary")
+        for width,height in ((1366,768),(960,800),(390,844)):
+            with self.subTest(window=(width,height)):
+                self.driver.set_window_size(width,height)
+                if self.element(".history-events-panel").get_attribute("open"):
+                    summary.click()
+                geometry=self.driver.execute_script("""
+                    const panel=document.querySelector('.history-events-panel'), summary=panel.querySelector('summary');
+                    const p=panel.getBoundingClientRect(), s=summary.getBoundingClientRect();
+                    return {panelTop:p.top,panelBottom:p.bottom,summaryTop:s.top,summaryBottom:s.bottom,
+                      scrollHeight:panel.scrollHeight,clientHeight:panel.clientHeight};
+                """)
+                self.assertGreaterEqual(geometry["summaryTop"],geometry["panelTop"])
+                self.assertLessEqual(geometry["summaryBottom"],geometry["panelBottom"])
+                self.assertLessEqual(geometry["scrollHeight"],geometry["clientHeight"]+1,
+                    "The collapsed heading should fit without a scrollbar")
+                self.assertFalse(self.rendered("#history-events button"))
+                before=len(self.fixture.worker.playback_commands)
+                summary.send_keys(Keys.ENTER)
+                self.assertTrue(self.rendered("#history-events button"))
+                summary.send_keys(Keys.ENTER)
+                self.assertFalse(self.rendered("#history-events button"))
+                self.assertEqual(len(self.fixture.worker.playback_commands),before)
+                self.assertEqual(self.element("#history-player").get_attribute("data-state"),"paused")
+
     def test_history_date_picker_keyboard_dismissal_and_navigation_preserve_draft(self):
         self.paused_history()
         summary=self.element(".history-date-picker summary")

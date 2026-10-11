@@ -27,6 +27,9 @@ Clip-label coverage checks that Start/End sit between the bars and adding or
 clearing them preserves both bar geometry and preview size. Mouse, touch and
 keyboard editing use the same dedicated strip, retaining duration/order limits
 and metadata-refresh behavior without seeking playback.
+Collapsed Motion events coverage checks that the heading fits inside its panel
+without a scrollbar at desktop, narrow desktop and phone widths. Keyboard
+expansion/collapse preserves playback and reveals/hides the event list.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames
