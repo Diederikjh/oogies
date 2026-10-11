@@ -879,6 +879,54 @@ class ViewerUITests(unittest.TestCase):
         self.assertTrue(self.driver.execute_script("return firstExportRow===document.querySelector(arguments[0])",
             f'.export-job[data-job-id="{first}"]'))
 
+    def test_history_export_confirmation_bounces_restarts_and_respects_reduced_motion(self):
+        self.mark_clip(10)
+        # Pause real browser animations for deterministic visual samples.
+        self.driver.execute_script("""
+            const animate=Element.prototype.animate; window.feedbackAnimations=[];
+            Element.prototype.animate=function(...args){
+              const animation=animate.apply(this,args);
+              if(this.id==='clip-message'){animation.pause();feedbackAnimations.push(animation);}
+              return animation;
+            };
+        """)
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:self.driver.execute_script("return feedbackAnimations.length===1"))
+        samples=self.driver.execute_script("""
+            const animation=feedbackAnimations[0], message=document.getElementById('clip-message');
+            const duration=animation.effect.getComputedTiming().duration;
+            const samples=[0,.2,.4,.6,.8,.9].map(fraction=>{
+              animation.currentTime=duration*fraction;
+              const style=getComputedStyle(message);
+              return {opacity:Number(style.opacity),y:new DOMMatrixReadOnly(style.transform).m42};
+            });
+            animation.finish();
+            return {duration,samples,opacity:Number(getComputedStyle(message).opacity),
+              transform:getComputedStyle(message).transform,text:message.textContent};
+        """)
+        self.assertGreater(samples["duration"],150); self.assertLessEqual(samples["duration"],700)
+        self.assertEqual(samples["samples"][0]["opacity"],0)
+        self.assertGreater(samples["samples"][0]["y"],0)
+        self.assertLess(min(sample["y"] for sample in samples["samples"]),0)
+        self.assertEqual(samples["opacity"],1); self.assertEqual(samples["transform"],"none")
+        self.assertIn("Export queued",samples["text"])
+        self.assert_history_controls_in_view()
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:self.driver.execute_script("return feedbackAnimations.length===2"))
+        self.element("#clip-clear").click()
+        self.assertEqual(self.element("#clip-message").text,"")
+        self.assertEqual(self.driver.execute_script("return feedbackAnimations[1].playState"),"idle")
+        self.driver.execute_cdp_cmd("Emulation.setEmulatedMedia",{"features":[{"name":"prefers-reduced-motion","value":"reduce"}]})
+        self.element("#clip-start").click(); self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.assertEqual(self.driver.execute_script("return feedbackAnimations.length"),2)
+        self.assertEqual(self.driver.execute_script("return document.getElementById('clip-message').getAnimations().length"),0)
+        self.element("#clip-message a").send_keys(Keys.ENTER)
+        self.wait.until(lambda _:self.element("#exports-panel").is_displayed())
+        self.assertEqual(self.element("#clip-message").get_attribute("textContent"),"")
+
     def test_history_export_confirmation_clear_and_one_minute_expiry(self):
         self.mark_clip(10)
         # Control just the confirmation timers; playback and HTTP clocks stay real.

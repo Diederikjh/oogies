@@ -8,6 +8,15 @@ and historical use cases incrementally.
 
 ## Compact History workspace
 
+Save clip/Settings refinements were committed as `645640c`. Successful save
+confirmations now appear with a brief fade and small vertical bounce, highlighted
+inside the clip box. The animation uses opacity/transforms, leaves layout and
+scroll position alone, restarts for each accepted save, and is cancelled on
+message dismissal. Reduced-motion preferences show the feedback immediately.
+Six focused browser cases passed: real animation samples, repeat saves, reduced
+motion, compact layout, timed/clear/navigation dismissal, delayed responses and
+the existing queue/download/delete flow.
+
 The compact layout and its browser coverage were committed as `95b85c1`.
 The main clip action now reads Save clip, with bold text and a filled highlight.
 Picture proportions are shown/configured in Settings; the clip box shows its

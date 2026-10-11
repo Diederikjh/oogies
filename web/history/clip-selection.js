@@ -28,6 +28,8 @@ export class ClipSelection {
   }
   clearMessage() {
     ++this.messageGeneration; clearTimeout(this.messageTimer);
+    this.messageAnimation?.cancel(); this.messageAnimation = null;
+    this.message.classList.remove("clip-confirmation");
     this.messageTimer = undefined; this.message.replaceChildren();
   }
   bounds(name) {
@@ -71,6 +73,15 @@ export class ClipSelection {
       link.href = "#exports-panel"; link.textContent = "Export"; link.setAttribute("aria-label", "View export jobs");
       link.addEventListener("click", event => { event.preventDefault(); this.onExports(); });
       this.message.replaceChildren(link, document.createTextNode(` queued for ${cameraName}. You can continue watching.`));
+      this.message.classList.add("clip-confirmation");
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        this.messageAnimation = this.message.animate([
+          {opacity:0, transform:"translateY(8px)", offset:0, easing:"ease-out"},
+          {opacity:1, transform:"translateY(-3px)", offset:.6, easing:"ease-in-out"},
+          {opacity:1, transform:"translateY(1px)", offset:.82, easing:"ease-out"},
+          {opacity:1, transform:"translateY(0)", offset:1}
+        ], {duration:480});
+      }
       this.messageTimer = setTimeout(() => {
         if (generation === this.messageGeneration) this.clearMessage();
       }, 60000);

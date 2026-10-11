@@ -20,6 +20,9 @@ Visibility inside native closed `<details>` uses Chromium's `checkVisibility()`;
 the installed Selenium version reports those unpainted descendants as visible.
 The complete local run with this layout passed 66 cases: 63 browser cases and
 three native buffer regressions, using the same command as GitHub Actions.
+Confirmation feedback coverage samples the real browser animation for its fade,
+vertical bounce and settled state, then checks repeated saves, cancellation on
+Clear marks, reduced motion and keyboard navigation to export jobs.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames
