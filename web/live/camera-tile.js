@@ -1,5 +1,6 @@
 import {MediaDisplay} from "/shared/media-player.js";
 import {readAspect, saveAspect} from "/shared/display-preferences.js";
+import {TileExpansion} from "/live/tile-expansion.js";
 
 const LABELS = {starting:"Connecting", live:"Live", stale:"Video delayed", offline:"Offline",
   error:"Unavailable", capacity_limited:"Stream limit", stopping:"Stopping", stopped:"Stopped"};
@@ -25,13 +26,14 @@ export class CameraTile {
     this.display = new MediaDisplay(this.image, this.view);
     this.aspect = readAspect(camera.id, camera.aspect_ratio || "16:9");
     this.display.setAspect(this.aspect);
+    this.expansion = new TileExpansion(this.element, this.view, () => this.display.fit());
     this.view.setAttribute("aria-label", `Expand ${camera.name}`);
-    this.view.addEventListener("click", () => {
+    this.view.addEventListener("click", () => this.expansion.toggle(() => {
       const expanded = this.element.classList.toggle("is-expanded");
       this.view.setAttribute("aria-expanded", String(expanded));
       this.view.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} ${camera.name}`);
       this.element.querySelector(".expand-hint").textContent = expanded ? "Collapse" : "Expand";
-    });
+    }));
     this.url = null;
     this.decoding = false;
     this.hasFrame = false;
@@ -74,6 +76,7 @@ export class CameraTile {
 
   dispose() {
     this.disposed = true;
+    this.expansion.dispose();
     this.display.dispose();
     this.image.removeAttribute("src");
     if (this.url) URL.revokeObjectURL(this.url);

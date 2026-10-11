@@ -54,6 +54,11 @@ page's renewal timer and wait for its real ten-second lease while another page
 renews its lease. A delayed discovery response exercises navigation during
 initial loading.
 
+Expansion tests sample intermediate tile sizes and picture proportions through
+both expand and collapse, check that the focused picture fits in the viewport,
+and verify manual wheel, keyboard, touch and independent scroll changes cancel
+automatic following. Rapid reversals and reduced-motion preferences are covered.
+
 The offline-recovery case uses production `GridWorker` availability cache/event
 handling with a simulated SDK command transport and a controlled cache clock.
 It verifies that a recovered camera remains offline at 59.999 seconds, then
@@ -81,6 +86,11 @@ native process events or real recorder capacity. Keep the bounded real-recorder
 checks for those claims. Chrome/Chromium is the currently tested browser engine.
 
 ## Verified result
+
+After the expand/collapse refinements on 11 October, all 18 browser cases and
+26 unit tests passed. The manual-input cases verify automatic scroll requests
+stop during the transition while allowing native touch momentum; independent
+scrollbar offsets are also preserved.
 
 On 11 October 2026, all 14 browser cases and 26 host unit tests passed, including
 the new one-minute offline-camera recovery case. The updated native bridge also

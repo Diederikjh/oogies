@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import Select, WebDriverWait
@@ -137,6 +138,127 @@ class ViewerUITests(unittest.TestCase):
         self.element(view).send_keys(Keys.SPACE)
         self.assertEqual(self.element(view).get_attribute("aria-expanded"), "false")
         self.assertTrue(all(count == 1 for count in self.fixture.worker.started.values()))
+
+    def test_expansion_and_collapse_animate_and_keep_picture_in_focus(self):
+        self.wait_live()
+        view = self.tile(6) + " .camera-view"
+        self.driver.execute_script("document.querySelector(arguments[0]).scrollIntoView({block:'center',behavior:'instant'});", view)
+        def sample():
+            return self.driver.execute_async_script("""
+                const view=document.querySelector(arguments[0]), done=arguments[1], tile=view.closest('article');
+                const before=tile.getBoundingClientRect(), samples=[], start=performance.now();
+                view.click();
+                const collect=now=>{
+                    const box=tile.getBoundingClientRect(), picture=view.querySelector('img').getBoundingClientRect();
+                    samples.push({time:now-start,width:box.width,height:box.height,ratio:picture.width/picture.height});
+                    if(now-start<550) requestAnimationFrame(collect);
+                    else done({before:{width:before.width,height:before.height},samples,
+                        focused:box.top>=-1 && box.bottom<=innerHeight+1});
+                };requestAnimationFrame(collect);
+            """, view)
+        expanded = sample()
+        final = expanded["samples"][-1]
+        self.assertGreater(final["width"], expanded["before"]["width"] * 2)
+        self.assertTrue(any(expanded["before"]["width"]+10 < item["width"] < final["width"]-10
+                            for item in expanded["samples"]), "Expansion must have intermediate sizes")
+        self.assertTrue(expanded["focused"], "Expanded camera must fit in the viewport")
+        self.assertTrue(all(abs(item["ratio"]-16/9)<.02 for item in expanded["samples"]))
+        collapsed = sample()
+        final = collapsed["samples"][-1]
+        self.assertTrue(any(final["width"]+10 < item["width"] < collapsed["before"]["width"]-10
+                            for item in collapsed["samples"]), "Collapse must have intermediate sizes")
+        self.assertTrue(collapsed["focused"])
+        self.assertEqual(self.element(view).get_attribute("aria-expanded"), "false")
+        self.assertTrue(all(count==1 for count in self.fixture.worker.started.values()))
+
+    def test_manual_wheel_scroll_cancels_focus_without_stopping_expansion(self):
+        self.wait_live()
+        view = self.tile(6) + " .camera-view"
+        self.driver.execute_script("document.querySelector(arguments[0]).scrollIntoView({block:'center',behavior:'instant'});document.querySelector(arguments[0]).click();", view)
+        self.driver.execute_cdp_cmd("Input.dispatchMouseEvent", {"type":"mouseWheel", "x":20,"y":100,"deltaX":0,"deltaY":180})
+        positions = self.driver.execute_async_script("""
+            const done=arguments[0];setTimeout(()=>{
+                const chosen=scrollY;setTimeout(()=>done({chosen,after:scrollY}),500);
+            },100);
+        """)
+        self.assertAlmostEqual(positions["after"], positions["chosen"], delta=2)
+        self.assertEqual(self.element(view).get_attribute("aria-expanded"), "true")
+        self.assertGreater(self.element(view).rect["width"], 1000)
+
+    def test_manual_keyboard_touch_and_scrollbar_changes_cancel_focus(self):
+        self.wait_live()
+        view = self.tile(6) + " .camera-view"
+        for gesture in ("keyboard", "touch", "scrollbar"):
+            with self.subTest(gesture=gesture):
+                if gesture == "touch":
+                    self.driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {"enabled":True})
+                self.driver.execute_script("""
+                    const view=document.querySelector(arguments[0]);
+                    view.scrollIntoView({block:'center',behavior:'instant'});
+                    const monitor=window.scrollMonitor={original:window.scrollTo,calls:[],inputAt:null,
+                        started:performance.now(),events:new AbortController()};
+                    for(const name of ['keydown','touchstart','pointerdown']) window.addEventListener(name,()=>{
+                        monitor.inputAt ??= performance.now()-monitor.started;
+                    },{capture:true,passive:true,signal:monitor.events.signal});
+                    window.scrollTo=(...args)=>{
+                        if(monitor.inputAt!==null)monitor.calls.push(performance.now()-monitor.started);
+                        return monitor.original.apply(window,args);
+                    };view.click();
+                """, view)
+                try:
+                    if gesture == "keyboard":
+                        ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).perform()
+                    elif gesture == "touch":
+                        self.driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type":"touchStart","touchPoints":[{"x":20,"y":300}]})
+                        self.driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type":"touchMove","touchPoints":[{"x":20,"y":220}]})
+                        self.driver.execute_cdp_cmd("Input.dispatchTouchEvent", {"type":"touchEnd","touchPoints":[]})
+                    else:
+                        # Scrollbar offsets change without a wheel/key event.
+                        self.driver.execute_script("""
+                            scrollMonitor.inputAt=performance.now()-scrollMonitor.started;
+                            scrollMonitor.original.call(window,{top:scrollY+160,behavior:'instant'});
+                        """)
+                    result = self.driver.execute_async_script("""
+                        const done=arguments[0];setTimeout(()=>{
+                            const chosen=scrollY;setTimeout(()=>done({chosen,after:scrollY,
+                                inputAt:scrollMonitor.inputAt,calls:scrollMonitor.calls}),500);
+                        },150);
+                    """)
+                    self.assertIsNotNone(result["inputAt"], "A real manual input must arrive")
+                    self.assertLess(result["inputAt"],360,"Input must interrupt an active transition")
+                    self.assertEqual(result["calls"], [], "Automatic scroll requests must stop after user input")
+                    if gesture == "scrollbar":
+                        self.assertAlmostEqual(result["after"], result["chosen"], delta=2)
+                    self.assertEqual(self.element(view).get_attribute("aria-expanded"), "true")
+                finally:
+                    self.driver.execute_script("window.scrollTo=scrollMonitor.original;scrollMonitor.events.abort();delete window.scrollMonitor;")
+                    self.driver.execute_cdp_cmd("Emulation.setTouchEmulationEnabled", {"enabled":False})
+                    self.driver.execute_async_script("""
+                        const view=document.querySelector(arguments[0]);
+                        if(view.getAttribute('aria-expanded')==='true')view.click();
+                        setTimeout(arguments[1],550);
+                    """, view)
+
+    def test_rapid_reversal_and_reduced_motion_leave_stable_layout(self):
+        self.wait_live()
+        view = self.tile(6) + " .camera-view"
+        result = self.driver.execute_async_script("""
+            const view=document.querySelector(arguments[0]),done=arguments[1];
+            view.scrollIntoView({block:'center',behavior:'instant'});view.click();
+            setTimeout(()=>{view.click();setTimeout(()=>{
+                view.click();setTimeout(()=>done({expanded:view.getAttribute('aria-expanded'),
+                    animations:document.getAnimations().length}),550);
+            },60);},60);
+        """, view)
+        self.assertEqual(result, {"expanded":"true","animations":0})
+        self.assertAlmostEqual(self.ratio(self.tile(6)+" img"),16/9,delta=.01)
+        self.driver.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features":[{"name":"prefers-reduced-motion","value":"reduce"}]})
+        result = self.driver.execute_script("""
+            const view=document.querySelector(arguments[0]);view.click();
+            return {expanded:view.getAttribute('aria-expanded'),animations:document.getAnimations().length};
+        """, view)
+        self.assertEqual(result, {"expanded":"false","animations":0})
+        self.assertTrue(all(count==1 for count in self.fixture.worker.started.values()))
 
     def test_settings_are_per_camera_persisted_and_keyboard_accessible(self):
         self.wait_live()

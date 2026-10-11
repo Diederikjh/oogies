@@ -16,7 +16,12 @@ hide or change a camera's default display proportions.
 Each tile has independent live/stale/offline/error/capacity state. Click its
 picture to expand/collapse; the picture is a button supporting Enter and Space,
 with an accessible action label and expansion state. Expansion keeps the overview
-substream and creates no extra NVR connection. Aspect selectors are under
+substream and creates no extra NVR connection. Expand/collapse animates the same
+tile over 360 ms while preserving picture proportions; the page follows it into
+view. Wheel, touch, keyboard or scrollbar input immediately cancels automatic
+scrolling while the size transition finishes. Rapid toggles continue from the
+current rectangle, and reduced-motion preferences use an immediate transition.
+Aspect selectors are under
 Settings → Picture proportions, with one saved browser preference per camera
 shared by its live and recorded views. Main-stream quality switching is not implemented yet. Camera 1's
 16:9 setting matches the owner's Hik-Connect screenshot; other cameras can use

@@ -57,7 +57,9 @@ Camera availability is cached for one minute. Offline cameras are rechecked
 while the grid is active and return automatically when they recover.
 
 Click a camera picture to expand it; click again to collapse. Enter and Space
-work too. Expansion uses the same overview stream. Change picture proportions
+work too. Expand/collapse animates smoothly and scrolls the picture into view;
+manual scrolling immediately takes control. Reduced-motion preferences are
+respected. Expansion uses the same overview stream. Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
 choice, and the same setting applies to its recorded video.
 

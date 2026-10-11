@@ -26,6 +26,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/settings/display-settings.js": ("settings/display-settings.js", "text/javascript"),
     "/live/overview.js": ("live/overview.js", "text/javascript"),
     "/live/camera-tile.js": ("live/camera-tile.js", "text/javascript"),
+    "/live/tile-expansion.js": ("live/tile-expansion.js", "text/javascript"),
     "/history/recorded-clip.js": ("history/recorded-clip.js", "text/javascript")}
 
 

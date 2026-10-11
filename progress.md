@@ -69,6 +69,20 @@ lease was released. Evidence is private in
 
 ## Current milestone: automatic live grid verified
 
+The one-minute availability cache and recovery tests were committed as
+`50c2272`. Picture expand/collapse now animates the existing tile over 360 ms,
+keeping its aspect ratio and existing video source. Automatic scrolling brings
+the tile into view and yields immediately to wheel, touch, keyboard, pointer or
+scrollbar changes. Rapid reversals start from the current rectangle, resize and
+disposal clean up the transition, and reduced-motion preferences skip animation.
+Browser tests sample intermediate sizes/ratios and cover manual interruption,
+rapid reversal and reduced motion. No backend video resizing or new stream is
+introduced by expansion.
+All 26 unit tests and 18 offline browser cases passed. The local service was
+reloaded and verified to serve the new animation module. Browser checks also
+verified that touch momentum can continue after manual input without further
+automatic scroll requests; scrollbar offsets remain where the user places them.
+
 The aspect correction was committed as `95ec310`. The service now discovers inputs
 and automatically shows a responsive live grid. Nine configured inputs were
 found: seven online (six analog and SDK IP channel 34) and two offline. Progressive

@@ -409,6 +409,11 @@ share sources, and pausing one must preserve the other. Authentication rejection
 ends the check; do not retry passwords or SDK profiles automatically. Report
 actual discovered channels, tested concurrency and per-camera failures.
 
+Click a camera picture to animate expand/collapse. Verify the picture stays in
+focus and manual wheel/touch/keyboard/scrollbar input overrides automatic
+scrolling. The transition preserves picture proportions and the existing
+overview stream. Reduced-motion preferences disable the animation.
+
 Camera availability expires after 60 seconds. Active views share one periodic
 status query using the existing SDK login; recovered offline cameras resume
 automatically. Recent video takes precedence over an offline status hint.
