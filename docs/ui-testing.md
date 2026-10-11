@@ -16,6 +16,8 @@ delete, newest-first ordering on returning from History and refreshing after
 another viewer queues work, per-file failure/retry, and preserving another live tab while an export
 waits for a slot. Host tests cover ranges, idempotency, FIFO/admission, restart,
 retention, storage limits, active-download deletion, and HTTP byte ranges/410.
+Circular export progress is checked against the fixture's actual capture progress,
+including accessible values, completion/cancellation, mobile fit and reduced motion.
 Real-recorder timing/coexistence evidence is separate in [clip exports](clip-exports.md).
 
 ## Run

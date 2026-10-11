@@ -8,6 +8,15 @@ and historical use cases incrementally.
 
 ## Clip exports, frame downloads and fine seeking
 
+The export ordering fix was committed as `5f3c9fd`. Running exports now use a
+circular SVG progressbar with the existing backend progress and a central
+percentage. The ring is reused on polling, hidden outside running state, and
+provides an accessible label/range/value. Reduced-motion preferences disable
+the short arc transition; no new requests or dependencies were added.
+Four focused browser cases passed for actual capture percentage updates,
+completion, cancellation, download/delete and ordering. The new case also checks
+mobile fit and reduced motion; its intermediate screenshot was visually reviewed.
+
 Exports previously appended new jobs below cached rows. Returning from History
 or refreshing kept the wrong order; a full reload rebuilt it newest first.
 A browser regression reproduced this, then passed after positioning reused rows

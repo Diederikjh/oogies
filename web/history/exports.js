@@ -1,5 +1,21 @@
 import {api} from "/shared/api.js";
 
+function progressIndicator() {
+  const ring = document.createElement("span"); ring.className = "export-progress";
+  ring.setAttribute("role", "progressbar"); ring.setAttribute("aria-valuemin", "0"); ring.setAttribute("aria-valuemax", "100");
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 48 48"); svg.setAttribute("aria-hidden", "true");
+  for (const name of ["track", "value"]) {
+    const circle = document.createElementNS(svg.namespaceURI, "circle");
+    circle.setAttribute("class", `export-progress-${name}`);
+    for (const [key, value] of Object.entries({cx:24, cy:24, r:20, pathLength:100})) circle.setAttribute(key, value);
+    if (name === "value") circle.setAttribute("transform", "rotate(-90 24 24)");
+    svg.append(circle);
+  }
+  const percent = document.createElement("span"); percent.setAttribute("aria-hidden", "true");
+  ring.append(svg, percent); return ring;
+}
+
 export class ExportsView {
   constructor(panel) {
     this.panel = panel; this.list = panel.querySelector("#export-jobs");
@@ -22,7 +38,9 @@ export class ExportsView {
         if (!row) {
           row = document.createElement("li"); row.className = "export-job"; row.dataset.jobId = job.id;
           const title = document.createElement("h2"), range = document.createElement("p"), status = document.createElement("p"), actions = document.createElement("div");
-          range.className = "subtitle"; status.setAttribute("role", "status"); actions.className = "actions";
+          range.className = "subtitle"; status.className = "export-status"; status.setAttribute("role", "status"); actions.className = "actions";
+          const label = document.createElement("span"); label.className = "export-status-label";
+          status.append(progressIndicator(), label);
           row.append(title, range, status, actions);
         }
         // Keep the API's newest-first order when adding jobs to an existing list.
@@ -34,7 +52,16 @@ export class ExportsView {
         title.textContent = job.camera_name;
         const time = new Intl.DateTimeFormat(undefined, {timeZone:job.timezone, dateStyle:"medium", timeStyle:"medium"});
         range.textContent = `${time.format(new Date(job.from))} – ${time.format(new Date(job.to))} · ${job.timezone} · ${job.duration_seconds} seconds · ${job.aspect_ratio}`;
-        status.textContent = job.error || job.waiting_reason || (job.state === "running" ? `Exporting · ${Math.round(job.progress * 100)}%` : job.state === "ready" ? `Ready · ${(job.bytes / 1024 / 1024).toFixed(1)} MiB · Expires ${new Date(job.expires_at).toLocaleString()}` : job.state);
+        const [ring, label] = status.children;
+        ring.hidden = job.state !== "running";
+        if (!ring.hidden) {
+          const percent = Math.round(Math.max(0, Math.min(1, Number.isFinite(job.progress) ? job.progress : 0)) * 100);
+          ring.setAttribute("aria-label", `Export progress for ${job.camera_name}`);
+          ring.setAttribute("aria-valuenow", percent);
+          ring.querySelector(".export-progress-value").setAttribute("stroke-dasharray", `${percent} 100`);
+          ring.lastElementChild.textContent = `${percent}%`;
+        }
+        label.textContent = job.error || job.waiting_reason || (job.state === "running" ? "Exporting" : job.state === "ready" ? `Ready · ${(job.bytes / 1024 / 1024).toFixed(1)} MiB · Expires ${new Date(job.expires_at).toLocaleString()}` : job.state);
         if (actions.dataset.state !== job.state) {
           actions.replaceChildren(); actions.dataset.state = job.state;
           if (job.state === "ready") {

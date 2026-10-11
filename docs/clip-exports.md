@@ -66,6 +66,11 @@ as well as path separators on Unix. No controls or letterboxing are included.
 States are `queued`, `running`, `ready`, `failed`, `cancelled`, `expired`.
 The list stays newest first when returning from History, refreshing, or receiving
 updates from another browser. Existing rows and their controls are reused.
+Running jobs show a circular progress indicator with the backend's percentage
+in the centre and an accessible progressbar value. Queued jobs show their wait
+reason; completed or cancelled jobs show their status instead of the ring.
+Progress follows recorded-time capture and stays below 100% until the MP4 is
+finalized and verified. Reduced-motion preferences disable the ring transition.
 One worker runs, with three waiting jobs by default. A queued job holds no
 recorder slot. An active job reserves one slot in the same budget as live and
 historical viewers. Full capacity waits without probing or evicting another view.
