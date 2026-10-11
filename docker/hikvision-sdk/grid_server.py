@@ -15,6 +15,7 @@ from browser_server import Handler as BaseHandler
 from grid_worker import GridWorker
 from live_sessions import LiveSessions, SessionError
 from history_timeline import HistoryTimeline
+from playback_sessions import PlaybackSessions
 from nvr_config import load_config
 from sdk_adapters import get_sdk_adapter
 
@@ -30,6 +31,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/live/tile-expansion.js": ("live/tile-expansion.js", "text/javascript"),
     "/history/history-view.js": ("history/history-view.js", "text/javascript"),
     "/history/timeline.js": ("history/timeline.js", "text/javascript"),
+    "/history/playback-controls.js": ("history/playback-controls.js", "text/javascript"),
     "/history/history.css": ("history/history.css", "text/css")}
 
 
@@ -61,8 +63,18 @@ class Handler(BaseHandler):
             return
         path = urlsplit(self.path).path
         match = re.fullmatch(r"/api/live/sessions/([a-f0-9]{32})", path)
+        playback = re.fullmatch(r"/api/playback/sessions/([a-f0-9]{32})", path)
         try:
-            if operation == "POST" and path == "/api/live/sessions":
+            if operation == "POST" and path == "/api/playback/sessions":
+                self.json_response(self.server.playback.create(self.body()), 201)
+            elif operation == "PATCH" and playback:
+                self.json_response(self.server.playback.patch(playback[1], self.body()))
+            elif operation == "DELETE" and playback:
+                if self.headers.get("Origin") not in (None, "http://" + self.headers["Host"]):
+                    raise SessionError("Invalid origin.", 403)
+                self.server.playback.delete(playback[1])
+                self.send_response(204); self.send_header("Content-Length", "0"); self.end_headers()
+            elif operation == "POST" and path == "/api/live/sessions":
                 result = self.server.sessions.create(self.body(), self.headers.get("Idempotency-Key"))
                 self.json_response(result, 201)
             elif operation == "PATCH" and match:
@@ -100,6 +112,7 @@ class Handler(BaseHandler):
                 with worker.condition:
                     self.json_response(dict(state=worker.state, error=worker.error,
                         active_live_sources=len(sessions.wanted), viewer_sessions=len(sessions.sessions),
+                        playback_sessions=len(self.server.playback.sessions),
                         device_stream_limit=None, source_limit=sessions.limit,
                         tested_concurrent_streams=worker.tested_capacity, sdk_login_calls=worker.login_calls,
                         sdk_adapter=worker.adapter.sdk_id, recording_available=self.server.recording.is_file(),
@@ -114,8 +127,12 @@ class Handler(BaseHandler):
                 self.json_response(result, status)
             elif re.fullmatch(r"/api/live/sessions/[a-f0-9]{32}", path):
                 self.json_response(sessions.get(path.rsplit("/", 1)[1]))
+            elif re.fullmatch(r"/api/playback/sessions/[a-f0-9]{32}", path):
+                self.json_response(self.server.playback.get(path.rsplit("/", 1)[1]))
             elif (match := re.fullmatch(r"/media/live/([a-f0-9]{32})/frames", path)):
                 self.frames(match[1])
+            elif (match := re.fullmatch(r"/media/playback/([a-f0-9]{32})", path)):
+                self.frames(match[1], playback=True)
             elif path == "/recording.mp4":
                 self.file(self.server.recording, "video/mp4", ranged=True)
             elif path in ASSETS:
@@ -129,8 +146,9 @@ class Handler(BaseHandler):
         except (OSError, ValueError):
             self.json_response({"error": {"code": "recorder_unavailable", "message": "Recorder discovery failed; no automatic login retry.", "retryable": False}}, 503)
 
-    def frames(self, identifier):
-        self.server.sessions.get(identifier)
+    def frames(self, identifier, playback=False):
+        sessions = self.server.playback if playback else self.server.sessions
+        sessions.get(identifier)
         with self.server.worker.condition:
             if identifier in self.server.feeds:
                 raise SessionError("This viewer already has a frame feed.", 409)
@@ -143,8 +161,8 @@ class Handler(BaseHandler):
         self.end_headers()
         seen = {}
         try:
-            while not self.server.sessions.closed:
-                for packet in self.server.sessions.next_frames(identifier, seen):
+            while not sessions.closed:
+                for packet in sessions.next_frames(identifier, seen):
                     self.wfile.write(packet)
                 self.wfile.flush()
         except (OSError, SessionError):
@@ -154,7 +172,7 @@ class Handler(BaseHandler):
                 self.server.feeds.discard(identifier)
 
 
-def create_server(worker, sessions, *, address, web, recording, recording_info=None, timeline=None):
+def create_server(worker, sessions, *, address, web, recording, recording_info=None, timeline=None, playback=None):
     """Wire the HTTP service without initializing an SDK or choosing a worker."""
     server = ThreadingHTTPServer(address, Handler)
     server.daemon_threads = True
@@ -164,6 +182,8 @@ def create_server(worker, sessions, *, address, web, recording, recording_info=N
     server.web, server.recording = Path(web), Path(recording)
     server.recording_info = recording_info or {}
     server.timeline = timeline or HistoryTimeline(worker, worker.config.get("timezone", "Africa/Johannesburg"))
+    server.playback = playback or PlaybackSessions(worker, sessions, lease_seconds=sessions.lease_seconds)
+    sessions.playback_sessions = server.playback
     return server
 
 
@@ -190,7 +210,7 @@ def main():
     try:
         server.serve_forever()
     finally:
-        sessions.close(); worker.close(); server.timeline.close(); server.server_close()
+        sessions.close(); server.playback.close(); worker.close(); server.timeline.close(); server.server_close()
 
 
 if __name__ == "__main__": main()

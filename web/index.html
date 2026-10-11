@@ -19,6 +19,10 @@
       <div id="camera-grid" class="camera-grid"></div>
     </section>
     <section id="history-panel" aria-label="Camera history" hidden>
+      <div id="history-player" class="history-player" data-state="idle">
+        <div id="history-viewer" class="viewer history-viewer"><img id="history-image" hidden alt="Recorded camera video"><span id="history-placeholder" class="tile-placeholder">Select a time or motion interval to play its recording.</span></div>
+        <div class="toolbar"><p id="history-playback-status" role="status" aria-live="polite"></p><div class="actions"><button id="history-pause" disabled>Pause</button><button id="history-stop" disabled>Stop playback</button></div></div>
+      </div>
       <div class="history-card">
         <div class="history-controls">
           <label>Camera<select id="history-camera" disabled aria-label="History camera"></select></label>
@@ -38,7 +42,7 @@
         <ul id="history-events" class="history-events" aria-label="Motion intervals"></ul>
       </div>
     </section>
-    <footer><span class="dot"></span>Local camera viewer<span>Video only · Overview quality</span></footer>
+    <footer><span class="dot"></span>Local camera viewer<span id="view-note">Video only · Overview quality</span></footer>
   </main>
   <dialog id="display-settings" aria-labelledby="settings-title">
     <div class="settings-heading"><h2 id="settings-title">Settings</h2><button id="settings-close" autofocus>Done</button></div>

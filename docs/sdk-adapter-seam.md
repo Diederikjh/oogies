@@ -59,6 +59,14 @@ for the HTTP API. The fixture worker substitutes at this operation boundary.
 See [History timeline](history-timeline.md). This is a concrete extension, not a
 new abstract recorder hierarchy.
 
+The same worker now exposes `start_playback`, `control_playback` and
+`stop_playback` with independent session IDs/generations. The current native
+implementation owns file-mode decoder contexts; the Python manager owns leases,
+UTC ranges and capacity. Seeking/resuming use a fresh generation and time-based
+context rather than another login. The current pause strategy stops the native
+context and retains its last frame/time. [History playback](history-playback.md)
+records the verified behavior and limits a later SDK implementation must address.
+
 There is no abstract base class, dynamic loader, speculative camera/history
 interface or extra SDK implementation. The invocation arguments describe the
 operations already present in the prototype. They can change when a second

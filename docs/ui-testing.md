@@ -80,10 +80,17 @@ manager. [test_viewer_ui.py](../tests/ui/test_viewer_ui.py) drives the browser;
 [run.py](../tests/ui/run.py) records results. Each case uses a new browser profile,
 server and worker; cleanup closes feeds, views, fixture threads and the browser.
 
-The fake worker substitutes at the Python worker boundary. These tests do not
+The fake worker substitutes at the Python worker boundary. The browser cases do not
 exercise C++ callbacks, SDK authentication, decryption, discovery compatibility,
 native process events or real recorder capacity. Keep the bounded real-recorder
 checks for those claims. Chrome/Chromium is the currently tested browser engine.
+
+Three additional Docker tests compile the production C++ playback buffer without
+the SDK. They exercise decoder refusals, bounded lossless delivery from a fast
+producer, and waking a blocked producer on stop. These run before the browser
+cases in the same local/CI command, using the compiler already in the image.
+Run just these regressions with `python3 tools/run_ui_tests.py test_native_playback`.
+The Python fixture cannot reproduce native compressed-stream overflows.
 
 The [first History slice](history-timeline.md) extends the same worker seam with
 synthetic recording and motion intervals. It replaces the saved-clip case and
@@ -95,11 +102,29 @@ tab keeps moving. A fresh checkout needs no private MP4. Unit tests cover UTC,
 midnight and ambiguous clock conversion, clipped intervals/stable IDs, bounded
 queue/cache behavior, native response cleanup and HTTP parameter encoding.
 
-Interactive historical playback, seeking and its multi-viewer controls remain
-the next [planned test changes](history-view-plan.md#test-changes). Selecting a
-time in the current UI does not create a playback session.
+The [interactive playback suite](history-playback.md) now checks moving frames
+after time selection, pause/resume, paused seeking, one SDK seek per slider
+commit, independent historical tabs, live plus history, offline cameras with
+recordings, selected-camera aspect, and Settings opened before discovery finishes.
+The fixture supplies decoded frames/clocks through the production worker/session
+boundary; SDK compatibility and native resource behavior still use manual checks.
 
 ## Verified result
+
+After the sustained-playback correction, all 50 unit tests and 33 Docker cases
+passed (30 browser and three native buffer regressions). The real API check
+ran 75 uninterrupted seconds with a concurrent live preview, normal recorded
+clock advancement and working controls. The actual browser then played for
+thirty seconds and confirmed Pause/Stop cleanup. See
+[History playback](history-playback.md) for evidence and manual check commands.
+
+Interactive playback passes 50 unit tests and the full 30-case browser suite,
+including moving playback and delayed History settings. Real recorder checks
+verified requested first-frame time, paused/resumed footage and playing/paused
+seeks through one login. Docker Chromium also displayed actual SDK video with
+the correct aspect and verified pause/Stop cleanup. A real live preview advanced
+from 2 to 31 received frames while the full playback/control check ran; it
+remained live with one SDK login. Wider capacity is still unverified.
 
 The first History timeline slice passed all 40 unit and 24 Docker browser cases. Its native
 SDK worker compiled and passed an offline decoder check. Real metadata queries

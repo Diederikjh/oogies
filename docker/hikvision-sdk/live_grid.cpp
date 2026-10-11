@@ -66,6 +66,7 @@ struct Source {
     int width = 0, height = 0;
     unsigned long long sequence = 0, published = 0, jpegs = 0;
     std::string directory;
+    std::string playback_id, position;
     explicit Source(int ch, const std::string &root) : channel(ch), directory(root + "/camera-" + std::to_string(ch)) {}
 };
 
@@ -133,7 +134,8 @@ static void start(Source &source, LONG user, const std::string &key) {
 static void publish(Source &source) {
     if (!source.active) return;
     if (source.error) {
-        event("{\"type\":\"source_error\",\"channel\":" + std::to_string(source.channel) + ",\"error\":" + std::to_string(source.error.load()) + "}");
+        if (source.playback_id.empty())
+            event("{\"type\":\"source_error\",\"channel\":" + std::to_string(source.channel) + ",\"error\":" + std::to_string(source.error.load()) + "}");
         stop(source); return;
     }
     std::vector<char> frame; int width, height; unsigned long long sequence;
@@ -148,14 +150,24 @@ static void publish(Source &source) {
         source.error = 26; return;
     }
     ++source.jpegs;
+    if (!source.playback_id.empty()) {
+        PLAYM4_SYSTEM_TIME clock{};
+        if (PlayM4_GetSystemTime(source.port, &clock) && clock.dwYear >= 2000 && clock.dwYear <= 2100) {
+            NET_DVR_TIME wall{clock.dwYear, clock.dwMon, clock.dwDay, clock.dwHour, clock.dwMin, clock.dwSec};
+            source.position = history_time(wall);
+        }
+    }
     std::ofstream metadata(source.directory + "/frame.tmp.json");
     metadata << "{\"generation\":" << source.generation << ",\"sequence\":" << sequence
         << ",\"width\":" << width << ",\"height\":" << height << ",\"decoded_frames\":" << source.decoded.load()
-        << ",\"jpeg_frames\":" << source.jpegs << "}";
+        << ",\"jpeg_frames\":" << source.jpegs << ",\"position\":"
+        << (source.position.empty() ? "null" : quote(source.position)) << "}";
     metadata.close();
     std::rename((source.directory + "/frame.tmp.json").c_str(), (source.directory + "/frame.json").c_str());
     source.published = sequence;
 }
+
+#include "history_playback.h"
 
 struct Camera { int channel; std::string name, online; };
 static std::vector<Camera> discover(LONG user, const NET_DVR_DEVICEINFO_V30 &device, bool read_names = true) {
@@ -235,6 +247,7 @@ int main(int argc, char **argv) {
     const char *root = std::getenv("CAM_SDK_CAPTURE_DIR");
     if (!root) { NET_DVR_Logout(user); NET_DVR_Cleanup(); return 2; }
     std::map<int, std::unique_ptr<Source>> sources;
+    std::map<std::string, std::unique_ptr<Playback>> playbacks;
     for (const auto &camera : cameras) sources[camera.channel] = std::make_unique<Source>(camera.channel, root);
     std::string buffer;
     std::thread history_job;
@@ -252,6 +265,28 @@ int main(int argc, char **argv) {
                 std::istringstream command(buffer.substr(0, newline)); buffer.erase(0, newline + 1);
                 std::string operation; int channel = 0; command >> operation >> channel;
                 if (operation == "quit") { stopping = 1; break; }
+                if (operation.rfind("playback-", 0) == 0) {
+                    std::string id; int generation = 0; command >> id >> generation;
+                    if (id.size() != 32 || id.find_first_not_of("0123456789abcdef") != std::string::npos || generation < 1) continue;
+                    if (operation == "playback-start") {
+                        std::string begin_text, end_text; int paused = 0; command >> begin_text >> end_text >> paused;
+                        NET_DVR_TIME begin{}, end{};
+                        if (!sources.count(channel) || !parse_history_time(begin_text, begin) || !parse_history_time(end_text, end)) continue;
+                        if (playbacks.count(id)) playbacks.erase(id);
+                        if (playbacks.size() >= 8) {
+                            event("{\"type\":\"playback\",\"id\":" + quote(id) + ",\"generation\":" + std::to_string(generation) + ",\"state\":\"error\",\"error\":41}");
+                            continue;
+                        }
+                        auto playback = std::make_unique<Playback>(id, generation, channel, root);
+                        playback->start(user, key, begin, end, paused != 0);
+                        playbacks[id] = std::move(playback);
+                    } else if (playbacks.count(id) && playbacks[id]->source.generation == generation) {
+                        if (operation == "playback-stop") playbacks.erase(id);
+                        else if (operation == "playback-pause") playbacks[id]->pause(true);
+                        else if (operation == "playback-resume") playbacks[id]->pause(false);
+                    }
+                    continue;
+                }
                 if (operation == "timeline") {
                     std::string id, begin_text, end_text; command >> id >> begin_text >> end_text;
                     NET_DVR_TIME begin{}, end{};
@@ -293,10 +328,13 @@ int main(int argc, char **argv) {
         }
         if (std::chrono::steady_clock::now() - last_publish >= std::chrono::milliseconds(100)) {
             for (auto &item : sources) publish(*item.second);
+            for (auto &item : playbacks) item.second->publish_frame();
             last_publish = std::chrono::steady_clock::now();
         }
+        for (auto &item : playbacks) item.second->pump();
     }
     for (auto &item : sources) stop(*item.second);
+    playbacks.clear();
     if (history_job.joinable()) history_job.join();
     NET_DVR_Logout(user); NET_DVR_Cleanup();
     event("{\"type\":\"shutdown\",\"login_calls\":1}");

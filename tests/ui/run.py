@@ -25,7 +25,7 @@ class ReportResult(unittest.TextTestResult):
 
 if __name__ == "__main__":
     os.umask(0o077)
-    suite = unittest.defaultTestLoader.loadTestsFromNames(sys.argv[1:] or ["test_viewer_ui"])
+    suite = unittest.defaultTestLoader.loadTestsFromNames(sys.argv[1:] or ["test_native_playback", "test_viewer_ui"])
     result = unittest.TextTestRunner(verbosity=2, resultclass=ReportResult).run(suite)
     output = Path("/output"); output.mkdir(parents=True, exist_ok=True)
     (output / "ui-tests.json").write_text(json.dumps(dict(tests=result.testsRun,

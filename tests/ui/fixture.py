@@ -11,6 +11,8 @@ from types import SimpleNamespace
 from grid_server import create_server
 from grid_worker import GridWorker
 from live_sessions import LiveSessions
+from playback_sessions import PlaybackSessions
+from history_timeline import recorder_utc, utc_text
 
 
 COLORS = [(190, 35, 45), (35, 140, 65), (40, 70, 195), (185, 135, 30),
@@ -64,6 +66,7 @@ class FakeRecorderWorker(GridWorker):
         self.timeline_calls = []
         self.timeline_states = {}
         self.timeline_gate = threading.Event(); self.timeline_gate.set()
+        self.playback_commands = []
         self.discovery_gate = threading.Event()
         if not delayed:
             self.discovery_gate.set()
@@ -97,6 +100,21 @@ class FakeRecorderWorker(GridWorker):
 
     def _command(self, command):
         # Reuse the production cache/event logic; substitute only SDK transport.
+        parts = command.split()
+        if parts[0].startswith("playback-"):
+            self.playback_commands.append(command)
+            identifier, generation = parts[2], int(parts[3])
+            source = self.playbacks.get(identifier)
+            if source and source["generation"] == generation:
+                if parts[0] == "playback-start":
+                    source.update(ready_at=time.monotonic() + .15,
+                        play_time=recorder_utc(parts[4], self.zone), end_time=recorder_utc(parts[5], self.zone),
+                        pause_on_frame=parts[6] == "1")
+                    self._event(dict(type="playback", id=identifier, generation=generation, state="starting", error=0))
+                elif parts[0] in ("playback-pause", "playback-resume"):
+                    self._event(dict(type="playback", id=identifier, generation=generation,
+                        state="paused" if parts[0] == "playback-pause" else "playing", error=0))
+            return
         if command != "refresh":
             raise AssertionError("Unexpected fake SDK command")
         self.refresh_calls += 1
@@ -151,6 +169,18 @@ class FakeRecorderWorker(GridWorker):
                         width=352, height=288, received=source["sequence"], last_frame=time.monotonic(),
                         last_frame_received_at=datetime.now(timezone.utc).isoformat())
                 self.tested_capacity = max(self.tested_capacity, sum(s["state"] == "live" for s in self.sources.values()))
+                for identifier, source in self.playbacks.items():
+                    if source["state"] not in ("starting", "seeking", "playing") or time.monotonic() < source["ready_at"]: continue
+                    if source["play_time"] >= source["end_time"]:
+                        self._event(dict(type="playback", id=identifier, generation=source["generation"], state="ended", error=0)); continue
+                    source["sequence"] += 1
+                    key = source["camera_id"] if source["camera_id"] in self.media.frames else "camera-1"
+                    source.update(state="playing", frame=self.media.frames[key][source["sequence"] % 2],
+                        width=352, height=288, received=source["sequence"], last_frame=time.monotonic(), position=utc_text(source["play_time"].replace(microsecond=0)))
+                    source["play_time"] += timedelta(seconds=.2)
+                    if source["pause_on_frame"]:
+                        source["pause_on_frame"] = False
+                        self._event(dict(type="playback", id=identifier, generation=source["generation"], state="paused", error=0))
                 self.condition.notify_all()
 
     def close(self):
@@ -162,11 +192,12 @@ class FakeRecorderWorker(GridWorker):
 
 
 class ViewerFixture:
-    def __init__(self, media, *, limit=8, lease=10, recording=True, **worker_options):
+    def __init__(self, media, *, limit=8, lease=10, recording=True, playback_limit=1, **worker_options):
         self.worker = FakeRecorderWorker(media, **worker_options)
         self.sessions = LiveSessions(self.worker, limit=limit, lease_seconds=lease)
         self.server = create_server(self.worker, self.sessions, address=("127.0.0.1", 0), web="/web",
-            recording=media.recording if recording else media.directory / "missing.mp4")
+            recording=media.recording if recording else media.directory / "missing.mp4",
+            playback=PlaybackSessions(self.worker, self.sessions, limit=playback_limit, lease_seconds=lease))
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -185,6 +216,7 @@ class ViewerFixture:
         self.server.shutdown()
         self.thread.join(timeout=2)
         self.sessions.close()
+        self.server.playback.close()
         self.server.timeline.close()
         self.server.server_close()
         self.reaper.join(timeout=2)

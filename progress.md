@@ -6,6 +6,76 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Sustained History playback correction
+
+The owner reported playback stopping after a few seconds with code 43. The
+earlier checks had exercised only short runs between seeks. The recorder sends
+compressed footage faster than real-time decoding: the bridge's 16 MiB callback
+queue filled and generated that error locally. Retrying decoder input did not
+apply flow control to incoming data.
+
+The queue now waits for capacity before copying more data and retains refused
+decoder chunks in order, including their memory accounting. The main publisher
+does not wait for the decoder. Closing wakes the callback before SDK stop, and
+two-second playback heartbeats keep the connection active while it waits. The
+queue limit remains 16 MiB. Private buffer statistics confirmed the cap was
+reached and 141 capacity waits occurred, without losing playback.
+
+A 75-second uninterrupted real-recorder check received 606 frames with exactly
+75 seconds of recorded-clock advancement and no feed errors. A concurrent live
+preview advanced from 7 to 608 frames and stayed live through the same SDK
+login. Pause/resume, playing seek and paused seek passed afterward. Sampled
+service memory was about 107 MiB. A separate Docker Chromium check displayed
+moving footage for thirty uninterrupted seconds, verified Pause, and left zero
+historical sessions after Stop. The updated service is running on localhost.
+
+Three new Docker tests compile the production C++ buffer without the SDK and
+cover decoder refusals, fast-producer/slow-consumer ordering and bounds, and
+stopping a blocked callback. They run with the existing UI/CI command. The
+manual API and browser checks now include sustained playback by default.
+All 50 host unit tests and 33 Docker cases (30 browser, three native buffer)
+passed. The publication privacy scan and whitespace check also passed.
+Evidence and usage are in [History playback](docs/history-playback.md).
+
+## Interactive History playback
+
+The functioning timeline was committed as `bb40e0f` before this work. Clicking
+the recording timeline, motion intervals or a committed time selection now shows
+moving SDK footage. The player supports pause/resume, playing and paused seeks,
+Stop, recorded-time playhead updates and per-camera aspect preferences. Dragging
+previews locally and sends one seek on release. Entering History before live
+discovery finishes still supplies camera settings, including an already-open
+Settings dialog.
+
+Independent Python playback leases share the existing native SDK login, while
+each playback owns its handle/decoder, position and generation. The current
+application admits one historical viewer and reserves one source-budget slot;
+it does not evict another live viewer. New generations discard old frames and
+timestamps. Leaving History, Stop, page-close cleanup and expiry release only
+that viewer. SDK credentials and the full verification code remain backend-only.
+
+The initial combined SDK/decoder pause failed with aggregated code 8; its layer
+was not established. The verified implementation stops the native context on
+pause, retains the last picture/time, and reopens at that recorded time on resume.
+Seek also replaces just that context; a paused seek publishes one new picture
+before holding. Positions come from the decoded stream's recorded system clock.
+
+A bounded real API check verified exact first-frame time, distinct moving JPEGs,
+pause holding frame/time, resume and playing/paused seeks, with one SDK login and
+test-session cleanup. The real Docker browser displayed moving SDK footage at
+the chosen time, 960 × 1088 source dimensions and approximately 16:9 display;
+Pause held its image and Stop left zero playback sessions. A live preview also
+advanced from 2 to 31 frames during the complete playback/control check, remained
+live and reused the same login. Full-grid playback capacity is still unverified.
+
+All 50 unit and 30 browser tests passed, covering playback,
+settings and viewer isolation alongside existing grid/animation/recovery checks.
+Details and private evidence paths are in
+[History playback](docs/history-playback.md). Guides and API proposals now
+describe implemented playback; audio, speed and export remain future work.
+The updated service is running with the player and its new assets served. The
+functional timeline checkpoint remains `bb40e0f`; playback changes await review.
+
 ## First History timeline slice
 
 The pre-implementation plan was committed as `ccee147`. History now replaces

@@ -4,7 +4,11 @@ export class Timeline {
     this.panel = panel;
     this.onSelect = onSelect;
     this.slider = panel.querySelector("#history-position");
-    this.slider.addEventListener("input", () => this.select(this.begin + Number(this.slider.value) * 1000));
+    this.slider.addEventListener("pointerdown", () => { this.scrubbing = true; });
+    this.slider.addEventListener("pointercancel", () => { this.scrubbing = false; });
+    this.slider.addEventListener("pointerup", () => { this.scrubbing = false; });
+    this.slider.addEventListener("input", () => { this.scrubbing = true; this.select(this.begin + Number(this.slider.value) * 1000, false); });
+    this.slider.addEventListener("change", () => { this.scrubbing = false; this.select(this.begin + Number(this.slider.value) * 1000); });
     this.tracks = new Map(["recordings", "motion"].map(name => [name, panel.querySelector(`#history-${name}`)]));
     for (const track of this.tracks.values()) track.addEventListener("click", event => {
       if (event.target.closest("button") || !this.begin || track.dataset.state !== "ready") return;
@@ -59,7 +63,13 @@ export class Timeline {
         button.style.left = `${(start - this.begin) / (this.end - this.begin) * 100}%`;
         button.style.width = `${(end - start) / (this.end - this.begin) * 100}%`;
         button.classList.toggle("is-point", start === end);
-        button.addEventListener("click", () => this.select(start)); track.append(button);
+        button.addEventListener("click", event => {
+          if (name === "motion" || !event.detail) this.select(start);
+          else {
+            const bounds = track.getBoundingClientRect();
+            this.select(this.begin + (event.clientX - bounds.left) / bounds.width * (this.end - this.begin));
+          }
+        }); track.append(button);
         if (name === "motion") {
           const entry = document.createElement("li"), action = document.createElement("button");
           action.textContent = label; action.dataset.intervalId = interval.id;

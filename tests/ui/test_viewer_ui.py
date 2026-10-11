@@ -22,6 +22,9 @@ class ViewerUITests(unittest.TestCase):
         "test_fresh_install_without_a_recording": {"recording": False},
         "test_switching_views_during_discovery_recovers": {"delayed": True},
         "test_offline_camera_recovers_after_one_minute_in_both_tabs": {"offline_camera":"camera-3"},
+        "test_history_playback_preserves_another_live_tab": {"limit":9},
+        "test_history_playback_positions_are_independent_between_tabs": {"playback_limit":2},
+        "test_history_settings_work_before_live_discovery_finishes": {"delayed":True},
     }
 
     @classmethod
@@ -418,6 +421,8 @@ class ViewerUITests(unittest.TestCase):
         self.wait_live(); self.open_history()
         self.element("#history-earlier").click(); self.history_ready()
         self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click()
+        self.history_playing(); self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
         selected, span = self.element("#history-selected").text, self.element("#history-range").text
         count = len(self.fixture.worker.timeline_calls)
         self.element("#history-refresh").click(); self.history_ready()
@@ -443,6 +448,111 @@ class ViewerUITests(unittest.TestCase):
         self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")[1].click()
         self.assertGreater(float(self.element("#history-position").get_attribute("value")), 0)
         self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,".timeline-cursor")), 2)
+
+    def history_playing(self):
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "playing" and
+            self.driver.execute_script("return document.getElementById('history-image').naturalWidth > 0 && !document.getElementById('history-image').hidden"))
+
+    def history_pixels(self):
+        return self.driver.execute_script("""
+            const img=document.getElementById('history-image'), c=document.createElement('canvas');
+            c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);return c.toDataURL();
+        """)
+
+    def test_history_click_plays_moving_frames_and_pause_resume_seek_work(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")[0].click(); self.history_playing()
+        first = self.history_pixels()
+        self.wait.until(lambda _:self.history_pixels() != first)
+        self.open_settings(); self.aspect("4:3"); self.close_settings()
+        self.assertAlmostEqual(self.ratio("#history-image"), 4/3, delta=.01)
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        paused = self.history_pixels()
+        self.driver.execute_async_script("const done=arguments[0];setTimeout(done,500)")
+        self.assertEqual(self.history_pixels(), paused)
+        self.element("#history-pause").click(); self.history_playing()
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["generation"], 2)
+        self.wait.until(lambda _:self.history_pixels() != paused)
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[2].click()
+        self.wait.until(lambda _:next(iter(self.fixture.worker.playbacks.values()))["generation"] == 3 and
+            self.element("#history-player").get_attribute("data-state") == "paused" and
+            self.driver.execute_script("return !document.getElementById('history-image').hidden"))
+        self.element("#history-stop").click()
+        self.wait.until(lambda _:not self.fixture.worker.playbacks)
+        self.assertEqual(self.element("#history-player").get_attribute("data-state"), "idle")
+
+    def test_history_slider_previews_locally_and_commits_one_seek(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        before = len([cmd for cmd in self.fixture.worker.playback_commands if cmd.startswith("playback-start")])
+        self.driver.execute_script("""
+            const slider=document.getElementById('history-position');
+            for(const value of [2200,2300,2400]) {slider.value=value;slider.dispatchEvent(new Event('input',{bubbles:true}));}
+        """)
+        self.assertEqual(len([cmd for cmd in self.fixture.worker.playback_commands if cmd.startswith("playback-start")]), before)
+        self.driver.execute_script("document.getElementById('history-position').dispatchEvent(new Event('change',{bubbles:true}))")
+        self.wait.until(lambda _:next(iter(self.fixture.worker.playbacks.values()))["generation"] == 2)
+        self.assertEqual(len([cmd for cmd in self.fixture.worker.playback_commands if cmd.startswith("playback-start")]), before + 1)
+
+    def test_history_playback_preserves_another_live_tab(self):
+        self.wait_live(); first = self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url); self.wait_live()
+        self.open_history(); self.wait_counts(1,8)
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        self.assertEqual(len(self.fixture.worker.playbacks), 1)
+        self.driver.switch_to.window(first); self.wait_live()
+        pixels = self.pixels(); self.wait.until(lambda _:self.pixels() != pixels)
+        self.assertTrue(all(count == 1 for count in self.fixture.worker.started.values()))
+        self.driver.switch_to.window(self.driver.window_handles[1]); self.element("#live-tab").click(); self.wait_live()
+        self.wait.until(lambda _:not self.fixture.worker.playbacks)
+        self.wait_counts(2,8)
+
+    def test_history_playback_positions_are_independent_between_tabs(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        first_tab = self.driver.current_window_handle
+        first_id = next(iter(self.fixture.worker.playbacks))
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url); self.open_history()
+        Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[2].click(); self.history_playing()
+        second_id = next(key for key in self.fixture.worker.playbacks if key != first_id)
+        self.driver.switch_to.window(first_tab)
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.fixture.worker.playbacks[first_id]["state"] == "paused")
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[1].click()
+        self.wait.until(lambda _:self.fixture.worker.playbacks[first_id]["generation"] == 2)
+        self.assertEqual(self.fixture.worker.playbacks[second_id]["generation"], 1)
+        self.assertEqual(self.fixture.worker.playbacks[second_id]["state"], "playing")
+        self.element("#history-stop").click()
+        self.wait.until(lambda _:first_id not in self.fixture.worker.playbacks)
+        self.driver.switch_to.window(self.driver.window_handles[1]); self.history_playing()
+        before = self.history_pixels(); self.wait.until(lambda _:self.history_pixels() != before)
+
+    def test_history_offline_camera_playback_uses_its_own_aspect_preference(self):
+        self.wait_live(); self.open_settings(); self.aspect("4:3"); self.close_settings()
+        self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        self.assertAlmostEqual(self.ratio("#history-image"), 4/3, delta=.01)
+        Select(self.element("#history-camera")).select_by_value("camera-9"); self.history_ready()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")[0].click(); self.history_playing()
+        self.assertIn("Camera 9", self.element("#history-image").get_attribute("alt"))
+        self.assertAlmostEqual(self.ratio("#history-image"), 16/9, delta=.01)
+        self.open_settings(); self.aspect("original", channel=9); self.close_settings()
+        self.wait.until(lambda _:abs(self.ratio("#history-image") - 352/288) < .01)
+
+    def test_history_settings_work_before_live_discovery_finishes(self):
+        self.element("#history-tab").click(); self.open_settings()
+        self.fixture.worker.discovery_gate.set(); self.history_ready()
+        self.wait.until(lambda _:len(self.driver.find_elements(By.CSS_SELECTOR,"#aspect-settings select")) == 9)
+        self.aspect("4:3", channel=2); self.close_settings()
+        Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")[0].click(); self.history_playing()
+        self.assertAlmostEqual(self.ratio("#history-image"), 4/3, delta=.01)
 
     def test_lease_expiry_releases_only_the_unrenewed_view(self):
         self.wait_live(); first = self.driver.current_window_handle

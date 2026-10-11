@@ -1,0 +1,180 @@
+import {api} from "/shared/api.js";
+import {FrameFeed} from "/shared/frame-feed.js";
+import {MediaDisplay} from "/shared/media-player.js";
+import {readAspect, saveAspect} from "/shared/display-preferences.js";
+
+const LABELS = {starting:"Loading recording…", seeking:"Seeking…", playing:"Playing", paused:"Paused",
+  pausing:"Pausing…", resuming:"Resuming…", ended:"End of selected range", error:"Playback unavailable"};
+
+export class PlaybackControls {
+  constructor(panel, onPosition) {
+    this.panel = panel; this.onPosition = onPosition;
+    this.image = panel.querySelector("#history-image");
+    this.placeholder = panel.querySelector("#history-placeholder");
+    this.message = panel.querySelector("#history-playback-status");
+    this.pauseButton = panel.querySelector("#history-pause");
+    this.stopButton = panel.querySelector("#history-stop");
+    this.viewer = panel.querySelector("#history-viewer");
+    this.display = new MediaDisplay(this.image, this.viewer);
+    this.epoch = 0; this.renderEpoch = 0; this.session = null;
+    this.pauseButton.addEventListener("click", () => this.control());
+    this.stopButton.addEventListener("click", () => this.stop());
+    this.paint(null);
+  }
+
+  setAspect(cameraId, value) {
+    if (this.camera?.id !== cameraId) return;
+    this.display.setAspect(saveAspect(cameraId, value));
+  }
+
+  select(camera, position, from, to) {
+    const epoch = ++this.epoch;
+    this.camera = camera;
+    this.display.setAspect(readAspect(camera.id, camera.aspect_ratio || "16:9"));
+    this.image.alt = `Recorded video from ${camera.name}`;
+    this.pending = {camera, position, from, to, epoch};
+    this.loading = true; this.bufferedFrame = null; this.clearPicture();
+    this.paint({state:this.session ? "seeking" : "starting"});
+    const bounds = this.viewer.getBoundingClientRect();
+    if (bounds.top < 0 || bounds.bottom > innerHeight) this.viewer.scrollIntoView({block:"nearest", behavior:"instant"});
+    if (!this.draining) {
+      this.draining = this.drain().finally(() => { this.draining = null; });
+    }
+  }
+
+  async drain() {
+    while (this.pending) {
+      const job = this.pending; this.pending = null;
+      try {
+        const same = this.session?.camera_id === job.camera.id && this.session.from === new Date(job.from).toISOString().replace(".000Z", "Z") &&
+          this.session.to === new Date(job.to).toISOString().replace(".000Z", "Z");
+        let status;
+        if (same) {
+          this.expectedGeneration = this.session.generation + 1;
+          status = await api(`/api/playback/sessions/${this.session.id}`, "PATCH", {position:new Date(job.position).toISOString()});
+        } else {
+          await this.release();
+          status = await api("/api/playback/sessions", "POST", {camera_id:job.camera.id,
+            from:new Date(job.from).toISOString(), to:new Date(job.to).toISOString(), position:new Date(job.position).toISOString()});
+        }
+        this.session = status;
+        if (job.epoch !== this.epoch) {
+          if (!this.pending) await this.release();
+          continue;
+        }
+        this.expectedGeneration = status.generation;
+        this.loading = false;
+        if (!this.feed) {
+          const id = status.id;
+          this.feed = new FrameFeed(status.media.url, (_, jpeg, header) => {
+            if (this.session?.id === id) this.frame(jpeg, header);
+          });
+          this.feed.run().catch(error => {
+            if (this.session?.id === id && error.name !== "AbortError") this.paint({state:"error", error:error.message});
+          });
+        }
+        if (this.bufferedFrame) {
+          const {jpeg, header} = this.bufferedFrame; this.bufferedFrame = null; this.frame(jpeg, header);
+        }
+        this.paint(status);
+        clearInterval(this.pollTimer); clearInterval(this.renewTimer);
+        this.pollTimer = setInterval(() => this.poll(), 500);
+        this.renewTimer = setInterval(() => this.renew(), Math.max(1000, status.lease_seconds * 1000 / 3));
+      } catch (error) {
+        await this.release();
+        if (job.epoch === this.epoch) {
+          this.loading = false;
+          this.paint({state:"error", error:error.message});
+        }
+      }
+    }
+  }
+
+  frame(jpeg, header) {
+    if (header.generation !== this.expectedGeneration) return;
+    if (this.loading) { this.bufferedFrame = {jpeg, header}; return; }
+    if (this.drawing) return;
+    this.drawing = true;
+    const epoch = this.renderEpoch, previous = this.url;
+    const next = URL.createObjectURL(new Blob([jpeg], {type:"image/jpeg"})); this.url = next;
+    this.image.onload = () => {
+      if (previous) URL.revokeObjectURL(previous);
+      if (epoch !== this.renderEpoch || this.image.currentSrc !== next) return;
+      this.drawing = false; this.image.hidden = false; this.placeholder.hidden = true;
+      if (header.position) this.onPosition(Date.parse(header.position));
+    };
+    this.image.onerror = () => { if (previous) URL.revokeObjectURL(previous); this.drawing = false; };
+    this.image.src = next;
+  }
+
+  paint(status) {
+    const state = status?.state;
+    this.panel.querySelector("#history-player").dataset.state = state || "idle";
+    this.message.textContent = status?.error || LABELS[state] || "Select a time or motion interval to play its recording.";
+    this.placeholder.textContent = this.message.textContent;
+    this.pauseButton.textContent = state === "paused" ? "Resume" : "Pause";
+    this.pauseButton.disabled = !this.session || !["playing", "paused"].includes(state) || this.loading;
+    this.stopButton.disabled = !this.session;
+    if (state === "error") this.image.hidden = true;
+  }
+
+  async poll() {
+    if (!this.session || this.loading) return;
+    const id = this.session.id, epoch = this.epoch;
+    try {
+      const status = await api(`/api/playback/sessions/${id}`);
+      if (epoch !== this.epoch || this.session?.id !== id || status.generation !== this.expectedGeneration) return;
+      this.session = status; this.paint(status);
+    } catch (error) { if (epoch === this.epoch) this.paint({state:"error", error:error.message}); }
+  }
+
+  async control() {
+    if (!this.session || this.loading) return;
+    const id = this.session.id, epoch = this.epoch;
+    const state = this.session.state === "paused" ? "playing" : "paused";
+    if (state === "playing") {
+      this.loading = true; this.expectedGeneration = this.session.generation + 1;
+      this.clearPicture(); this.paint({state:"resuming"});
+    }
+    this.pauseButton.disabled = true;
+    try {
+      const status = await api(`/api/playback/sessions/${id}`, "PATCH", {state});
+      if (epoch === this.epoch && this.session?.id === id) {
+        this.session = status; this.expectedGeneration = status.generation; this.loading = false; this.paint(status);
+        if (this.bufferedFrame) { const {jpeg, header} = this.bufferedFrame; this.bufferedFrame = null; this.frame(jpeg, header); }
+      }
+    } catch (error) { if (epoch === this.epoch) this.paint({state:"error", error:error.message}); }
+  }
+
+  async renew() {
+    if (!this.session) return;
+    const id = this.session.id, epoch = this.epoch;
+    try { await api(`/api/playback/sessions/${id}`, "PATCH", {}); }
+    catch (error) { if (epoch === this.epoch) this.paint({state:"error", error:error.message}); }
+  }
+
+  clearPicture() {
+    ++this.renderEpoch; this.drawing = false;
+    this.image.onload = this.image.onerror = null; this.image.removeAttribute("src");
+    if (this.url) URL.revokeObjectURL(this.url); this.url = null;
+    this.image.hidden = true; this.placeholder.hidden = false;
+  }
+
+  async release() {
+    clearInterval(this.pollTimer); clearInterval(this.renewTimer);
+    this.feed?.close(); this.feed = null;
+    const session = this.session; this.session = null;
+    if (session) await api(`/api/playback/sessions/${session.id}`, "DELETE").catch(() => {});
+  }
+
+  async stop() {
+    const epoch = ++this.epoch; this.pending = null; this.loading = true; this.clearPicture(); this.paint(null);
+    if (this.draining) await this.draining;
+    if (epoch === this.epoch) { await this.release(); this.loading = false; this.paint(null); }
+  }
+
+  releaseOnClose() {
+    if (this.session) fetch(`/api/playback/sessions/${this.session.id}`, {method:"DELETE", keepalive:true}).catch(() => {});
+    this.stop();
+  }
+}

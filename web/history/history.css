@@ -1,4 +1,5 @@
 .history-card{border:1px solid #2c3d35;border-radius:12px;background:#15211d;padding:20px}
+.history-viewer{height:clamp(200px,45vh,520px);aspect-ratio:auto;border:1px solid #2c3d35;border-radius:12px}.history-player .toolbar{margin-top:12px}
 .history-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:16px}
 .history-controls label{display:grid;gap:4px;font-size:13px;color:#adc0b9}.history-controls select{min-height:38px;max-width:100%}
 .history-controls .actions{flex-wrap:wrap}.history-card h2{font-size:18px;margin:0 0 6px}

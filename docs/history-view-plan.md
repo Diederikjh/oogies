@@ -1,9 +1,10 @@
 # History view plan
 
 Status: recorded before implementation in `ccee147`, 11 October 2026.
-The first [History timeline slice](history-timeline.md) is now implemented:
-metadata queries and timeline selection. Interactive historical playback,
-pause/resume/seek and playback coexistence remain next. This plan expands milestones 3 and 4 in
+The [History timeline](history-timeline.md) and
+[interactive playback](history-playback.md) are now implemented: metadata,
+selected-time video, pause/resume and seeking. Wider capacity, speed, audio and
+export remain later work. This plan expands milestones 3 and 4 in
 [implementation-plan.md](implementation-plan.md); endpoint contracts remain in
 [backend-api-plan.md](backend-api-plan.md).
 
@@ -45,8 +46,9 @@ Verified: a five-second camera-1 recording was decoded through SDK time playback
 and PlayCtrl, then played as an MP4. V30 recording discovery and base motion
 search now return accepted results through the first History slice. The sampled
 motion ranges were empty, so real nonempty marker data remains unverified.
-Interactive controls and historical playback alongside another user's live
-grid remain unverified. `NET_DVR_FindFile_V40` previously failed with error 11;
+Time playback controls and a real-browser player are now verified on camera 1.
+Broader device capacity and full-grid playback coexistence need further measurement.
+`NET_DVR_FindFile_V40` previously failed with error 11;
 it did not establish missing footage or a permissions problem. See
 [historical results](historical-playback-results.md) and
 [timeline results](history-timeline.md).

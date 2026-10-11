@@ -19,6 +19,8 @@ class LiveSessions:
         self.lock = worker.condition
         self.sessions, self.keys, self.wanted = {}, {}, set()
         self.closed = False
+        self.reserved_sources = 0
+        self.playback_sessions = None
 
     def selection(self, body):
         if not isinstance(body, dict) or set(body) != {"cameras"} or not isinstance(body["cameras"], list):
@@ -66,7 +68,7 @@ class LiveSessions:
     def _reconcile(self):
         desired = set().union(*(self._active(session["cameras"]) for session in self.sessions.values())) if self.sessions else set()
         # Retain working sources first. Extra requested cameras remain labeled.
-        admitted = (self.wanted & desired) | set(sorted(desired - self.wanted)[:max(0, self.limit - len(self.wanted & desired))])
+        admitted = (self.wanted & desired) | set(sorted(desired - self.wanted)[:max(0, self.limit - self.reserved_sources - len(self.wanted & desired))])
         for identifier in sorted(self.wanted - admitted):
             self.worker.stop_source(identifier)
         for identifier in sorted(admitted - self.wanted):
@@ -123,6 +125,7 @@ class LiveSessions:
     def run_reaper(self):
         while not self.closed:
             self.maintain()
+            if self.playback_sessions: self.playback_sessions.reap()
             time.sleep(1)
 
     def maintain(self):

@@ -9,11 +9,10 @@ entries, previous/next motion buttons and a keyboard-accessible time slider
 select a timestamp locally. Selection pins the range; Recent enables minute
 refreshes again. A currently live-offline camera can still be queried.
 
-This slice displays metadata and selects times. It does not start historical
-video or implement playback sessions, pause/resume or seek. Those are the next
-part of [the History plan](history-view-plan.md). A private diagnostic MP4 is no
-longer required for History. Existing camera aspect preferences remain available
-in Settings; applying them to a new historical player belongs to that next slice.
+The timeline checkpoint selected times locally. It is now connected to
+[interactive playback](history-playback.md), with video, pause/resume and seeking.
+A private diagnostic MP4 is no longer required for History. Camera aspect
+preferences apply to both live and recorded pictures through Settings.
 
 ## Backend and SDK
 

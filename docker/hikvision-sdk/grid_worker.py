@@ -7,6 +7,8 @@ import subprocess
 import threading
 import time
 import uuid
+from zoneinfo import ZoneInfo
+from history_timeline import recorder_utc, utc_text
 
 
 class GridWorker:
@@ -26,6 +28,8 @@ class GridWorker:
         self.next_availability_refresh = 0
         self.history_results = {}
         self.history_lock = threading.Lock()
+        self.playbacks = {}
+        self.zone = ZoneInfo(config.get("timezone", "Africa/Johannesburg"))
 
     def ensure_ready(self):
         with self.condition:
@@ -70,6 +74,7 @@ class GridWorker:
             for raw in iter(lambda: self.process.stdout.readline(262144), b""):
                 if written < 5 * 1024 * 1024:
                     log.write(raw[:5 * 1024 * 1024 - written]); written += len(raw)
+                    if raw.startswith(b"GRID_EVENT "): log.flush()
                 if not raw.startswith(b"GRID_EVENT "):
                     continue
                 try:
@@ -80,13 +85,24 @@ class GridWorker:
         with self.condition:
             if not self.shutdown and self.state != "error":
                 self.state, self.error = "error", "Recorder worker ended; no automatic retry."
-            for source in self.sources.values():
+            for source in list(self.sources.values()) + list(self.playbacks.values()):
                 source["state"], source["frame"] = "error", None
             self.condition.notify_all()
 
     def _event(self, event):
         with self.condition:
             kind = event["type"]
+            if kind == "playback":
+                source = self.playbacks.get(event["id"])
+                if source and source["generation"] == event["generation"]:
+                    if event.get("error"):
+                        source.update(state="error", frame=None, error=f"Historical playback failed (SDK/decoder code {event['error']}).")
+                    elif source["state"] not in ("error", "ended"):
+                        state = event["state"]
+                        if source["state"] == "seeking" and state == "starting": state = "seeking"
+                        source["state"] = state
+                self.condition.notify_all()
+                return
             if kind == "timeline":
                 if event["id"] in self.history_results:
                     self.history_results[event["id"]] = event
@@ -172,7 +188,7 @@ class GridWorker:
                 self.process.stdin.write((command + "\n").encode())
             except OSError:
                 self.state, self.error = "error", "Recorder worker ended; no automatic retry."
-                for source in self.sources.values():
+                for source in list(self.sources.values()) + list(self.playbacks.values()):
                     source["state"], source["frame"] = "error", None
                 self.condition.notify_all()
 
@@ -191,6 +207,55 @@ class GridWorker:
             source = self.sources[camera_id]
             source["state"], source["frame"] = "stopping", None
             self.send("stop", camera_id)
+
+    def start_playback(self, identifier, camera_id, begin, end, generation, paused=False):
+        with self.condition:
+            self.playbacks[identifier] = dict(camera_id=camera_id, generation=generation,
+                state="starting" if generation == 1 else "seeking", frame=None, position=None,
+                sequence=0, received=0, width=0, height=0, last_frame=0, requested_at=time.monotonic(), error=None)
+            self._command(f"playback-start {self.cameras[camera_id]['channel']} {identifier} {generation} {begin} {end} {int(paused)}")
+            self.condition.notify_all()
+
+    def control_playback(self, identifier, paused):
+        with self.condition:
+            source = self.playbacks[identifier]
+            source["state"] = "pausing" if paused else "resuming"
+            self._command(f"playback-{'pause' if paused else 'resume'} 0 {identifier} {source['generation']}")
+
+    def stop_playback(self, identifier):
+        with self.condition:
+            source = self.playbacks.pop(identifier, None)
+            if source: self._command(f"playback-stop 0 {identifier} {source['generation']}")
+            self.condition.notify_all()
+
+    def _playback_frames(self):
+        with self.condition:
+            identifiers = list(self.playbacks)
+        for identifier in identifiers:
+            directory = self.directory / ("playback-" + identifier)
+            try:
+                metadata = json.loads((directory / "frame.json").read_text())
+                frame = (directory / "frame.jpg").read_bytes()
+                if metadata != json.loads((directory / "frame.json").read_text()): continue
+                if len(frame) > 4 * 1024 * 1024 or not frame.startswith(b"\xff\xd8") or not frame.endswith(b"\xff\xd9"): continue
+                position = utc_text(recorder_utc(metadata["position"], self.zone)) if metadata.get("position") else None
+                with self.condition:
+                    source = self.playbacks.get(identifier)
+                    if not source or source["state"] in ("error", "ended") or metadata["generation"] != source["generation"] or metadata["sequence"] == source["sequence"]: continue
+                    source.update(frame=frame, sequence=metadata["sequence"], position=position,
+                        width=metadata["width"], height=metadata["height"], last_frame=time.monotonic())
+                    source["received"] += 1
+                    if source["state"] not in ("paused", "pausing", "resuming"): source["state"] = "playing"
+                    self.condition.notify_all()
+            except (OSError, ValueError, KeyError): pass
+        with self.condition:
+            for identifier, source in self.playbacks.items():
+                if source["state"] in ("starting", "seeking") and time.monotonic() - source["requested_at"] > 15:
+                    source.update(state="error", error="No historical frames arrived within 15 seconds.", frame=None)
+                    self._command(f"playback-stop 0 {identifier} {source['generation']}")
+                elif source["state"] == "playing" and source["last_frame"] and time.monotonic() - source["last_frame"] > 15:
+                    source.update(state="error", error="Historical playback stopped delivering frames.", frame=None)
+                    self._command(f"playback-stop 0 {identifier} {source['generation']}")
 
     def _frames(self):
         while not self.shutdown and self.process.poll() is None:
@@ -228,6 +293,7 @@ class GridWorker:
                         source["state"] = "stale" if time.monotonic() - source["last_frame"] > 5 else "live"
                 fresh = sum(source["state"] == "live" for source in self.sources.values())
                 self.tested_capacity = max(self.tested_capacity, fresh)
+            self._playback_frames()
             time.sleep(0.05)
 
     def close(self):

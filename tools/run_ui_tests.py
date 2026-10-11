@@ -32,7 +32,8 @@ def main():
                "--env", "XDG_CACHE_HOME=/tmp/cache", "--env", "PYTHONPATH=/support:/probe:/ui"]
     for source, target, readonly in ((ROOT / "tools", "/support", True),
             (ROOT / "docker/hikvision-sdk", "/probe", True), (ROOT / "web", "/web", True),
-            (ROOT / "tests/ui", "/ui", True), (output, "/output", False)):
+            (ROOT / "tests/ui", "/ui", True), (ROOT / "tests/native", "/native", True),
+            (output, "/output", False)):
         command.extend(["--mount", f"type=bind,source={source},target={target}" + (",readonly" if readonly else "")])
     command.extend([IMAGE, "python3", "/ui/run.py", *args.tests])
     result = subprocess.run(command)

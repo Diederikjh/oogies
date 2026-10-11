@@ -27,7 +27,7 @@ export class FrameFeed {
           if (!headerLength || headerLength > 512 || headerLength + 2 >= length) throw new Error("Invalid frame header.");
           const header = JSON.parse(decoder.decode(joined.subarray(offset + 6, offset + 6 + headerLength)));
           const jpeg = joined.subarray(offset + 6 + headerLength, offset + 4 + length);
-          this.onFrame(header.camera_id, jpeg);
+          this.onFrame(header.camera_id, jpeg, header);
           offset += 4 + length;
         }
         pending = joined.slice(offset);

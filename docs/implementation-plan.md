@@ -2,14 +2,15 @@
 
 Status: owner configuration, discovery and the initial live grid are implemented
 and verified on the current recorder. The first History timeline slice is now
-implemented; interactive historical playback is next. The
-[API document](backend-api-plan.md) distinguishes implemented live/timeline endpoints from
-historical proposals; [live-grid.md](live-grid.md) records observed capacity.
+implemented, with selected-time historical playback and pause/resume/seek. The
+[API document](backend-api-plan.md) distinguishes implemented viewing endpoints
+from export proposals; [live-grid.md](live-grid.md) records observed live capacity.
 The [History view plan](history-view-plan.md) expands milestones 3–4 into SDK
 feasibility, fixture-tested UI, real metadata and interactive playback stages.
 
-Milestone 1's seven-camera live checks pass; a fully fresh remote/LFS installation
-and simultaneous SDK historical playback remain unverified. Milestone 2's initial
+Milestone 1's seven-camera live checks pass; one live preview plus historical
+playback/control checks now coexist through one login. A fully fresh remote/LFS
+installation and full-grid historical coexistence remain unverified. Milestone 2's initial
 grid, sharing, cleanup and expansion pass; expansion currently keeps overview
 quality. Main-stream switching and sustained recovery are later work.
 
@@ -93,7 +94,8 @@ event search completed successfully with no intervals in two bounded camera-1
 queries. The [implemented timeline](history-timeline.md) presents returned SDK
 data without requiring Android equivalence. Live video continued during metadata
 search through the same login; interactive historical playback coexistence and
-controls remain unverified.
+controls are now verified on camera 1, including a real-browser player. Full-grid
+plus historical video and broader device capacity still need measurement.
 
 If richer motion data is needed later, compare alternative
 SDK/event-log and supported ISAPI paths. Recording intervals labeled as motion
@@ -144,4 +146,4 @@ Current Linux amd64 support and device-specific
 limitations remain explicit until broader compatibility is verified.
 
 See the [API document](backend-api-plan.md) for current live/timeline calls and
-proposed playback flows. Both setup guides describe the first History slice.
+implemented playback flows and future exports. Both setup guides describe History.

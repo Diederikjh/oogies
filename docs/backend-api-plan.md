@@ -1,7 +1,7 @@
 # Backend API and frontend boundaries
 
 Status: inventory, live-view leases and historical timeline queries are
-implemented. Playback-session and export APIs below remain proposals. The exact current live
+implemented, including playback sessions. Export APIs below remain proposals. The exact current live
 contract and verification are in [live-grid.md](live-grid.md); the milestone
 sequence is in [implementation-plan.md](implementation-plan.md).
 The detailed [History view plan](history-view-plan.md) records implementation
@@ -124,8 +124,8 @@ The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
 ## Recording and motion timeline data — milestones 3–4
 
-Implemented in the [first History slice](history-timeline.md). Playback is still
-proposed. Queries return bounded results from V30 recording and base motion
+Implemented in the [first History slice](history-timeline.md), now connected to
+[playback](history-playback.md). Queries return bounded results from V30 recording and base motion
 searches through the shared login; no API fallback or authentication retry occurs.
 
 | Method | Path | Meaning |
@@ -188,6 +188,9 @@ ranges are rejected for the current SDK's timezone-free search API.
 
 ## Independent historical playback — milestone 4
 
+Implemented for one admitted historical viewer session. The native worker
+reuses its login, with an independent playback handle/decoder and position.
+
 | Method | Path | Meaning |
 | --- | --- | --- |
 | POST | `/api/playback/sessions` | Start a camera/time playback for this viewer |
@@ -202,13 +205,16 @@ Example creation:
 {
   "camera_id": "camera-1",
   "from": "2026-10-10T11:51:50Z",
-  "to": "2026-10-10T11:52:50Z"
+  "to": "2026-10-10T11:52:50Z",
+  "position": "2026-10-10T11:52:00Z"
 }
 ```
 
 Return 201 with a playback ID, starting state, range, media descriptor, lease
 expiry and verified `supported_controls`. Select an available recorded stream;
 do not assume the live substream was also recorded.
+`position` is optional and defaults to `from`. The UI supplies its entire visible
+range and the clicked timestamp, so later seeks can go earlier or later within it.
 
 Example PATCH bodies:
 
@@ -224,25 +230,25 @@ Example PATCH bodies:
 {"position": "2026-10-10T11:52:10Z"}
 ```
 
-```json
-{"rate": 2}
-```
-
 Unspecified fields remain unchanged; PATCH `{}` only renews the lease. Validate
 seek targets against the session range, clear old decoder buffers during seek,
-and report `seeking` until new frames arrive. Return supported controls only
-after their behavior has been verified. Use accurate decoded/playback timestamps
+and report `seeking` until new frames arrive. Pause/resume and seek are verified;
+rate control is not implemented. Use accurate decoded/playback timestamps
 for `position`; return null while unavailable rather than inventing precise
 positions from HTTP arrival times.
 Include playback generation and timestamp precision where needed to discard
 old frames after seeks and avoid implying greater accuracy than the SDK provides.
-Initial controls are pause/resume and time seek; speed selection is deferred.
+The current profile stops that viewer's handle/decoder on pause, retaining its
+last picture/time. Resume reopens at the confirmed time and increments generation;
+seek likewise replaces only that context. A paused seek shows its first new frame
+then holds it. Position uses PlayCtrl's recorded system time at second precision.
 
-Playback state may be starting, playing, paused, seeking, ended or error. An
+Playback state may be starting, playing, pausing, paused, seeking, ended or error. An
 ended session cannot silently switch to live video. Playback sessions do not
 share mutable position/controls between viewers. Admission counts playback
 resources alongside the shared live sources and retains room for other clients.
-Initially admit one historical playback until coexistence is verified. Reuse
+Admit one historical viewer, including a paused lease, pending wider capacity
+measurement. Reuse
 the live lease pattern (90 seconds, renewed every 30) and preserve other viewers'
 sources when switching this page between Live and History.
 
@@ -282,8 +288,8 @@ ready result points only to its clip, never a workspace path or directory.
 
 ## Frontend files along functional boundaries
 
-Live and history/timeline modules follow these boundaries; playback controls
-and export modules remain planned:
+Live, history/timeline and playback-control modules follow these boundaries;
+export modules remain planned:
 
 ```text
 web/
@@ -330,11 +336,11 @@ creates a downloadable clip without replacing another viewer's playback.
 
 ## Current implementation versus proposal
 
-Inventory, live leases, their feed and timeline queries above are implemented.
+Inventory, live leases, their feed, timeline queries and playback sessions above are implemented.
 `/recording.mp4` retains access to an existing private diagnostic clip with
 byte-range support but is no longer the History UI. The prior `/api/start`,
 `/api/stop` and `/stream.mjpeg` routes are no longer exposed by the default service.
-Independent SDK historical sessions and export jobs remain proposals; selecting
-a History timestamp is currently local. Shared response conventions
+Export jobs remain proposals. Selecting a History timestamp now starts/seeks
+an independent SDK historical session. Shared response conventions
 above describe the eventual API; current live errors use a generic structured
 `error.code` plus safe message and do not expose raw SDK logs.

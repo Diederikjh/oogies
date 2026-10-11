@@ -16,7 +16,8 @@ there is no separate vendor download step.
 Live video has been verified on one Hikvision DS-7108HGHI-K1. Compatibility with
 other recorders, firmware and authentication settings is not yet established.
 History now displays recording coverage and SDK-returned motion intervals.
-Interactive historical video playback remains planned; see
+Clicking a time starts recorded video with pause/resume and seeking; see
+[the playback notes](docs/history-playback.md),
 [the timeline notes](docs/history-timeline.md) and
 [the implementation plan](docs/implementation-plan.md).
 
@@ -348,8 +349,7 @@ Optional `camera_overrides` keys are SDK channel numbers, for example:
 `"4": {"enabled":false}`. Names and online state otherwise come from discovery.
 Only overview quality is implemented; clicking a picture toggles expansion
 without starting a main stream. Aspect controls live under Settings → Picture
-proportions, with per-camera browser preferences applied to live video. The next
-historical player will use the same preferences.
+proportions, with per-camera browser preferences applied to live and History video.
 Restart the service after editing settings or credentials. See
 [the grid notes](docs/live-grid.md) for the implemented API and limits.
 
@@ -431,8 +431,9 @@ Switching to History releases this page's live subscriptions while other pages
 keep theirs. Verify the camera selector, default three-hour range and separate
 recording/motion tracks. An accepted empty motion result differs from an error
 or unsupported query. Check that range labels agree with the configured recorder
-timezone. Clicking intervals selects time locally; this first slice does not
-start historical video. No private MP4 is required on a fresh clone. The existing
+timezone. Clicking a time or motion interval starts recorded video. Verify the
+visible recorder timestamp, Pause/Resume, a second time selection while paused,
+and Stop releasing the playback. No private MP4 is required on a fresh clone. The existing
 historical extraction diagnostic uses the same private recorder configuration.
 
 Inside the runtime, verify the configured IANA timezone can be loaded with
@@ -440,6 +441,14 @@ Python's `zoneinfo.ZoneInfo`. It requires timezone data in Docker; install
 `tzdata` in the runtime image if a different base image lacks it, rather than
 adding a host Python dependency. Do not replace the owner's timezone with a
 default simply to make this check pass.
+
+Current production admits one historical viewer and reserves a slot in
+`max_live_sources` while it owns that lease, including while paused. Seven live
+previews and one playback fit the default application budget of eight, but that
+is not a measured hardware guarantee. A full budget returns a capacity error
+and preserves existing viewers. Resume/seek reopen only that playback context
+at the confirmed/selected time; native combined pause was not usable on the
+verified profile. Audio, speed and clip export are not implemented.
 
 Stop with:
 

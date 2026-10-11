@@ -1,14 +1,24 @@
 import {api} from "/shared/api.js";
 import {Timeline} from "/history/timeline.js";
+import {PlaybackControls} from "/history/playback-controls.js";
 
 export class HistoryView {
-  constructor(panel) {
+  constructor(panel, onCameras = () => {}) {
     this.panel = panel;
+    this.onCameras = onCameras;
     this.camera = panel.querySelector("#history-camera");
     this.hours = panel.querySelector("#history-hours");
     this.message = panel.querySelector("#history-message");
     this.active = false; this.generation = 0; this.recent = true;
-    this.timeline = new Timeline(panel, () => { this.recent = false; });
+    this.player = new PlaybackControls(panel, position => {
+      if (this.active && !this.timeline.scrubbing && this.timeline.begin <= position && position < this.timeline.end)
+        this.timeline.select(position, false);
+    });
+    this.timeline = new Timeline(panel, position => {
+      this.recent = false;
+      const camera = this.cameras?.find(camera => camera.id === this.camera.value);
+      if (camera) this.player.select(camera, position, this.timeline.begin, this.timeline.end);
+    });
     this.camera.addEventListener("change", () => { this.timeline.selected = undefined; this.load(); });
     this.hours.addEventListener("change", () => { this.recent = true; this.load(); });
     panel.querySelector("#history-recent").addEventListener("click", () => { this.recent = true; this.load(); });
@@ -41,6 +51,8 @@ export class HistoryView {
       const inventory = await api("/api/cameras", "GET", undefined, {}, this.abort.signal);
       if (!this.active || generation !== this.generation) return;
       const previous = this.camera.value;
+      this.cameras = inventory.cameras;
+      this.onCameras();
       this.camera.replaceChildren(...inventory.cameras.map(camera => new Option(camera.name, camera.id)));
       if ([...this.camera.options].some(option => option.value === previous)) this.camera.value = previous;
       this.camera.disabled = !inventory.cameras.length;
@@ -61,6 +73,9 @@ export class HistoryView {
     if (this.recent || !this.end) this.end = this.now();
     const begin = this.end - Number(this.hours.value) * 3600000;
     const cameraId = this.camera.value;
+    if (this.player.session && (this.player.session.camera_id !== cameraId || Date.parse(this.player.session.from) !== begin || Date.parse(this.player.session.to) !== this.end)) {
+      this.player.stop(); this.timeline.selected = undefined;
+    }
     const query = new URLSearchParams({from:new Date(begin).toISOString(), to:new Date(this.end).toISOString()});
     if (refresh) query.set("refresh", "1");
     this.data = null;
@@ -99,5 +114,6 @@ export class HistoryView {
 
   hide() {
     this.active = false; ++this.generation; this.abort?.abort(); clearInterval(this.refreshTimer);
+    return this.player.stop();
   }
 }

@@ -11,7 +11,8 @@ substream decodes successfully with PlayCtrl and the full verification code.
 Historical time playback also works: a five-second recording was extracted
 from one hour earlier. V30 recording search now works, and the History tab shows
 recording coverage and SDK motion intervals over a selectable recent-hours range.
-Interactive historical playback is the next slice. See
+Clicking a History time now plays its recorded video, with pause/resume, seeking
+and independent viewer state. See [History playback](docs/history-playback.md) and
 [History timeline notes](docs/history-timeline.md) for the contract and evidence.
 The browser now automatically displays a live grid: seven simultaneous previews
 were verified, shared across tabs through one SDK login. Offline inputs remain
@@ -41,7 +42,8 @@ Open <http://localhost:8088/>; the grid starts automatically. **Pause view**
 releases only this page’s subscriptions. Abandoned views expire after 90 seconds
 by default; other viewers keep their streams. **History** shows a selected
 camera's recording/motion timeline without requiring a saved private clip.
-It currently selects times; historical video controls follow in the next slice.
+Click a time or motion interval to play its footage; Pause/Resume and Stop
+control only your playback. One historical viewer slot is currently admitted.
 Expand uses overview quality. Credentials stay in
 the Docker backend. To stop the web server:
 

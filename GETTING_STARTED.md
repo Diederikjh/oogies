@@ -61,13 +61,15 @@ work too. Expand/collapse animates smoothly and scrolls the picture into view;
 manual scrolling immediately takes control. Reduced-motion preferences are
 respected. Expansion uses the same overview stream. Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
-choice.
+choice, including that camera's History playback.
 
 Open **History** to select a camera and browse the last three hours, or choose
 1/6 hours and earlier ranges. Recording coverage and motion are separate tracks.
-Click a band/event or use the time slider to select a timestamp. This first slice
-shows the timeline; historical video playback controls are the next milestone.
-No saved footage is required. Switching views preserves other viewers' streams.
+Click a band/event or commit a time-slider selection to play recorded footage.
+Pause/Resume and Stop control your player; another time selection seeks, including
+while paused. No saved footage is required. Switching views preserves other
+viewers' streams. One historical viewer slot is currently admitted; Stop releases
+it. The installing user's source budget must have room for live plus playback.
 
 To stop the service:
 
