@@ -1,8 +1,7 @@
 export class DisplaySettings {
-  constructor(dialog, tiles, recording) {
+  constructor(dialog, tiles) {
     this.dialog = dialog;
     this.tiles = tiles;
-    this.recording = recording;
     this.list = dialog.querySelector("#aspect-settings");
     document.getElementById("settings-open").addEventListener("click", () => {
       this.render();
@@ -12,8 +11,6 @@ export class DisplaySettings {
   }
 
   camerasReady() {
-    const first = this.tiles.get("camera-1");
-    if (first) this.recording.setAspect(first.aspect);
     if (this.dialog.open) this.render();
   }
 
@@ -21,8 +18,6 @@ export class DisplaySettings {
     this.list.replaceChildren();
     const cameras = [...this.tiles.values()].map(tile => ({id:tile.camera.id,
       name:tile.camera.name, aspect:tile.aspect, apply:value => tile.setAspect(value)}));
-    if (!this.tiles.has("camera-1")) cameras.push({id:"camera-1", name:"Camera 1 · Recorded clip",
-      aspect:this.recording.aspect, apply:() => {}});
     for (const camera of cameras) {
       const label = document.createElement("label");
       label.className = "aspect-setting";
@@ -36,7 +31,6 @@ export class DisplaySettings {
       select.value = camera.aspect;
       select.addEventListener("change", () => {
         camera.apply(select.value);
-        if (camera.id === "camera-1") this.recording.setAspect(select.value);
       });
       label.append(name, select);
       this.list.append(label);

@@ -1,7 +1,7 @@
 """A recorder substitute for browser tests; only the worker boundary is fake."""
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
 import threading
@@ -61,6 +61,9 @@ class FakeRecorderWorker(GridWorker):
         self.failure, self.failed_camera = failure, failed_camera
         self.offline_camera = offline_camera
         self.device_online, self.refresh_calls = {}, 0
+        self.timeline_calls = []
+        self.timeline_states = {}
+        self.timeline_gate = threading.Event(); self.timeline_gate.set()
         self.discovery_gate = threading.Event()
         if not delayed:
             self.discovery_gate.set()
@@ -101,6 +104,25 @@ class FakeRecorderWorker(GridWorker):
             {"channel":camera["channel"], "online":self.device_online[key]}
             for key,camera in self.cameras.items()]})
 
+    def query_timeline(self, camera_id, begin, end):
+        self.timeline_calls.append((camera_id, begin, end))
+        if not self.timeline_gate.wait(10):
+            raise ValueError("Fixture history gate was not released")
+        start, stop = datetime.fromisoformat(begin), datetime.fromisoformat(end)
+        span = stop - start
+        wall = lambda fraction:(start + span * fraction).isoformat(timespec="seconds")
+        recording = lambda left,right:dict(start=wall(left), end=wall(right), recording_type=0)
+        motion = lambda left,right:dict(start=wall(left), end=wall(right), recording_type=1)
+        recordings = dict(state="ready", complete=True, source="NET_DVR_FindFile_V30",
+                          intervals=[recording(0,.4), recording(.6,1)])
+        state = self.timeline_states.get(camera_id, "ready")
+        events = [motion(.15,.17), motion(.65,.65), motion(.85,.88)] if state == "ready" else []
+        result = dict(state="ready" if state == "empty" else state, complete=True,
+                      source="NET_DVR_FindFileByEvent", intervals=events)
+        if state in ("unsupported", "error"):
+            result.update(intervals=None, complete=False, sdk_error=23 if state == "unsupported" else 11)
+        return dict(recordings=recordings, motion=result)
+
     def start_source(self, key):
         self.started[key] += 1
         self.sources[key] = dict(state="starting", frame=None, sequence=0, generation=self.started[key],
@@ -134,6 +156,7 @@ class FakeRecorderWorker(GridWorker):
     def close(self):
         self.shutdown = True
         self.discovery_gate.set()
+        self.timeline_gate.set()
         self.closed.set()
         self.thread.join(timeout=2)
 
@@ -158,9 +181,11 @@ class ViewerFixture:
 
     def close(self):
         self.worker.discovery_gate.set()
+        self.worker.timeline_gate.set()
         self.server.shutdown()
         self.thread.join(timeout=2)
         self.sessions.close()
+        self.server.timeline.close()
         self.server.server_close()
         self.reaper.join(timeout=2)
         self.worker.close()

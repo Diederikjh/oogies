@@ -6,6 +6,38 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## First History timeline slice
+
+The pre-implementation plan was committed as `ccee147`. History now replaces
+Recorded clip and displays SDK recording coverage and motion intervals for a
+selected camera and 1/3/6-hour range (default three hours). Earlier/later,
+Recent/Refresh, interval selection, previous/next motion and a keyboard time
+slider are implemented. Playback video, pause/resume and seeking remain the
+next slice; selecting time currently stays local.
+
+The Python timeline service normalizes recorder wall time through private owner
+timezone configuration, caches results for 60 seconds from completion, shares
+identical work and bounds the query queue/cache. The existing native worker
+performs metadata searches in a background thread through its shared SDK login.
+It closes search handles, caps enumeration duration/results and keeps incomplete
+coverage distinct from confirmed gaps. Credentials and captured data stay private.
+
+V30 recording search returned two camera-1 intervals in a bounded three-hour
+query, resolving the need for a usable recording-discovery path after the earlier
+V40 error 11. Base motion search succeeded with zero intervals in that range.
+A one-hour query while camera 1 streamed returned one recording interval and
+zero motion intervals; 20 live packets were read, source sequences advanced
+1–34, no feed errors occurred, and one SDK login was retained. Only the temporary
+test viewer was released. Live plus historical video capacity remains unverified.
+
+The native worker compiled and passed its offline decoder check without
+credentials/networking/logins. All 40 unit and 24 browser cases passed with synthetic data,
+including six new History cases and updated navigation/fresh-install checks.
+See [History timeline](docs/history-timeline.md) for the API, limits and evidence.
+Both getting-started guides and the API/milestone plan reflect this first slice.
+The service was relaunched with the new History assets; HTTP readiness and all
+new module/style routes passed without opening another recorder session.
+
 ## History view planning
 
 Animated camera expansion and manual-scroll cancellation were committed as

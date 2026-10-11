@@ -1,0 +1,15 @@
+.history-card{border:1px solid #2c3d35;border-radius:12px;background:#15211d;padding:20px}
+.history-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.history-controls label{display:grid;gap:4px;font-size:13px;color:#adc0b9}.history-controls select{min-height:38px;max-width:100%}
+.history-controls .actions{flex-wrap:wrap}.history-card h2{font-size:18px;margin:0 0 6px}
+.timeline-rows{display:grid;grid-template-columns:90px minmax(0,1fr);gap:12px;margin:20px 0 4px;align-items:center}
+.timeline-label{font-size:13px;color:#adc0b9}.timeline-track{position:relative;height:38px;border:1px solid #52665d;border-radius:6px;overflow:hidden;background:#0a1210}
+.timeline-track:not([data-state=ready]),.timeline-track[data-complete=false]{background:repeating-linear-gradient(135deg,#1d2925,#1d2925 6px,#28312d 6px,#28312d 12px)}
+.timeline-interval{position:absolute;top:6px;bottom:6px;min-width:3px;padding:0;border:0;border-radius:3px;background:#6eb996}
+#history-motion .timeline-interval{background:#e7b55b}.timeline-interval:hover:not(:disabled){background:#bcebd6}#history-motion .timeline-interval:hover{background:#f8d999}
+.timeline-interval.is-point{min-width:7px;transform:translateX(-50%)}.timeline-cursor{position:absolute;top:0;bottom:0;border-left:2px solid white;pointer-events:none}
+.timeline-axis{display:flex;justify-content:space-between;gap:8px;margin-left:102px;font-size:11px;color:#97aaa4}.timeline-axis span{min-width:0}
+.history-position{display:grid;gap:6px;margin:20px 0;font-size:14px}.history-position input{width:100%;accent-color:#8cdbb4;cursor:pointer}.history-position input:focus-visible{outline:2px solid #96e6c1}
+.history-statuses{display:flex;flex-wrap:wrap;gap:6px 24px;margin-top:16px}.history-statuses p{margin:0;font-size:13px;color:#adc0b9}
+.history-event-controls{display:flex;gap:8px;flex-wrap:wrap}.history-events{display:flex;gap:8px;flex-wrap:wrap;list-style:none;padding:0;margin:16px 0 0;max-height:200px;overflow:auto}
+@media(max-width:620px){.history-card{padding:14px}.history-controls{align-items:stretch}.history-controls label:first-child{width:100%}.history-controls .actions{width:100%}.timeline-rows{grid-template-columns:65px minmax(0,1fr);gap:8px}.timeline-axis{margin-left:73px;font-size:10px}.timeline-axis span:nth-child(2),.timeline-axis span:nth-child(4){display:none}}

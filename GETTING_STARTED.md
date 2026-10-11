@@ -1,8 +1,8 @@
 # Getting started
 
 This project is a local browser viewer for Hikvision cameras. The current
-service automatically shows discovered cameras in a live grid. Historical
-timeline browsing is planned.
+service automatically shows discovered cameras in a live grid. The History tab
+shows recent recording coverage and motion intervals returned by the SDK.
 
 **Using a coding agent to set up your machine?** Give it
 [GETTING_STARTED_AGENTS.md](GETTING_STARTED_AGENTS.md). That guide contains the
@@ -61,7 +61,13 @@ work too. Expand/collapse animates smoothly and scrolls the picture into view;
 manual scrolling immediately takes control. Reduced-motion preferences are
 respected. Expansion uses the same overview stream. Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
-choice, and the same setting applies to its recorded video.
+choice.
+
+Open **History** to select a camera and browse the last three hours, or choose
+1/6 hours and earlier ranges. Recording coverage and motion are separate tracks.
+Click a band/event or use the time slider to select a timestamp. This first slice
+shows the timeline; historical video playback controls are the next milestone.
+No saved footage is required. Switching views preserves other viewers' streams.
 
 To stop the service:
 
@@ -71,8 +77,7 @@ python3 tools/run_browser_viewer.py --stop
 
 The viewer is currently available only on the machine running it. A closed or
 killed tab’s subscriptions expire within about 90 seconds of its last renewal;
-the last subscriber leaving stops that camera stream. A fresh clone has no saved
-footage for **Recorded clip**.
+the last subscriber leaving stops that camera stream.
 
 See [progress.md](progress.md) for verified results and the
 [implementation plan](docs/implementation-plan.md) for upcoming milestones.

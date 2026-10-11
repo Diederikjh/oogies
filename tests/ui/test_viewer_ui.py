@@ -262,7 +262,7 @@ class ViewerUITests(unittest.TestCase):
 
     def test_settings_are_per_camera_persisted_and_keyboard_accessible(self):
         self.wait_live()
-        self.assertEqual(self.driver.find_elements(By.CSS_SELECTOR, "#live-panel select, #recording-panel select"), [])
+        self.assertEqual(self.driver.find_elements(By.CSS_SELECTOR, "#live-panel select"), [])
         self.open_settings()
         self.assertEqual(self.driver.execute_script("return document.activeElement.id"), "settings-close")
         self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, "#aspect-settings select")), 9)
@@ -303,23 +303,22 @@ class ViewerUITests(unittest.TestCase):
         self.driver.find_element(By.ID, "stop").click(); self.wait_counts(0, 0)
         self.assertTrue(all(count == 1 for count in self.fixture.worker.stopped.values()))
 
-    def test_recorded_playback_shares_aspect_and_releases_live_view(self):
+    def test_history_timeline_releases_only_its_live_view_and_preserves_settings(self):
         self.wait_live(); self.open_settings(); self.aspect("4:3"); self.close_settings()
-        self.driver.find_element(By.ID, "recording-tab").click(); self.wait_counts(0, 0)
-        # Source assignment follows asynchronous release of this view's lease.
-        self.wait.until(lambda _: self.driver.find_element(By.ID, "recording").get_dom_attribute("src") == "/recording.mp4")
-        error = self.driver.execute_async_script("""
-            const done=arguments[0];document.getElementById('recording').play()
-                .then(()=>done(null)).catch(error=>done(error.message));
-        """)
-        self.assertIsNone(error, "Playback must start after its source is attached")
-        self.wait.until(lambda _: self.driver.execute_script("return document.getElementById('recording').currentTime > .4"))
-        self.assertAlmostEqual(self.ratio("#recording"), 4/3, delta=.01)
+        first = self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url); self.wait_live(); self.wait_counts(2,8)
+        self.driver.find_element(By.ID, "history-tab").click(); self.wait_counts(1, 8)
+        self.wait.until(lambda _: self.element("#history-motion").get_attribute("data-state") == "ready")
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")), 2)
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")), 3)
+        self.assertEqual(self.element("#history-hours").get_attribute("value"), "3")
+        self.assertEqual(self.element("#view-title").text, "Camera history")
+        self.assertIn("Africa/Johannesburg", self.element("#history-range").text)
         self.open_settings(); self.aspect("16:9"); self.close_settings()
-        self.wait.until(lambda _: abs(self.ratio("#recording") - 16/9) < .01)
         self.driver.find_element(By.ID, "live-tab").click(); self.wait_live()
-        self.assertTrue(self.driver.execute_script("return document.getElementById('recording').paused"))
         self.assertAlmostEqual(self.ratio(self.tile() + " img"), 16/9, delta=.01)
+        self.driver.switch_to.window(first); self.wait_live()
+        self.assertTrue(all(count == 1 for count in self.fixture.worker.started.values()))
 
     def test_stale_and_failed_camera_do_not_hide_healthy_streams(self):
         self.wait_live()
@@ -358,8 +357,92 @@ class ViewerUITests(unittest.TestCase):
 
     def test_fresh_install_without_a_recording(self):
         self.wait_live()
-        self.assertFalse(self.driver.find_element(By.ID,"recording-tab").is_enabled())
-        self.assertIsNone(self.driver.find_element(By.ID,"recording").get_dom_attribute("src"))
+        self.assertTrue(self.driver.find_element(By.ID,"history-tab").is_enabled())
+        self.driver.find_element(By.ID,"history-tab").click()
+        self.wait.until(lambda _: self.element("#history-recordings").get_attribute("data-state") == "ready")
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")), 2)
+
+    def open_history(self):
+        self.driver.find_element(By.ID,"history-tab").click()
+        self.history_ready()
+
+    def history_ready(self):
+        self.wait.until(lambda _: self.element("#history-recordings").get_attribute("data-state") == "ready" and
+                        self.element("#history-motion").get_attribute("data-state") != "pending")
+
+    def test_history_camera_ranges_include_offline_inputs(self):
+        self.wait_live(); self.open_history()
+        Select(self.element("#history-camera")).select_by_value("camera-9"); self.history_ready()
+        self.assertEqual(self.fixture.worker.timeline_calls[-1][0], "camera-9")
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")), 2)
+        Select(self.element("#history-hours")).select_by_value("1"); self.history_ready()
+        self.assertEqual(self.element("#history-position").get_attribute("max"), "3599")
+        initial = self.element("#history-range").text
+        self.element("#history-earlier").click(); self.history_ready()
+        self.assertNotEqual(self.element("#history-range").text, initial)
+        self.assertTrue(self.element("#history-later").is_enabled())
+        self.element("#history-recent").click(); self.history_ready()
+        self.assertEqual(self.element("#history-range").text, initial)
+        self.assertFalse(self.element("#history-later").is_enabled())
+
+    def test_history_empty_unsupported_and_error_motion_are_distinct(self):
+        self.wait_live()
+        self.fixture.worker.timeline_states.update({"camera-1":"empty", "camera-2":"unsupported", "camera-3":"error"})
+        self.open_history()
+        self.assertIn("No motion intervals", self.element("#history-motion-status").text)
+        self.assertFalse(self.element("#history-next").is_enabled())
+        for camera, state in [("camera-2", "unsupported"), ("camera-3", "error")]:
+            Select(self.element("#history-camera")).select_by_value(camera); self.history_ready()
+            self.assertEqual(self.element("#history-motion").get_attribute("data-state"), state)
+            self.assertIn("unavailable", self.element("#history-motion-status").text)
+            self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")), 2)
+            self.assertFalse(self.element("#history-previous").is_enabled())
+
+    def test_history_event_selection_keyboard_and_motion_navigation_are_local(self):
+        self.wait_live(); self.open_history()
+        calls = len(self.fixture.worker.timeline_calls)
+        entries = self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")
+        entries[1].click()
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-motion .is-point")), 1)
+        position = float(self.element("#history-position").get_attribute("value"))
+        self.element("#history-previous").click()
+        self.assertLess(float(self.element("#history-position").get_attribute("value")), position)
+        self.element("#history-next").click()
+        self.assertEqual(float(self.element("#history-position").get_attribute("value")), position)
+        self.element("#history-position").send_keys(Keys.ARROW_RIGHT)
+        self.assertEqual(float(self.element("#history-position").get_attribute("value")), position + 1)
+        self.assertEqual(len(self.fixture.worker.timeline_calls), calls)
+        self.assertNotEqual(self.element("#history-selected").text, "Choose a time")
+
+    def test_history_refresh_preserves_fixed_range_and_selected_time(self):
+        self.wait_live(); self.open_history()
+        self.element("#history-earlier").click(); self.history_ready()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click()
+        selected, span = self.element("#history-selected").text, self.element("#history-range").text
+        count = len(self.fixture.worker.timeline_calls)
+        self.element("#history-refresh").click(); self.history_ready()
+        self.assertEqual(len(self.fixture.worker.timeline_calls), count + 1)
+        self.assertEqual(self.element("#history-selected").text, selected)
+        self.assertEqual(self.element("#history-range").text, span)
+
+    def test_history_delayed_old_camera_response_cannot_replace_new_selection(self):
+        self.wait_live()
+        self.fixture.worker.timeline_states.update({"camera-1":"error", "camera-2":"empty"})
+        self.fixture.worker.timeline_gate.clear()
+        self.driver.find_element(By.ID,"history-tab").click()
+        self.wait.until(lambda _: len(self.fixture.worker.timeline_calls) == 1)
+        Select(self.element("#history-camera")).select_by_value("camera-2")
+        self.fixture.worker.timeline_gate.set(); self.history_ready()
+        self.assertEqual(self.element("#history-camera").get_attribute("value"), "camera-2")
+        self.assertIn("No motion intervals", self.element("#history-motion-status").text)
+        self.assertEqual([call[0] for call in self.fixture.worker.timeline_calls], ["camera-1", "camera-2"])
+
+    def test_history_mobile_timeline_fits_and_can_select_recording(self):
+        self.wait_live(); self.driver.set_window_size(390, 844); self.open_history()
+        self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth <= innerWidth"))
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-recordings button")[1].click()
+        self.assertGreater(float(self.element("#history-position").get_attribute("value")), 0)
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,".timeline-cursor")), 2)
 
     def test_lease_expiry_releases_only_the_unrenewed_view(self):
         self.wait_live(); first = self.driver.current_window_handle
@@ -384,8 +467,7 @@ class ViewerUITests(unittest.TestCase):
         self.assertTrue(all(count == 1 for count in self.fixture.worker.started.values()))
 
     def test_switching_views_during_discovery_recovers(self):
-        self.wait.until(lambda _: self.driver.find_element(By.ID,"recording-tab").is_enabled())
-        self.driver.find_element(By.ID,"recording-tab").click()
+        self.driver.find_element(By.ID,"history-tab").click()
         self.driver.find_element(By.ID,"live-tab").click()
         self.fixture.worker.discovery_gate.set()
         self.wait_live(); self.wait_counts(1,8)

@@ -1,8 +1,9 @@
 # Viewer implementation plan
 
 Status: owner configuration, discovery and the initial live grid are implemented
-and verified on the current recorder. Next is motion-timeline feasibility. The
-[API document](backend-api-plan.md) distinguishes implemented live endpoints from
+and verified on the current recorder. The first History timeline slice is now
+implemented; interactive historical playback is next. The
+[API document](backend-api-plan.md) distinguishes implemented live/timeline endpoints from
 historical proposals; [live-grid.md](live-grid.md) records observed capacity.
 The [History view plan](history-view-plan.md) expands milestones 3–4 into SDK
 feasibility, fixture-tested UI, real metadata and interactive playback stages.
@@ -86,14 +87,15 @@ lease expiry were verified. Historical time extraction and saved MP4 playback
 also work. Hardware maximum and historical playback alongside the grid remain
 unknown; short seven-camera samples used about 154 MiB and half one CPU core.
 
-General recording search returned SDK error 11; direct playback by time worked
-without search. This does not establish whether the motion-event search API
-works on this recorder. The SDK documents motion-event searches, but the
-bundled guide describes event-triggered recordings with recording linkage
-configured. The Android app's timeline may use additional metadata; its presence
-is promising evidence, not proof of API equivalence.
+The earlier V40 recording search returned SDK error 11; direct playback by time
+worked without search. V30 recording search now returns coverage. Base motion
+event search completed successfully with no intervals in two bounded camera-1
+queries. The [implemented timeline](history-timeline.md) presents returned SDK
+data without requiring Android equivalence. Live video continued during metadata
+search through the same login; interactive historical playback coexistence and
+controls remain unverified.
 
-If event search cannot reproduce the app's timeline, compare alternative
+If richer motion data is needed later, compare alternative
 SDK/event-log and supported ISAPI paths. Recording intervals labeled as motion
 must retain their actual granularity rather than being presented as exact
 motion-trigger timestamps. Future alarm subscription/storage can collect new
@@ -141,5 +143,5 @@ and [GETTING_STARTED_AGENTS.md](../GETTING_STARTED_AGENTS.md) alongside implemen
 Current Linux amd64 support and device-specific
 limitations remain explicit until broader compatibility is verified.
 
-See the [API document](backend-api-plan.md) for current live calls and proposed
-historical flows. Both setup guides were updated with the grid implementation.
+See the [API document](backend-api-plan.md) for current live/timeline calls and
+proposed playback flows. Both setup guides describe the first History slice.

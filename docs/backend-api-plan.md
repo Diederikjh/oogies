@@ -1,7 +1,7 @@
 # Backend API and frontend boundaries
 
-Status: inventory and live-view leases are implemented. Historical timeline,
-playback-session and export APIs below remain proposals. The exact current live
+Status: inventory, live-view leases and historical timeline queries are
+implemented. Playback-session and export APIs below remain proposals. The exact current live
 contract and verification are in [live-grid.md](live-grid.md); the milestone
 sequence is in [implementation-plan.md](implementation-plan.md).
 The detailed [History view plan](history-view-plan.md) records implementation
@@ -124,6 +124,10 @@ The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
 ## Recording and motion timeline data — milestones 3–4
 
+Implemented in the [first History slice](history-timeline.md). Playback is still
+proposed. Queries return bounded results from V30 recording and base motion
+searches through the shared login; no API fallback or authentication retry occurs.
+
 | Method | Path | Meaning |
 | --- | --- | --- |
 | GET | `/api/cameras/{id}/timeline?from={utc}&to={utc}` | Recording availability and motion intervals over a bounded time range |
@@ -145,10 +149,12 @@ Example partial response: recording information is available, but motion is not:
     "intervals": [
       {"start": "2026-10-10T11:00:00Z", "end": "2026-10-10T12:00:00Z"}
     ],
+    "complete": true,
     "error": null
   },
   "motion": {
     "state": "unsupported",
+    "complete": false,
     "intervals": null,
     "error": {"code": "motion_unavailable", "message": "Motion intervals are not available through the supported query."}
   }
@@ -162,8 +168,9 @@ data returns `intervals: null`. This preserves the distinction between no motion
 and no usable motion query. Recording-search failure need not prevent direct
 time playback, which already works on this recorder.
 
-Motion intervals include `id`, `start`, `end`, `type: "motion"`, and a granularity
-such as `event` or `recording`. Do not label entire motion-triggered recordings
+Motion intervals include `id`, `start`, `end`, original `source_start`/`source_end`,
+SDK provenance, `type: "motion"`, and `granularity: "sdk_interval"`. Recording
+coverage uses `granularity: "recording"`. Do not label entire motion-triggered recordings
 as precise event durations unless the data supports that interpretation.
 Cache bounded camera/range queries and avoid querying the recorder while the
 user is dragging the timeline. Pending responses can be polled until ready;
@@ -172,7 +179,12 @@ Initially bound requests to six hours and cache recent results for 60 seconds,
 sharing concurrent identical work. Include query time, completeness and queried
 coverage; truncated or unsearched ranges are unknown rather than confirmed gaps.
 Point events may have equal start/end. The detailed History plan describes the
-three-hour default UI and native search bounds to establish during feasibility.
+three-hour default UI. Native enumerations are bounded to ten seconds and 256
+results each; the worker has a 25-second response deadline. There are at most
+four queued/running metadata jobs and 32 cached ranges. `refresh=1` invalidates a
+completed cache entry; omit that flag on subsequent polls. Responses include
+`timezone`, `generated_at` and nullable `recorder_now`; ambiguous wall-clock
+ranges are rejected for the current SDK's timezone-free search API.
 
 ## Independent historical playback — milestone 4
 
@@ -270,8 +282,8 @@ ready result points only to its clip, never a workspace path or directory.
 
 ## Frontend files along functional boundaries
 
-The current live modules follow these boundaries; history/timeline/control/export
-modules in this layout remain planned:
+Live and history/timeline modules follow these boundaries; playback controls
+and export modules remain planned:
 
 ```text
 web/
@@ -288,7 +300,6 @@ web/
     camera-tile.js               one tile and enlarged-view interaction
                                  grid/tile styling currently in style.css
   history/
-    recorded-clip.js              implemented saved MP4 playback
     history-view.js              camera/date/range selection and query lifecycle
     timeline.js                  recording/motion bands and timeline interaction
     playback-controls.js         playback session, seek, pause and speed
@@ -319,10 +330,11 @@ creates a downloadable clip without replacing another viewer's playback.
 
 ## Current implementation versus proposal
 
-Inventory, live leases and their feed above are implemented. `/recording.mp4`
-serves an existing private clip with byte-range support. The prior `/api/start`,
+Inventory, live leases, their feed and timeline queries above are implemented.
+`/recording.mp4` retains access to an existing private diagnostic clip with
+byte-range support but is no longer the History UI. The prior `/api/start`,
 `/api/stop` and `/stream.mjpeg` routes are no longer exposed by the default service.
-Timeline queries, independent SDK historical sessions and export jobs remain
-proposals pending motion/recording feasibility work. Shared response conventions
+Independent SDK historical sessions and export jobs remain proposals; selecting
+a History timestamp is currently local. Shared response conventions
 above describe the eventual API; current live errors use a generic structured
 `error.code` plus safe message and do not expose raw SDK logs.

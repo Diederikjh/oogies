@@ -29,7 +29,12 @@ static std::string quote(const std::string &value) {
     }
     out << '"'; return out.str();
 }
-static void event(const std::string &json) { std::cout << "GRID_EVENT " << json << std::endl; }
+static std::mutex event_mutex;
+static void event(const std::string &json) {
+    std::lock_guard<std::mutex> guard(event_mutex);
+    std::cout << "GRID_EVENT " << json << std::endl;
+}
+#include "history_queries.h"
 static bool line(std::string &value) {
     value.clear(); char c;
     while (!stopping && value.size() <= 512) {
@@ -232,6 +237,8 @@ int main(int argc, char **argv) {
     std::map<int, std::unique_ptr<Source>> sources;
     for (const auto &camera : cameras) sources[camera.channel] = std::make_unique<Source>(camera.channel, root);
     std::string buffer;
+    std::thread history_job;
+    std::atomic<bool> history_busy{false};
     auto last_publish = std::chrono::steady_clock::now();
     while (!stopping) {
         pollfd descriptor{STDIN_FILENO, POLLIN, 0};
@@ -245,6 +252,22 @@ int main(int argc, char **argv) {
                 std::istringstream command(buffer.substr(0, newline)); buffer.erase(0, newline + 1);
                 std::string operation; int channel = 0; command >> operation >> channel;
                 if (operation == "quit") { stopping = 1; break; }
+                if (operation == "timeline") {
+                    std::string id, begin_text, end_text; command >> id >> begin_text >> end_text;
+                    NET_DVR_TIME begin{}, end{};
+                    if (!sources.count(channel) || id.size() != 32 ||
+                        id.find_first_not_of("0123456789abcdef") != std::string::npos ||
+                        !parse_history_time(begin_text, begin) || !parse_history_time(end_text, end)) continue;
+                    if (history_busy) {
+                        event("{\"type\":\"timeline\",\"id\":" + quote(id) + ",\"busy\":true}"); continue;
+                    }
+                    if (history_job.joinable()) history_job.join();
+                    history_busy = true;
+                    history_job = std::thread([&, id, channel, begin, end]() {
+                        history_query(user, id, channel, begin, end); history_busy = false;
+                    });
+                    continue;
+                }
                 if (operation == "refresh") {
                     const auto availability = discover(user, device.struDeviceV30, false);
                     std::ostringstream update; update << "{\"type\":\"availability\",\"cameras\":[";
@@ -274,6 +297,7 @@ int main(int argc, char **argv) {
         }
     }
     for (auto &item : sources) stop(*item.second);
+    if (history_job.joinable()) history_job.join();
     NET_DVR_Logout(user); NET_DVR_Cleanup();
     event("{\"type\":\"shutdown\",\"login_calls\":1}");
     return 0;

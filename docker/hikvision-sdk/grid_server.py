@@ -9,11 +9,12 @@ from pathlib import Path
 import re
 import signal
 import threading
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from browser_server import Handler as BaseHandler
 from grid_worker import GridWorker
 from live_sessions import LiveSessions, SessionError
+from history_timeline import HistoryTimeline
 from nvr_config import load_config
 from sdk_adapters import get_sdk_adapter
 
@@ -27,7 +28,9 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/live/overview.js": ("live/overview.js", "text/javascript"),
     "/live/camera-tile.js": ("live/camera-tile.js", "text/javascript"),
     "/live/tile-expansion.js": ("live/tile-expansion.js", "text/javascript"),
-    "/history/recorded-clip.js": ("history/recorded-clip.js", "text/javascript")}
+    "/history/history-view.js": ("history/history-view.js", "text/javascript"),
+    "/history/timeline.js": ("history/timeline.js", "text/javascript"),
+    "/history/history.css": ("history/history.css", "text/css")}
 
 
 class Handler(BaseHandler):
@@ -71,6 +74,8 @@ class Handler(BaseHandler):
                 self.send_response(204); self.send_header("Content-Length", "0"); self.end_headers()
             else:
                 self.send_error(404)
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
         except SessionError as error:
             self.json_response({"error": {"code": "session_error", "message": str(error), "retryable": False}}, error.status)
         except (OSError, ValueError):
@@ -99,6 +104,14 @@ class Handler(BaseHandler):
                         tested_concurrent_streams=worker.tested_capacity, sdk_login_calls=worker.login_calls,
                         sdk_adapter=worker.adapter.sdk_id, recording_available=self.server.recording.is_file(),
                         **self.server.recording_info))
+            elif (match := re.fullmatch(r"/api/cameras/(camera-[0-9]+)/timeline", path)):
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                if set(query) - {"from", "to", "refresh"} or any(len(values) != 1 for values in query.values()) or not {"from", "to"} <= query.keys():
+                    raise SessionError("A single from/to range is required.")
+                if query.get("refresh", ["0"])[0] not in ("0", "1"):
+                    raise SessionError("Invalid refresh option.")
+                result, status = self.server.timeline.query(match[1], query["from"][0], query["to"][0], query.get("refresh") == ["1"])
+                self.json_response(result, status)
             elif re.fullmatch(r"/api/live/sessions/[a-f0-9]{32}", path):
                 self.json_response(sessions.get(path.rsplit("/", 1)[1]))
             elif (match := re.fullmatch(r"/media/live/([a-f0-9]{32})/frames", path)):
@@ -109,6 +122,8 @@ class Handler(BaseHandler):
                 name, mime = ASSETS[path]; self.file(self.server.web / name, mime)
             else:
                 self.send_error(404)
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
         except SessionError as error:
             self.json_response({"error": {"code": "session_error", "message": str(error), "retryable": False}}, error.status)
         except (OSError, ValueError):
@@ -139,7 +154,7 @@ class Handler(BaseHandler):
                 self.server.feeds.discard(identifier)
 
 
-def create_server(worker, sessions, *, address, web, recording, recording_info=None):
+def create_server(worker, sessions, *, address, web, recording, recording_info=None, timeline=None):
     """Wire the HTTP service without initializing an SDK or choosing a worker."""
     server = ThreadingHTTPServer(address, Handler)
     server.daemon_threads = True
@@ -148,6 +163,7 @@ def create_server(worker, sessions, *, address, web, recording, recording_info=N
     server.worker, server.sessions, server.feeds = worker, sessions, set()
     server.web, server.recording = Path(web), Path(recording)
     server.recording_info = recording_info or {}
+    server.timeline = timeline or HistoryTimeline(worker, worker.config.get("timezone", "Africa/Johannesburg"))
     return server
 
 
@@ -174,7 +190,7 @@ def main():
     try:
         server.serve_forever()
     finally:
-        sessions.close(); worker.close(); server.server_close()
+        sessions.close(); worker.close(); server.timeline.close(); server.server_close()
 
 
 if __name__ == "__main__": main()

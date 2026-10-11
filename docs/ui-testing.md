@@ -47,7 +47,7 @@ discovery does not import Docker-only Selenium dependencies.
 The suite checks eight simultaneous moving pictures and distinct camera identity,
 offline labeling, capacity limits, individual stream failures and stale states.
 It checks click/keyboard expansion, per-camera settings and persistence,
-modal keyboard/focus behavior, mobile fit, synthetic recorded playback and
+modal keyboard/focus behavior, mobile fit, synthetic history timelines and
 release of live subscriptions when changing views. Multiple tabs exercise shared
 sources, Pause/Resume, refresh and closing an active tab. Lease tests suppress one
 page's renewal timer and wait for its real ten-second lease while another page
@@ -85,13 +85,27 @@ exercise C++ callbacks, SDK authentication, decryption, discovery compatibility,
 native process events or real recorder capacity. Keep the bounded real-recorder
 checks for those claims. Chrome/Chromium is the currently tested browser engine.
 
-The proposed [History test changes](history-view-plan.md#test-changes) extend this
-same worker seam with synthetic timelines and independent playback contexts.
-They replace the saved-clip cases and add time selection, seeking, motion states,
-selected-camera aspect and multi-viewer cleanup checks. These are planned tests,
-not part of the currently verified suite.
+The [first History slice](history-timeline.md) extends the same worker seam with
+synthetic recording and motion intervals. It replaces the saved-clip case and
+checks camera/range selection, offline inputs with recordings, point events,
+previous/next motion selection, keyboard time selection, empty/unsupported/error
+motion states, a pinned range/selection during Refresh, mobile fit and delayed
+old responses. Navigation releases only this page's live lease while another
+tab keeps moving. A fresh checkout needs no private MP4. Unit tests cover UTC,
+midnight and ambiguous clock conversion, clipped intervals/stable IDs, bounded
+queue/cache behavior, native response cleanup and HTTP parameter encoding.
+
+Interactive historical playback, seeking and its multi-viewer controls remain
+the next [planned test changes](history-view-plan.md#test-changes). Selecting a
+time in the current UI does not create a playback session.
 
 ## Verified result
+
+The first History timeline slice passed all 40 unit and 24 Docker browser cases. Its native
+SDK worker compiled and passed an offline decoder check. Real metadata queries
+returned recording coverage, while a live/history-metadata coexistence check
+kept camera frames advancing through one login. These checks do not establish
+interactive playback controls or live plus historical video capacity.
 
 After the expand/collapse refinements on 11 October, all 18 browser cases and
 26 unit tests passed. The manual-input cases verify automatic scroll requests

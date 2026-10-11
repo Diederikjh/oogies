@@ -4,30 +4,46 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Oogies · Live overview</title>
   <link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
+  <link rel="stylesheet" href="/history/history.css">
 </head>
 <body>
   <main>
-    <header><div><p class="eyebrow">Oogies</p><h1>Live overview</h1>
+    <header><div><p class="eyebrow">Oogies</p><h1 id="view-title">Live overview</h1>
       </div><span id="grid-summary" class="badge">Connecting…</span></header>
     <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live overview</button>
-      <button id="recording-tab" aria-pressed="false">Recorded clip</button>
+      <button id="history-tab" aria-pressed="false">History</button>
       <button id="settings-open" aria-haspopup="dialog">Settings</button></nav>
     <section id="live-panel" aria-label="Live camera overview">
       <div class="toolbar"><p id="message" role="status" aria-live="polite">Discovering cameras…</p>
         <div class="actions"><button id="start" disabled>Resume view</button><button id="stop" disabled>Pause view</button></div></div>
       <div id="camera-grid" class="camera-grid"></div>
     </section>
-    <section id="recording-panel" aria-label="Recorded camera video" hidden>
-      <div class="viewer recording-viewer"><video id="recording" controls playsinline preload="none"></video></div>
-      <div class="toolbar"><div><strong>Historical test clip · Camera 1</strong><p class="subtitle" id="recording-time">Recorder time</p></div></div>
-      <p class="subtitle">The previously extracted clip. Historical timeline browsing is the next milestone.</p>
+    <section id="history-panel" aria-label="Camera history" hidden>
+      <div class="history-card">
+        <div class="history-controls">
+          <label>Camera<select id="history-camera" disabled aria-label="History camera"></select></label>
+          <label>Range<select id="history-hours"><option value="1">1 hour</option><option value="3" selected>3 hours</option><option value="6">6 hours</option></select></label>
+          <div class="actions"><button id="history-earlier">Earlier</button><button id="history-later" disabled>Later</button><button id="history-recent">Recent</button><button id="history-refresh">Refresh</button></div>
+        </div>
+        <h2>Camera timeline</h2><p class="subtitle" id="history-range"></p>
+        <p id="history-message" role="status" aria-live="polite"></p>
+        <div class="timeline-rows">
+          <span class="timeline-label">Recordings</span><div id="history-recordings" class="timeline-track" role="group" aria-label="Recording timeline"></div>
+          <span class="timeline-label">Motion</span><div id="history-motion" class="timeline-track" role="group" aria-label="Motion timeline"></div>
+        </div>
+        <div id="history-axis" class="timeline-axis"></div>
+        <div class="history-statuses" aria-live="polite"><p id="history-recordings-status"></p><p id="history-motion-status"></p></div>
+        <label class="history-position">Selected time · <output id="history-selected">Choose a time</output><input id="history-position" type="range" min="0" step="1" value="0" disabled aria-label="Selected history time"></label>
+        <div class="history-event-controls"><button id="history-previous" disabled>Previous motion</button><button id="history-next" disabled>Next motion</button></div>
+        <ul id="history-events" class="history-events" aria-label="Motion intervals"></ul>
+      </div>
     </section>
     <footer><span class="dot"></span>Local camera viewer<span>Video only · Overview quality</span></footer>
   </main>
   <dialog id="display-settings" aria-labelledby="settings-title">
     <div class="settings-heading"><h2 id="settings-title">Settings</h2><button id="settings-close" autofocus>Done</button></div>
     <h3>Picture proportions</h3>
-    <p class="subtitle">Choose an aspect ratio for each camera. Changes apply immediately and are remembered in this browser, including recorded video for that camera.</p>
+    <p class="subtitle">Choose an aspect ratio for each camera. Changes apply immediately and are remembered in this browser.</p>
     <div id="aspect-settings" class="aspect-settings"></div>
   </dialog>
 </body>

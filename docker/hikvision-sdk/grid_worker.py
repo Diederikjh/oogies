@@ -24,6 +24,8 @@ class GridWorker:
         self.shutdown = False
         self.clock = clock
         self.next_availability_refresh = 0
+        self.history_results = {}
+        self.history_lock = threading.Lock()
 
     def ensure_ready(self):
         with self.condition:
@@ -65,7 +67,7 @@ class GridWorker:
     def _read(self):
         with (self.directory / "native.stdout.log").open("wb") as log:
             written = 0
-            for raw in iter(lambda: self.process.stdout.readline(65536), b""):
+            for raw in iter(lambda: self.process.stdout.readline(262144), b""):
                 if written < 5 * 1024 * 1024:
                     log.write(raw[:5 * 1024 * 1024 - written]); written += len(raw)
                 if not raw.startswith(b"GRID_EVENT "):
@@ -85,6 +87,11 @@ class GridWorker:
     def _event(self, event):
         with self.condition:
             kind = event["type"]
+            if kind == "timeline":
+                if event["id"] in self.history_results:
+                    self.history_results[event["id"]] = event
+                self.condition.notify_all()
+                return
             if kind == "ready":
                 if event.get("protocol") != 1:
                     self.state, self.error = "error", "Unsupported worker protocol."
@@ -140,6 +147,24 @@ class GridWorker:
             # missing response is retried at most once a minute, without login.
             self.next_availability_refresh = self.clock() + self.availability_cache_seconds
             self._command("refresh")
+
+    def query_timeline(self, camera_id, begin, end):
+        """Serialize metadata jobs; native searches run away from frame delivery."""
+        with self.history_lock:
+            self.ensure_ready()
+            identifier = uuid.uuid4().hex
+            with self.condition:
+                self.history_results[identifier] = None
+                try:
+                    self._command(f"timeline {self.cameras[camera_id]['channel']} {identifier} {begin} {end}")
+                    ready = self.condition.wait_for(lambda: self.history_results[identifier] is not None or
+                        self.state != "ready" or self.shutdown, timeout=25)
+                    result = self.history_results[identifier]
+                    if not ready or result is None or result.get("busy"):
+                        raise ValueError("Recorder history query did not complete.")
+                    return result
+                finally:
+                    del self.history_results[identifier]
 
     def _command(self, command):
         with self.condition, self.writer:

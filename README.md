@@ -9,7 +9,10 @@ alongside architecture changes.
 Current milestone: RTSP and HCNetSDK login work, and the encrypted camera
 substream decodes successfully with PlayCtrl and the full verification code.
 Historical time playback also works: a five-second recording was extracted
-from one hour earlier. Recording search still needs compatibility investigation.
+from one hour earlier. V30 recording search now works, and the History tab shows
+recording coverage and SDK motion intervals over a selectable recent-hours range.
+Interactive historical playback is the next slice. See
+[History timeline notes](docs/history-timeline.md) for the contract and evidence.
 The browser now automatically displays a live grid: seven simultaneous previews
 were verified, shared across tabs through one SDK login. Offline inputs remain
 labeled tiles. See [live-grid notes](docs/live-grid.md) for the architecture,
@@ -36,8 +39,10 @@ python3 tools/run_browser_viewer.py
 
 Open <http://localhost:8088/>; the grid starts automatically. **Pause view**
 releases only this page’s subscriptions. Abandoned views expire after 90 seconds
-by default; other viewers keep their streams. **Recorded clip** plays the private
-extracted MP4 when available. Expand uses overview quality. Credentials stay in
+by default; other viewers keep their streams. **History** shows a selected
+camera's recording/motion timeline without requiring a saved private clip.
+It currently selects times; historical video controls follow in the next slice.
+Expand uses overview quality. Credentials stay in
 the Docker backend. To stop the web server:
 
 ```sh

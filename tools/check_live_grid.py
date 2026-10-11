@@ -78,17 +78,16 @@ def main():
         driver.close(); driver.switch_to.window(first_tab)
         wait.until(lambda _: all(pic["state"] == "live" for pic in pictures() if pic["id"] in online))
         results["closing_one_view_preserves_other"] = True
-        if backend()["recording_available"]:
-            driver.find_element(By.ID, "recording-tab").click()
-            wait.until(lambda _: backend()["active_live_sources"] == 0)
-            driver.execute_script("document.getElementById('recording').play();")
-            wait.until(lambda _: driver.execute_script("return document.getElementById('recording').currentTime > 0.5"))
-            results["recorded_clip_plays"] = True
-            driver.save_screenshot(str(output / "recorded-clip.png"))
-        else:
-            driver.find_element(By.ID, "stop").click()
-            wait.until(lambda _: backend()["active_live_sources"] == 0)
-            results["recorded_clip_plays"] = "not_run: no private clip"
+        driver.find_element(By.ID, "history-tab").click()
+        wait.until(lambda _: backend()["active_live_sources"] == 0)
+        wait.until(lambda _: all(driver.find_element(By.ID, "history-" + name).get_attribute("data-state")
+            in ("ready", "unsupported", "error") for name in ("recordings", "motion")))
+        results["history_timeline"] = {name:dict(
+            state=driver.find_element(By.ID, "history-" + name).get_attribute("data-state"),
+            intervals=len(driver.find_elements(By.CSS_SELECTOR, "#history-" + name + " button")))
+            for name in ("recordings", "motion")}
+        assert backend()["sdk_login_calls"] == 1
+        driver.save_screenshot(str(output / "history-timeline.png"))
         errors = [entry for entry in driver.get_log("browser") if entry["level"] == "SEVERE" and "favicon.ico" not in entry["message"]]
         assert not errors, str(errors)
         results["browser_errors"] = errors

@@ -1,7 +1,9 @@
 # History view plan
 
-Status: proposal, 11 October 2026. No history feature or recorder probe was added
-for this plan. It expands milestones 3 and 4 in
+Status: recorded before implementation in `ccee147`, 11 October 2026.
+The first [History timeline slice](history-timeline.md) is now implemented:
+metadata queries and timeline selection. Interactive historical playback,
+pause/resume/seek and playback coexistence remain next. This plan expands milestones 3 and 4 in
 [implementation-plan.md](implementation-plan.md); endpoint contracts remain in
 [backend-api-plan.md](backend-api-plan.md).
 
@@ -40,11 +42,14 @@ part of milestone 4, using its separate job API.
 ## Evidence and SDK feasibility
 
 Verified: a five-second camera-1 recording was decoded through SDK time playback
-and PlayCtrl, then played as an MP4. Unverified: general recording discovery,
-motion markers, interactive controls, and playback alongside another user's
-live grid. `NET_DVR_FindFile_V40` previously failed with error 11; it did not
-establish missing footage or a permissions problem. See
-[historical results](historical-playback-results.md).
+and PlayCtrl, then played as an MP4. V30 recording discovery and base motion
+search now return accepted results through the first History slice. The sampled
+motion ranges were empty, so real nonempty marker data remains unverified.
+Interactive controls and historical playback alongside another user's live
+grid remain unverified. `NET_DVR_FindFile_V40` previously failed with error 11;
+it did not establish missing footage or a permissions problem. See
+[historical results](historical-playback-results.md) and
+[timeline results](history-timeline.md).
 
 Hikvision's [event-search documentation](https://open.hikvision.com/hardware/definitions/NET_DVR_FindFileByEvent.html)
 describes finding recordings by event and using their time ranges for playback.
@@ -237,7 +242,8 @@ python3 tools/run_ui_tests.py --build
 ```
 
 CI uses synthetic data with networking disabled and requires no SDK download,
-credentials or home footage. Current baseline is 26 unit and 18 browser cases;
-new counts/results are recorded after each implementation stage. Maintain the
+credentials or home footage. The plan checkpoint baseline was 26 unit and 18
+browser cases; the first timeline slice passes 40 unit and 24 browser cases.
+New counts/results are recorded after each implementation stage. Maintain the
 human and agent setup guides when dependencies, configuration, capabilities or
 startup behavior change. No additional host tools are planned.

@@ -51,6 +51,14 @@ lifecycle events, text start/stop commands, a `refresh` command returning an
 `availability` event through the same login, and per-camera latest-frame files; see
 [the grid contract](live-grid.md).
 
+Historical metadata extends that same worker with `query_timeline(camera_id,
+begin_wall, end_wall)` on the Python side and a bounded native `timeline` command.
+The current SDK's V30 recording and base motion searches live in
+`history_queries.h`; `HistoryTimeline` normalizes returned intervals/timezones
+for the HTTP API. The fixture worker substitutes at this operation boundary.
+See [History timeline](history-timeline.md). This is a concrete extension, not a
+new abstract recorder hierarchy.
+
 There is no abstract base class, dynamic loader, speculative camera/history
 interface or extra SDK implementation. The invocation arguments describe the
 operations already present in the prototype. They can change when a second

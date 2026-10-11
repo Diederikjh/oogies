@@ -1,5 +1,5 @@
-export async function api(path, method = "GET", body, headers = {}) {
-  const response = await fetch(path, {method, cache:"no-store", headers:{...headers,
+export async function api(path, method = "GET", body, headers = {}, signal) {
+  const response = await fetch(path, {method, signal, cache:"no-store", headers:{...headers,
     ...(body === undefined ? {} : {"Content-Type":"application/json"})},
     ...(body === undefined ? {} : {body:JSON.stringify(body)})});
   if (response.status === 204) return null;

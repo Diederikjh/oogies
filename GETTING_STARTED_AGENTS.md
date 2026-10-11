@@ -15,8 +15,10 @@ there is no separate vendor download step.
 
 Live video has been verified on one Hikvision DS-7108HGHI-K1. Compatibility with
 other recorders, firmware and authentication settings is not yet established.
-Motion timelines and arbitrary historical playback UI are planned;
-see [the implementation plan](docs/implementation-plan.md).
+History now displays recording coverage and SDK-returned motion intervals.
+Interactive historical video playback remains planned; see
+[the timeline notes](docs/history-timeline.md) and
+[the implementation plan](docs/implementation-plan.md).
 
 The service now reads the owner’s IP/SDK port from `.local/nvr-config.json`.
 Only the preserved HCNetSDK 6.1.9.48 profile is supported. Configuration support
@@ -67,8 +69,9 @@ environment readiness from recorder connectivity and successful live video.
 
 Docker Compose, host FFmpeg, host C++ compilers, Node.js and host
 Selenium are not prerequisites for the current prototype. Automated browser
-checks use a separate Docker image and are optional. The grid check skips
-recorded playback when a fresh checkout has no private historical clip.
+checks use a separate Docker image and are optional. The grid checker includes
+History metadata/navigation; neither History nor offline UI tests need a private
+historical clip.
 
 ### Detect the existing environment
 
@@ -337,7 +340,7 @@ selected SDK adapter; `login_password_max_chars` is not a configuration field.
 `max_live_sources` is an application budget (1–16), not a hardware limit; seven
 concurrent previews have been verified on the original recorder. `lease_seconds`
 can be 10–300; default 90 with frontend renewal every 30 seconds. The timezone
-records the recorder's clock context for later historical range conversion;
+sets the recorder's clock context for historical range conversion;
 live OSD timestamps are unchanged.
 
 Optional `camera_overrides` keys are SDK channel numbers, for example:
@@ -345,8 +348,8 @@ Optional `camera_overrides` keys are SDK channel numbers, for example:
 `"4": {"enabled":false}`. Names and online state otherwise come from discovery.
 Only overview quality is implemented; clicking a picture toggles expansion
 without starting a main stream. Aspect controls live under Settings → Picture
-proportions, with per-camera browser preferences applied to live and recorded
-video.
+proportions, with per-camera browser preferences applied to live video. The next
+historical player will use the same preferences.
 Restart the service after editing settings or credentials. See
 [the grid notes](docs/live-grid.md) for the implemented API and limits.
 
@@ -424,10 +427,19 @@ configuration changes still require service restart for full discovery.
 Closing a tab attempts to release its lease immediately. A killed/disconnected
 tab expires within about 90 seconds of its last heartbeat. Streams stop when
 their last subscriber leaves; the shared recorder login persists until shutdown.
-Switching to Recorded clip releases this page's live subscriptions. A fresh
-clone has no private clip and that tab is disabled; live grid setup needs no
-previous footage. The existing historical extraction command now uses the same
-private recorder configuration.
+Switching to History releases this page's live subscriptions while other pages
+keep theirs. Verify the camera selector, default three-hour range and separate
+recording/motion tracks. An accepted empty motion result differs from an error
+or unsupported query. Check that range labels agree with the configured recorder
+timezone. Clicking intervals selects time locally; this first slice does not
+start historical video. No private MP4 is required on a fresh clone. The existing
+historical extraction diagnostic uses the same private recorder configuration.
+
+Inside the runtime, verify the configured IANA timezone can be loaded with
+Python's `zoneinfo.ZoneInfo`. It requires timezone data in Docker; install
+`tzdata` in the runtime image if a different base image lacks it, rather than
+adding a host Python dependency. Do not replace the owner's timezone with a
+default simply to make this check pass.
 
 Stop with:
 
