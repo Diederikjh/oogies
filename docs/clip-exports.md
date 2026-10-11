@@ -12,9 +12,10 @@ seconds. Previewing the slider does not change either mark. Start/End flags and
 a shaded band appear in the visible timeline; text keeps both timestamps visible
 when you move to another time window. The white playhead stays independent.
 
-Choose an end after the start, from one second to ten minutes. Review the camera,
-range and picture proportions, then press **Queue export**. The request freezes
-those values. The **Export** word in the success message links to the Exports
+Choose an end after the start, from one second to ten minutes. Review the camera
+and range, then press **Save clip**, the emphasized primary action. Picture
+proportions are configured in **Settings** and apply to viewing and saved clips.
+The request freezes the range and current picture proportions. The **Export** word in the success message links to the Exports
 tab. The confirmation disappears after 60 seconds, on **Clear marks**, or when
 leaving History (including changing camera). Dismissing it does not cancel the
 queued job. Continue viewing, or open **Exports** to monitor progress, cancel

@@ -77,8 +77,8 @@
         <div class="history-side-column">
           <div class="history-clip-strip">
             <h2>Export a clip</h2>
-            <div class="history-speeds" role="group" aria-label="Clip selection"><button id="clip-start" disabled>Mark start</button><button id="clip-end" disabled>Mark end</button><button id="clip-clear">Clear marks</button><button id="clip-queue" disabled>Queue export</button><button id="clip-view-exports">View exports</button></div>
-            <div class="history-clip-summary"><p id="clip-range"></p><p id="clip-duration"></p><p id="clip-aspect"></p></div>
+            <div class="history-speeds" role="group" aria-label="Clip selection"><button id="clip-start" disabled>Mark start</button><button id="clip-end" disabled>Mark end</button><button id="clip-clear">Clear marks</button><button id="clip-queue" disabled>Save clip</button><button id="clip-view-exports">View exports</button></div>
+            <div class="history-clip-summary"><p id="clip-range"></p><p id="clip-duration"></p></div>
             <p id="clip-message" role="status" aria-live="polite"></p>
           </div>
           <details class="history-events-panel" open>
@@ -96,7 +96,7 @@
   <dialog id="display-settings" aria-labelledby="settings-title">
     <div class="settings-heading"><h2 id="settings-title">Settings</h2><button id="settings-close" autofocus>Done</button></div>
     <h3>Picture proportions</h3>
-    <p class="subtitle">Choose an aspect ratio for each camera. Changes apply immediately and are remembered in this browser.</p>
+    <p class="subtitle">Choose picture proportions for each camera, used for viewing and saved clips. Your choices are remembered in this browser.</p>
     <div id="aspect-settings" class="aspect-settings"></div>
   </dialog>
 </body>

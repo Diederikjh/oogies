@@ -52,7 +52,6 @@ export class ClipSelection {
     this.panel.querySelector("#clip-range").textContent = `Start: ${label(this.from)} · End: ${label(this.to)}`;
     this.panel.querySelector("#clip-duration").textContent = Number.isFinite(duration) ?
       this.valid ? `${duration} seconds` : `Choose an end after the start, up to ${this.maxSeconds} seconds.` : `Maximum ${this.maxSeconds} seconds`;
-    this.panel.querySelector("#clip-aspect").textContent = this.camera ? `Picture proportions: ${readAspect(this.camera.id, this.camera.aspect_ratio)}` : "";
     this.timeline.maxClipSeconds = this.maxSeconds;
     this.timeline.setClip(this.from, this.to);
   }

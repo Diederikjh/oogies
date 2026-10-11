@@ -49,7 +49,7 @@ speed buttons offer **0.5×, 1×, 2× and 4×**, preserved through seeking and p
 starts that camera's recording, retaining the same viewer slot and speed.
 One historical viewer slot is currently admitted.
 History also has ±10/30-second step buttons and a direct **Download current
-frame** PNG button. **Mark start → Mark end → Queue export** saves a video-only
+frame** PNG button. **Mark start → Mark end → Save clip** saves a video-only
 MP4 of up to ten minutes. The timeline zooms around both marks, whose handles
 can be dragged or adjusted with arrow keys within the duration/order limits.
 The **Exports** tab shows shared jobs, cancellation,

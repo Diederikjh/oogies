@@ -490,6 +490,7 @@ class ViewerUITests(unittest.TestCase):
 
     def test_history_compact_workspace_keeps_video_seek_and_marks_in_view(self):
         self.mark_clip(10)
+        self.assertEqual(self.element("#clip-queue").text,"Save clip")
         for width,height in ((1600,1100),(1366,768)):
             with self.subTest(window=(width,height)):
                 self.driver.set_window_size(width,height)

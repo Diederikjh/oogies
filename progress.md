@@ -8,6 +8,13 @@ and historical use cases incrementally.
 
 ## Compact History workspace
 
+The compact layout and its browser coverage were committed as `95b85c1`.
+The main clip action now reads Save clip, with bold text and a filled highlight.
+Picture proportions are shown/configured in Settings; the clip box shows its
+range and duration. Saving still uses the current camera's picture preference.
+Two focused browser cases passed for compact layout/Save clip and the complete
+queue, download and deletion flow.
+
 The owner approved the initial layout-only prototype and requested UI coverage. Desktop
 History now fits the available viewport: video, timeline, seeking and playback
 controls share the main pane; clip marks/export controls sit beside them, above
