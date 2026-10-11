@@ -5,8 +5,10 @@ Implemented after timeline checkpoint `bb40e0f`, 11 October 2026.
 On desktop, History keeps video, timeline and playback controls together within
 the viewport. Clip marks/export actions sit in the side column above a scrolling
 motion list. On smaller screens, the panels stack and motion events start
-collapsed. Recording-track Start/End handles edit the clip; both tracks retain
-selection shading. **Go to date/time** opens the date picker, which closes on a
+collapsed. Start/End handles in the strip between the recording and motion bars
+edit the clip; both bars retain selection shading and fixed heights. The label
+strip stays reserved so adding or clearing marks keeps the preview steady.
+**Go to date/time** opens the date picker, which closes on a
 successful jump, Escape, an outside click or navigation. Invalid input keeps the
 picker open and leaves the current recording intact.
 

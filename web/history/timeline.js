@@ -10,15 +10,14 @@ export class Timeline {
     this.slider.addEventListener("input", () => { this.scrubbing = true; this.select(this.seekBegin + Number(this.slider.value) * 1000, false); });
     this.slider.addEventListener("change", () => { this.scrubbing = false; this.select(this.seekBegin + Number(this.slider.value) * 1000); });
     this.tracks = new Map(["recordings", "motion"].map(name => [name, panel.querySelector(`#history-${name}`)]));
+    this.markers = panel.querySelector("#history-clip-marks");
     panel.querySelector("#history-zoom-clip").addEventListener("click", () => this.zoomToClip());
     panel.querySelector("#history-zoom-out").addEventListener("click", () => this.zoomOut());
     panel.querySelector("#history-full-range").addEventListener("click", () => this.fullRange());
-    for (const track of this.tracks.values()) {
-      track.addEventListener("pointerdown", event => this.startDrag(event, track));
-      track.addEventListener("pointermove", event => this.moveDrag(event));
-      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) track.addEventListener(type, event => this.endDrag(event));
-      track.addEventListener("keydown", event => this.editKey(event));
-    }
+    this.markers.addEventListener("pointerdown", event => this.startDrag(event, this.markers));
+    this.markers.addEventListener("pointermove", event => this.moveDrag(event));
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) this.markers.addEventListener(type, event => this.endDrag(event));
+    this.markers.addEventListener("keydown", event => this.editKey(event));
     for (const track of this.tracks.values()) track.addEventListener("click", event => {
       if (this.suppressClick) { this.suppressClick = false; return; }
       if (event.target.closest("button") || !this.begin || track.dataset.state !== "ready") return;
@@ -123,33 +122,35 @@ export class Timeline {
 
   drawClip() {
     const from = this.clipFrom, to = this.clipTo;
+    const percent = value => (value - this.viewBegin) / (this.viewEnd - this.viewBegin) * 100;
     this.panel.querySelector("#history-zoom-clip").disabled = !Number.isFinite(from) || !Number.isFinite(to);
     for (const id of ["history-zoom-out", "history-full-range"]) this.panel.querySelector(`#${id}`).disabled = !this.isZoomed();
     for (const track of this.tracks.values()) {
-      track.classList.toggle("has-clip", Number.isFinite(from) || Number.isFinite(to));
       for (const item of track.querySelectorAll(".clip-boundary,.clip-shade")) item.remove();
-      const percent = value => (value - this.viewBegin) / (this.viewEnd - this.viewBegin) * 100;
       if (from < to && from < this.viewEnd && to > this.viewBegin) {
         const shade = document.createElement("span"); shade.className = "clip-shade";
         shade.style.left = `${percent(Math.max(from, this.viewBegin))}%`;
         shade.style.width = `${percent(Math.min(to, this.viewEnd)) - percent(Math.max(from, this.viewBegin))}%`; track.append(shade);
       }
       for (const [name, label, value] of [["from", "Start", from], ["to", "End", to]]) {
-        let flag = track.querySelector(`.clip-marker[data-bound="${name}"]`);
-        if (!(value >= this.viewBegin && value <= this.viewEnd)) { flag?.remove(); continue; }
-        if (!flag) {
-          flag = document.createElement("button"); flag.type = "button"; flag.className = "clip-marker";
-          flag.dataset.bound = name; flag.textContent = label; flag.setAttribute("role", "slider");
-          flag.setAttribute("aria-label", `Clip ${name === "from" ? "start" : "end"}`); track.append(flag);
-        }
-        flag.style.left = `clamp(22px, ${percent(value)}%, calc(100% - 22px))`;
-        flag.title = `${label}: ${this.time(value, true)} · Drag or use arrow keys`;
-        flag.setAttribute("aria-valuenow", String(value / 1000)); flag.setAttribute("aria-valuetext", this.time(value, true));
-        const [min, max] = this.clipBounds?.(name) || [this.begin, this.end];
-        flag.setAttribute("aria-valuemin", String(min / 1000)); flag.setAttribute("aria-valuemax", String(max / 1000));
+        if (!(value >= this.viewBegin && value <= this.viewEnd)) continue;
         const boundary = document.createElement("span"); boundary.className = "clip-boundary";
         boundary.style.left = `${percent(value)}%`; track.append(boundary);
       }
+    }
+    for (const [name, label, value] of [["from", "Start", from], ["to", "End", to]]) {
+      let flag = this.markers.querySelector(`.clip-marker[data-bound="${name}"]`);
+      if (!(value >= this.viewBegin && value <= this.viewEnd)) { flag?.remove(); continue; }
+      if (!flag) {
+        flag = document.createElement("button"); flag.type = "button"; flag.className = "clip-marker";
+        flag.dataset.bound = name; flag.textContent = label; flag.setAttribute("role", "slider");
+        flag.setAttribute("aria-label", `Clip ${name === "from" ? "start" : "end"}`); this.markers.append(flag);
+      }
+      flag.style.left = `clamp(22px, ${percent(value)}%, calc(100% - 22px))`;
+      flag.title = `${label}: ${this.time(value, true)} · Drag or use arrow keys`;
+      flag.setAttribute("aria-valuenow", String(value / 1000)); flag.setAttribute("aria-valuetext", this.time(value, true));
+      const [min, max] = this.clipBounds?.(name) || [this.begin, this.end];
+      flag.setAttribute("aria-valuemin", String(min / 1000)); flag.setAttribute("aria-valuemax", String(max / 1000));
     }
   }
 
@@ -214,7 +215,7 @@ export class Timeline {
     const [min, max] = this.clipBounds(name), step = event.shiftKey ? 10000 : 1000;
     const target = {ArrowLeft:current-step, ArrowRight:current+step, Home:min, End:max}[event.key];
     if (target === undefined) return;
-    const track = flag.closest(".timeline-track");
+    const track = this.markers;
     const repairing = this.invalidClip();
     event.preventDefault(); this.onClipEdit(name, target);
     if (repairing || this.clipFrom < this.viewBegin || this.clipTo > this.viewEnd) {

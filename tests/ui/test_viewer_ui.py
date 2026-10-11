@@ -596,6 +596,33 @@ class ViewerUITests(unittest.TestCase):
         self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
         self.wait.until(lambda _:self.element("#clip-start").is_enabled())
 
+    def test_history_clip_labels_between_bars_keep_heights_and_preview_stable(self):
+        self.paused_history(); self.driver.set_window_size(1366,768)
+        def layout():
+            return self.driver.execute_script("""
+                return Object.fromEntries(['#history-viewer','#history-recordings','#history-motion'].map(selector=>{
+                  const r=document.querySelector(selector).getBoundingClientRect();return [selector,{top:r.top,height:r.height}];
+                }));
+            """)
+        before=layout()
+        self.element("#clip-start").click()
+        self.assertEqual(layout(),before)
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.assertEqual(layout(),before)
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,".clip-marker")),2)
+        for marker in self.driver.find_elements(By.CSS_SELECTOR,".clip-marker"):
+            rect=marker.rect
+            recording=self.element("#history-recordings").rect
+            motion=self.element("#history-motion").rect
+            self.assertGreaterEqual(rect["y"],recording["y"]+recording["height"])
+            self.assertLessEqual(rect["y"]+rect["height"],motion["y"])
+        self.assert_history_controls_in_view()
+        self.driver.save_screenshot("/output/history-marks-between-bars.png")
+        self.element("#clip-clear").click()
+        self.assertEqual(layout(),before)
+        self.assertEqual(self.driver.find_elements(By.CSS_SELECTOR,".clip-marker"),[])
+
     def test_history_clip_marks_steps_and_camera_reset(self):
         self.paused_history()
         before = len(self.fixture.worker.playback_commands)
@@ -606,7 +633,7 @@ class ViewerUITests(unittest.TestCase):
         self.element("#clip-end").click()
         self.assertEqual(self.element("#clip-duration").text, "30 seconds")
         self.assertIn(start.split(" · End:")[0], self.element("#clip-range").text)
-        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, ".clip-marker")), 4)
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, ".clip-marker")), 2)
         self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, ".clip-shade")), 2)
         self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"], "paused")
         self.element("#live-tab").click(); self.wait_live(); self.open_history()
@@ -702,8 +729,8 @@ class ViewerUITests(unittest.TestCase):
         self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth<=innerWidth"))
 
     def clip_seconds(self):
-        start=self.element('#history-recordings .clip-marker[data-bound="from"]')
-        end=self.element('#history-recordings .clip-marker[data-bound="to"]')
+        start=self.element('#history-clip-marks .clip-marker[data-bound="from"]')
+        end=self.element('#history-clip-marks .clip-marker[data-bound="to"]')
         return float(end.get_attribute("aria-valuenow"))-float(start.get_attribute("aria-valuenow"))
 
     def mark_clip(self, seconds=30):
@@ -712,7 +739,7 @@ class ViewerUITests(unittest.TestCase):
         self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
 
     def drag_clip(self, name, direction):
-        flag=self.element(f'#history-recordings .clip-marker[data-bound="{name}"]')
+        flag=self.element(f'#history-clip-marks .clip-marker[data-bound="{name}"]')
         self.driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'instant'})",flag)
         offset=self.driver.execute_script("const f=arguments[0].getBoundingClientRect(),t=arguments[0].parentElement.getBoundingClientRect();return (arguments[1]<0?t.left+2:t.right-2)-(f.left+f.width/2)",flag,direction)
         ActionChains(self.driver).move_to_element(flag).click_and_hold().move_by_offset(int(offset),0).release().perform()
@@ -741,30 +768,30 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(self.clip_seconds(),1200); self.assertFalse(self.element("#clip-queue").is_enabled())
         self.assertIn("Zoomed",self.element("#history-range").text)
         commands=len(self.fixture.worker.playback_commands)
-        self.element('#history-recordings .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.element('#history-clip-marks .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
         self.assertEqual(self.clip_seconds(),600); self.assertTrue(self.element("#clip-queue").is_enabled())
-        self.element('#history-recordings .clip-marker[data-bound="from"]').send_keys(Keys.END)
+        self.element('#history-clip-marks .clip-marker[data-bound="from"]').send_keys(Keys.END)
         self.assertEqual(self.clip_seconds(),1)
-        self.element('#history-recordings .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.element('#history-clip-marks .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
         self.assertEqual(self.clip_seconds(),1)
-        self.element('#history-recordings .clip-marker[data-bound="from"]').send_keys(Keys.HOME)
+        self.element('#history-clip-marks .clip-marker[data-bound="from"]').send_keys(Keys.HOME)
         self.assertEqual(self.clip_seconds(),600)
         self.element("#clip-start").click()  # Last displayed frame is after the edited end.
         self.assertLess(self.clip_seconds(),0); self.assertFalse(self.element("#clip-queue").is_enabled())
-        self.element('#history-recordings .clip-marker[data-bound="from"]').send_keys(Keys.ARROW_LEFT)
+        self.element('#history-clip-marks .clip-marker[data-bound="from"]').send_keys(Keys.ARROW_LEFT)
         self.assertEqual(self.clip_seconds(),1); self.assertTrue(self.element("#clip-queue").is_enabled())
         self.assertEqual(len(self.fixture.worker.playback_commands),commands)
 
     def test_history_clip_handles_respect_configured_limit(self):
         self.mark_clip(180)
         self.assertIn("up to 120 seconds",self.element("#clip-duration").text)
-        self.element('#history-recordings .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.element('#history-clip-marks .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
         self.assertEqual(self.clip_seconds(),120)
         self.assertTrue(self.element("#clip-queue").is_enabled())
 
     def test_history_clip_touch_drag_survives_metadata_refresh(self):
         self.mark_clip(); self.driver.set_window_size(390,844)
-        flag=self.element('#history-recordings .clip-marker[data-bound="to"]')
+        flag=self.element('#history-clip-marks .clip-marker[data-bound="to"]')
         self.driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'instant'})",flag)
         x,y,right=self.driver.execute_script("const f=arguments[0].getBoundingClientRect(),t=arguments[0].parentElement.getBoundingClientRect();return [f.left+f.width/2,f.top+f.height/2,t.right-2]",flag)
         before=len(self.fixture.worker.playback_commands); searches=len(self.fixture.worker.timeline_calls)

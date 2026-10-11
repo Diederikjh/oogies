@@ -23,6 +23,10 @@ three native buffer regressions, using the same command as GitHub Actions.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
 Clear marks, reduced motion and keyboard navigation to export jobs.
+Clip-label coverage checks that Start/End sit between the bars and adding or
+clearing them preserves both bar geometry and preview size. Mouse, touch and
+keyboard editing use the same dedicated strip, retaining duration/order limits
+and metadata-refresh behavior without seeking playback.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames

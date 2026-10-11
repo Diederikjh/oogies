@@ -8,6 +8,15 @@ and historical use cases incrementally.
 
 ## Compact History workspace
 
+The confirmation animation was committed as `bd84642`. Start/End handles now
+occupy a fixed strip between the recording and motion bars. Both bars retain
+their normal height and selection shading; marking or clearing no longer changes
+the preview's size. The label strip owns pointer capture and keyboard editing,
+preserving time-to-pixel scaling, focus, zoom and playback independence.
+Nine focused browser cases passed for fixed geometry, labels between bars,
+mouse/touch/keyboard editing, limits, metadata refresh, camera reset, mobile
+selection and zoomed seeking. The marked laptop screenshot was visually reviewed.
+
 Save clip/Settings refinements were committed as `645640c`. Successful save
 confirmations now appear with a brief fade and small vertical bounce, highlighted
 inside the clip box. The animation uses opacity/transforms, leaves layout and
@@ -27,8 +36,8 @@ queue, download and deletion flow.
 The owner approved the initial layout-only prototype and requested UI coverage. Desktop
 History now fits the available viewport: video, timeline, seeking and playback
 controls share the main pane; clip marks/export controls sit beside them, above
-an independently scrolling motion list. Duplicate draggable marks on the motion
-track are hidden, retaining its selection shading and the recording-track handles.
+an independently scrolling motion list. A single pair of draggable clip labels
+sits between the bars, with selection shading on both tracks.
 Camera/range navigation is above the workspace. Date/time opens in a dismissible
 popover and closes after successful navigation. Smaller screens stack the panels
 and initially collapse the motion list. Existing playback/export APIs are unchanged.

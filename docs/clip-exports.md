@@ -9,7 +9,9 @@ PNG downloads, and a shared durable MP4 export queue.
 Play or pause a recording, then use **Mark start** and **Mark end**. Each mark
 uses the last successfully displayed frame's recorded clock, rounded to whole
 seconds. Previewing the slider does not change either mark. Start/End flags and
-a shaded band appear in the visible timeline; text keeps both timestamps visible
+a shaded band appear in the visible timeline. Draggable Start/End labels sit in
+a fixed strip between the recording and motion bars, keeping bar heights and
+preview size stable when marks are added or cleared. Text keeps both timestamps visible
 when you move to another time window. The white playhead stays independent.
 
 Choose an end after the start, from one second to ten minutes. Review the camera
