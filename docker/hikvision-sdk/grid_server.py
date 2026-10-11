@@ -87,6 +87,7 @@ class Handler(BaseHandler):
         try:
             if path == "/api/cameras":
                 worker.ensure_ready()
+                worker.refresh_availability()
                 with worker.condition:
                     self.json_response({"cameras": list(worker.cameras.values())})
             elif path == "/api/status":

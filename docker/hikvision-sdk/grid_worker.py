@@ -10,7 +10,9 @@ import uuid
 
 
 class GridWorker:
-    def __init__(self, binary, adapter, config, output, spawn=subprocess.Popen):
+    availability_cache_seconds = 60
+
+    def __init__(self, binary, adapter, config, output, spawn=subprocess.Popen, clock=time.monotonic):
         self.binary, self.adapter, self.config = binary, adapter, config
         self.output, self.spawn = Path(output), spawn
         self.condition = threading.Condition(threading.RLock())
@@ -20,6 +22,8 @@ class GridWorker:
         self.cameras, self.sources = {}, {}
         self.login_calls = self.tested_capacity = 0
         self.shutdown = False
+        self.clock = clock
+        self.next_availability_refresh = 0
 
     def ensure_ready(self):
         with self.condition:
@@ -98,6 +102,17 @@ class GridWorker:
                             aspect_ratio=override.get("aspect_ratio", "16:9"), live_qualities=["overview"],
                             capabilities={"time_playback": "unknown", "motion_timeline": "unknown"})
                     self.state = "ready"
+                    self.next_availability_refresh = self.clock() + self.availability_cache_seconds
+            elif kind == "availability":
+                for camera in event["cameras"]:
+                    identifier = f"camera-{camera['channel']}"
+                    if identifier not in self.cameras or type(camera.get("online")) is not bool:
+                        continue
+                    source = self.sources.get(identifier, {})
+                    # Fresh decoded video is stronger evidence than a status hint.
+                    fresh = source.get("frame") is not None and time.monotonic() - source.get("last_frame", 0) <= 5
+                    self.cameras[identifier]["online"] = camera["online"] or fresh
+                self.next_availability_refresh = self.clock() + self.availability_cache_seconds
             elif kind == "fatal":
                 self.login_calls = event.get("login_calls", 0)
                 self.state, self.error = "error", f"Recorder connection failed (SDK code {event.get('error')}); no automatic retry."
@@ -117,16 +132,27 @@ class GridWorker:
                         source["state"] = "starting"
             self.condition.notify_all()
 
-    def send(self, operation, camera_id):
-        channel = self.cameras[camera_id]["channel"]
+    def refresh_availability(self):
+        with self.condition:
+            if self.shutdown or self.state != "ready" or self.clock() < self.next_availability_refresh:
+                return
+            # Advance before writing so simultaneous tabs share one query. A
+            # missing response is retried at most once a minute, without login.
+            self.next_availability_refresh = self.clock() + self.availability_cache_seconds
+            self._command("refresh")
+
+    def _command(self, command):
         with self.condition, self.writer:
             try:
-                self.process.stdin.write(f"{operation} {channel}\n".encode())
+                self.process.stdin.write((command + "\n").encode())
             except OSError:
                 self.state, self.error = "error", "Recorder worker ended; no automatic retry."
                 for source in self.sources.values():
                     source["state"], source["frame"] = "error", None
                 self.condition.notify_all()
+
+    def send(self, operation, camera_id):
+        self._command(f"{operation} {self.cameras[camera_id]['channel']}")
 
     def start_source(self, camera_id):
         with self.condition:

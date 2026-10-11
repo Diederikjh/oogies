@@ -153,7 +153,7 @@ static void publish(Source &source) {
 }
 
 struct Camera { int channel; std::string name, online; };
-static std::vector<Camera> discover(LONG user, const NET_DVR_DEVICEINFO_V30 &device) {
+static std::vector<Camera> discover(LONG user, const NET_DVR_DEVICEINFO_V30 &device, bool read_names = true) {
     NET_DVR_WORKSTATE_V30 state{};
     bool state_ok = NET_DVR_GetDVRWorkState_V30(user, &state);
     NET_DVR_IPPARACFG_V40 ip{}; ip.dwSize = sizeof(ip); DWORD returned = 0;
@@ -162,7 +162,7 @@ static std::vector<Camera> discover(LONG user, const NET_DVR_DEVICEINFO_V30 &dev
     auto add = [&](int channel, bool online_known, bool online) {
         NET_DVR_PICCFG_V30 picture{}; picture.dwSize = sizeof(picture);
         std::string name = "Camera " + std::to_string(channel);
-        if (NET_DVR_GetDVRConfig(user, NET_DVR_GET_PICCFG_V30, channel, &picture, sizeof(picture), &returned)) {
+        if (read_names && NET_DVR_GetDVRConfig(user, NET_DVR_GET_PICCFG_V30, channel, &picture, sizeof(picture), &returned)) {
             const auto length = strnlen(reinterpret_cast<const char *>(picture.sChanName), NAME_LEN);
             if (length) name.assign(reinterpret_cast<const char *>(picture.sChanName), length);
         }
@@ -245,6 +245,19 @@ int main(int argc, char **argv) {
                 std::istringstream command(buffer.substr(0, newline)); buffer.erase(0, newline + 1);
                 std::string operation; int channel = 0; command >> operation >> channel;
                 if (operation == "quit") { stopping = 1; break; }
+                if (operation == "refresh") {
+                    const auto availability = discover(user, device.struDeviceV30, false);
+                    std::ostringstream update; update << "{\"type\":\"availability\",\"cameras\":[";
+                    bool first = true;
+                    for (const auto &camera : availability) {
+                        if (!sources.count(camera.channel)) continue;
+                        if (!first) update << ',';
+                        first = false;
+                        update << "{\"channel\":" << camera.channel << ",\"online\":" << camera.online << "}";
+                    }
+                    update << "]}"; event(update.str());
+                    continue;
+                }
                 if (!sources.count(channel)) continue;
                 if (operation == "start") {
                     unsigned active = 0; for (auto &item : sources) active += item.second->active ? 1 : 0;

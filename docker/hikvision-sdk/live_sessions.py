@@ -122,8 +122,15 @@ class LiveSessions:
 
     def run_reaper(self):
         while not self.closed:
-            self.reap()
+            self.maintain()
             time.sleep(1)
+
+    def maintain(self):
+        with self.lock:
+            self.reap()
+            if self.sessions:
+                self.worker.refresh_availability()
+                self._reconcile()
 
     def next_frames(self, identifier, seen):
         with self.lock:

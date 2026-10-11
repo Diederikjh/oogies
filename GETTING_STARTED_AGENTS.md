@@ -409,6 +409,13 @@ share sources, and pausing one must preserve the other. Authentication rejection
 ends the check; do not retry passwords or SDK profiles automatically. Report
 actual discovered channels, tested concurrency and per-camera failures.
 
+Camera availability expires after 60 seconds. Active views share one periodic
+status query using the existing SDK login; recovered offline cameras resume
+automatically. Recent video takes precedence over an offline status hint.
+Unknown status keeps the previous known state until the next minute's query.
+Idle views do not make background queries. Newly added/removed channels or
+configuration changes still require service restart for full discovery.
+
 Closing a tab attempts to release its lease immediately. A killed/disconnected
 tab expires within about 90 seconds of its last heartbeat. Streams stop when
 their last subscriber leaves; the shared recorder login persists until shutdown.

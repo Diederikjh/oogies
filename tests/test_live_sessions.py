@@ -1,8 +1,10 @@
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +14,7 @@ from live_sessions import LiveSessions, SessionError
 from nvr_config import load_config
 from grid_worker import GridWorker
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 
 class FakeWorker:
@@ -20,6 +23,7 @@ class FakeWorker:
         self.cameras = {f"camera-{channel}": {"id":f"camera-{channel}", "channel":channel, "online":channel != 3} for channel in (1, 2, 3)}
         self.sources, self.started, self.stopped = {}, [], []
     def ensure_ready(self): pass
+    def refresh_availability(self): pass
     def start_source(self, key):
         self.started.append(key)
         self.sources[key] = {"state":"starting", "frame":None, "sequence":0, "generation":1}
@@ -134,3 +138,94 @@ class GridWorkerLifecycleTests(unittest.TestCase):
         self.assertEqual(worker.state, "error")
         self.assertTrue(all(source["state"] == "error" and source["frame"] is None
                             for source in worker.sources.values()))
+
+
+class CameraAvailabilityCacheTests(unittest.TestCase):
+    def setUp(self):
+        self.now = 0
+        self.spawn = Mock(side_effect=AssertionError("Availability refresh must not spawn/login"))
+        self.worker = GridWorker(None, None, {"camera_overrides": {}}, "/tmp",
+                                 spawn=self.spawn, clock=lambda: self.now)
+        self.worker.process = SimpleNamespace(stdin=io.BytesIO())
+        self.worker._event({"type":"ready", "protocol":1, "login_calls":1,
+            "cameras":[{"channel":1,"name":"Driveway","online":True},
+                       {"channel":3,"name":"Storage","online":False}]})
+
+    def commands(self):
+        return self.worker.process.stdin.getvalue().decode().splitlines()
+
+    def test_expires_at_one_minute_and_parallel_callers_share_one_refresh(self):
+        self.now = 59.999
+        self.worker.refresh_availability()
+        self.assertEqual(self.commands(), [])
+        self.now = 60
+        callers = [threading.Thread(target=self.worker.refresh_availability) for _ in range(8)]
+        for caller in callers: caller.start()
+        for caller in callers: caller.join()
+        self.assertEqual(self.commands(), ["refresh"])
+        self.assertFalse(self.worker.cameras["camera-3"]["online"])
+        self.assertEqual(self.worker.login_calls, 1)
+        self.spawn.assert_not_called()
+
+    def test_offline_camera_recovers_in_existing_views_without_restarting_healthy_source(self):
+        sessions = LiveSessions(self.worker, clock=lambda:self.now)
+        first = sessions.create(selection(1,3))
+        second = sessions.create(selection(1,3))
+        self.assertEqual(self.commands(), ["start 1"])
+        self.now = 59.999
+        sessions.maintain()
+        self.assertEqual(self.commands(), ["start 1"])
+        self.now = 60
+        sessions.maintain()
+        self.assertEqual(self.commands(), ["start 1", "refresh"])
+        self.worker._event({"type":"availability", "cameras":[{"channel":3,"online":True}]})
+        sessions.maintain()
+        self.worker._event({"type":"started","channel":3,"generation":1})
+        self.worker.sources["camera-3"].update(state="live", frame=b"\xff\xd8fixture\xff\xd9",
+                                               received=1, sequence=1, last_frame=time.monotonic())
+        for view in (first, second):
+            self.assertEqual(sessions.get(view["id"])["cameras"][1]["state"], "live")
+            self.assertEqual(len(sessions.next_frames(view["id"], {})), 1)
+        self.assertEqual(self.commands(), ["start 1", "refresh", "start 3"])
+        self.assertEqual(self.worker.cameras["camera-3"]["name"], "Storage")
+        self.assertEqual(self.worker.login_calls, 1)
+        self.spawn.assert_not_called()
+
+    def test_still_offline_and_failed_status_do_not_probe_or_query_every_tick(self):
+        sessions = LiveSessions(self.worker, lease_seconds=300, clock=lambda:self.now)
+        view = sessions.create(selection(3))
+        self.now = 60
+        sessions.maintain()
+        self.worker._event({"type":"availability", "cameras":[{"channel":3,"online":None}]})
+        self.now = 119.999
+        sessions.maintain()
+        self.assertEqual(self.commands(), ["refresh"])
+        self.assertEqual(sessions.get(view["id"])["cameras"][0]["state"], "offline")
+        self.now = 120
+        sessions.maintain()
+        self.worker._event({"type":"availability", "cameras":[{"channel":3,"online":False}]})
+        sessions.maintain()
+        self.assertEqual(self.commands(), ["refresh", "refresh"])
+        self.assertEqual(self.worker.login_calls, 1)
+
+    def test_refresh_preserves_fresh_video_and_releases_only_confirmed_offline_source(self):
+        self.worker.cameras["camera-3"]["online"] = True
+        sessions = LiveSessions(self.worker, clock=lambda:self.now)
+        view = sessions.create(selection(1,3))
+        self.worker.sources["camera-1"].update(state="live", frame=b"healthy-frame", last_frame=time.monotonic())
+        self.worker._event({"type":"availability", "cameras":[
+            {"channel":1,"online":False},{"channel":3,"online":False}]})
+        sessions.maintain()
+        self.assertTrue(self.worker.cameras["camera-1"]["online"])
+        self.assertEqual([c["state"] for c in sessions.get(view["id"])["cameras"]], ["live","offline"])
+        self.assertEqual(self.commands(), ["start 1","start 3","stop 3"])
+
+    def test_no_active_view_does_not_refresh_or_retry_a_rejected_login(self):
+        sessions = LiveSessions(self.worker, clock=lambda:self.now)
+        self.now = 60
+        sessions.maintain()
+        self.assertEqual(self.commands(), [])
+        self.worker.state = "error"
+        self.worker.refresh_availability()
+        self.assertEqual(self.commands(), [])
+        self.spawn.assert_not_called()

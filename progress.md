@@ -26,6 +26,47 @@ arguments and ref-update input, and that a privacy failure prevents upload.
 Future checkouts use `python3 tools/setup_git_lfs.py` to configure native filters
 while preserving the publication hook, then `git lfs fsck` to verify the SDK.
 
+## Storage camera recovery diagnosis
+
+Native Git LFS migration was committed as `1db2482`. Storage is SDK channel 3.
+The running viewer had cached `online: false` at discovery; its session manager
+excludes offline cameras before starting any preview. Earlier private logs show
+Storage successfully streamed in a previous run. Discovery was a one-time
+snapshot, so a recovered camera stayed excluded until the service restarted.
+
+A single isolated SDK probe found Storage online with normal signal/hardware
+flags, decoded eight frames and published five valid JPEGs at 352 × 288 without
+errors. The viewer was relaunched, and its normal HTTP session/media API then
+delivered three advancing, distinct Storage JPEGs with state `live`. The temporary
+test lease was deleted; the server retains one SDK login and is ready for browsers.
+Evidence stays private under `.local/browser-viewer/storage-check-*/report.json`
+and `.local/browser-viewer/storage-web-check.json`.
+
+The subsequent one-minute cache change below addresses the stale offline
+snapshot. Full rediscovery of added/removed channels still needs service restart.
+
+## One-minute camera availability cache
+
+Camera availability now expires after 60 seconds. Active viewers request a
+shared SDK status refresh through the existing login; a recovered offline
+camera starts automatically in already-open grids. Healthy previews are retained,
+and recent decoded video takes precedence over an offline status hint. Unknown
+status preserves the last known state and is retried at most once a minute.
+Authentication is never retried by this path. Idle viewers make no periodic
+queries; `/api/cameras` can request an expired refresh on the next access.
+
+All 26 host unit tests passed, including exact expiry, simultaneous callers,
+recovery in shared sessions, failed/unknown status, healthy-stream preservation
+and no extra login. A new offline Docker browser case verifies recovery in two
+tabs across the 60-second boundary using the real cache/event implementation and
+a controlled clock. The updated C++ bridge compiled against the bundled SDK,
+and its offline decoder check passed with networking disabled and zero logins.
+All 14 Docker browser cases passed. The service was relaunched with the updated
+cache and native protocol. Storage then delivered three advancing valid JPEGs
+through the normal browser API with one shared SDK login; the temporary test
+lease was released. Evidence is private in
+`.local/browser-viewer/availability-cache-web-check.json`.
+
 ## Current milestone: automatic live grid verified
 
 The aspect correction was committed as `95ec310`. The service now discovers inputs

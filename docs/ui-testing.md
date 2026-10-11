@@ -54,6 +54,15 @@ page's renewal timer and wait for its real ten-second lease while another page
 renews its lease. A delayed discovery response exercises navigation during
 initial loading.
 
+The offline-recovery case uses production `GridWorker` availability cache/event
+handling with a simulated SDK command transport and a controlled cache clock.
+It verifies that a recovered camera remains offline at 59.999 seconds, then
+starts moving in two already-open tabs at 60 seconds. It checks one shared
+refresh, one recorder connection and no restarts of healthy streams. Host unit
+tests additionally cover concurrent refresh callers, unsuccessful/unknown
+status, preserving fresh video, confirmed offline transitions and no login
+retries. No test waits a real minute for cache expiry.
+
 [create_server](../docker/hikvision-sdk/grid_server.py) accepts an existing worker
 and live-session manager. Production supplies `GridWorker`; tests supply
 `FakeRecorderWorker`. No alternate recorder selector or test endpoints are
@@ -72,6 +81,11 @@ native process events or real recorder capacity. Keep the bounded real-recorder
 checks for those claims. Chrome/Chromium is the currently tested browser engine.
 
 ## Verified result
+
+On 11 October 2026, all 14 browser cases and 26 host unit tests passed, including
+the new one-minute offline-camera recovery case. The updated native bridge also
+compiled against the bundled SDK and passed its offline decoder check without
+network access or credentials.
 
 On 10 October 2026, all 13 browser cases passed in Docker with networking
 disabled and zero SDK logins. All 18 existing host unit tests also passed.

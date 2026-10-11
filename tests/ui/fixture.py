@@ -9,6 +9,7 @@ import time
 from types import SimpleNamespace
 
 from grid_server import create_server
+from grid_worker import GridWorker
 from live_sessions import LiveSessions
 
 
@@ -44,8 +45,11 @@ class SyntheticMedia:
                        check=True, timeout=30, capture_output=True)
 
 
-class FakeRecorderWorker:
-    def __init__(self, media, *, failure=False, delayed=False, failed_camera=None):
+class FakeRecorderWorker(GridWorker):
+    def __init__(self, media, *, failure=False, delayed=False, failed_camera=None, offline_camera=None):
+        self.cache_now = 0
+        super().__init__(None, SimpleNamespace(sdk_id="ui-fixture"), {"camera_overrides": {}},
+                         media.directory, clock=lambda:self.cache_now)
         self.media = media
         self.condition = threading.Condition(threading.RLock())
         self.adapter = SimpleNamespace(sdk_id="ui-fixture")
@@ -55,6 +59,8 @@ class FakeRecorderWorker:
         self.cameras, self.sources = {}, {}
         self.started, self.stopped = Counter(), Counter()
         self.failure, self.failed_camera = failure, failed_camera
+        self.offline_camera = offline_camera
+        self.device_online, self.refresh_calls = {}, 0
         self.discovery_gate = threading.Event()
         if not delayed:
             self.discovery_gate.set()
@@ -79,8 +85,21 @@ class FakeRecorderWorker:
                         capabilities={"time_playback":"unknown", "motion_timeline":"unknown"})
                         for channel in range(1, 10)}
                     self.state = "ready"
+                    for key, camera in self.cameras.items():
+                        camera["online"] = camera["online"] and key != self.offline_camera
+                        self.device_online[key] = camera["online"]
+                    self.next_availability_refresh = self.clock() + self.availability_cache_seconds
             if self.state != "ready":
                 raise ValueError(self.error)
+
+    def _command(self, command):
+        # Reuse the production cache/event logic; substitute only SDK transport.
+        if command != "refresh":
+            raise AssertionError("Unexpected fake SDK command")
+        self.refresh_calls += 1
+        self._event({"type":"availability", "cameras":[
+            {"channel":camera["channel"], "online":self.device_online[key]}
+            for key,camera in self.cameras.items()]})
 
     def start_source(self, key):
         self.started[key] += 1
@@ -113,6 +132,7 @@ class FakeRecorderWorker:
                 self.condition.notify_all()
 
     def close(self):
+        self.shutdown = True
         self.discovery_gate.set()
         self.closed.set()
         self.thread.join(timeout=2)

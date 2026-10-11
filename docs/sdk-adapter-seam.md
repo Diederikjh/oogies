@@ -47,7 +47,8 @@ Credentials are sent only through stdin; the invocation's representation hides
 that field. The browser/runner retain process lifetime, timeout, output handling
 and cleanup. The C++ bridge retains actual SDK calls and decoding. Native output
 uses `CAM_SDK_REPORT` for bounded probes. The grid uses `GRID_EVENT` JSON
-lifecycle events, text start/stop commands and per-camera latest-frame files; see
+lifecycle events, text start/stop commands, a `refresh` command returning an
+`availability` event through the same login, and per-camera latest-frame files; see
 [the grid contract](live-grid.md).
 
 There is no abstract base class, dynamic loader, speculative camera/history

@@ -36,6 +36,7 @@ def main():
             self.login_calls, self.tested_capacity = 0, 1
             self.started, self.stopped = [], []
         def ensure_ready(self): pass
+        def refresh_availability(self): pass
         def start_source(self, key):
             self.started.append(key)
             self.sources[key] = dict(state='live', frame=frame, sequence=1, generation=len(self.started),

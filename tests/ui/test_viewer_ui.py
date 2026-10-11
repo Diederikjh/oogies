@@ -20,6 +20,7 @@ class ViewerUITests(unittest.TestCase):
         "test_recorder_rejection_has_no_automatic_retries": {"failure": True},
         "test_fresh_install_without_a_recording": {"recording": False},
         "test_switching_views_during_discovery_recovers": {"delayed": True},
+        "test_offline_camera_recovers_after_one_minute_in_both_tabs": {"offline_camera":"camera-3"},
     }
 
     @classmethod
@@ -266,3 +267,30 @@ class ViewerUITests(unittest.TestCase):
         self.driver.find_element(By.ID,"live-tab").click()
         self.fixture.worker.discovery_gate.set()
         self.wait_live(); self.wait_counts(1,8)
+
+    def test_offline_camera_recovers_after_one_minute_in_both_tabs(self):
+        healthy = [1,2,4,5,6,7,8]
+        self.wait_live(healthy)
+        self.assertEqual(self.state(3), "offline")
+        first = self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab")
+        self.driver.get(self.fixture.url)
+        self.wait_live(healthy); self.wait_counts(2,7)
+        second = self.driver.current_window_handle
+        with self.fixture.worker.condition:
+            self.fixture.worker.device_online["camera-3"] = True
+            self.fixture.worker.cache_now = 59.999
+        self.fixture.sessions.maintain()
+        self.assertEqual(self.fixture.worker.refresh_calls, 0)
+        self.assertEqual(self.state(3), "offline")
+        with self.fixture.worker.condition:
+            self.fixture.worker.cache_now = 60
+        self.fixture.sessions.maintain()
+        self.wait_live(); self.wait_counts(2,8)
+        self.driver.switch_to.window(first)
+        self.wait_live()
+        self.assertEqual(self.fixture.worker.refresh_calls, 1)
+        self.assertEqual(self.fixture.worker.connection_attempts, 1)
+        self.assertTrue(all(count==1 for count in self.fixture.worker.started.values()))
+        self.assertEqual(dict(self.fixture.worker.stopped), {})
+        self.driver.switch_to.window(second)

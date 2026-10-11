@@ -52,15 +52,35 @@ Discovery uses device information, work state, analog enable flags, direct IP
 channel configuration and picture/channel names. It does not treat the advertised
 eight analog/ten digital capacity as eighteen configured cameras. The current
 IP discovery handles direct-device modes 0 and 6; other acquisition modes or
-larger models need verified adapter changes. Online state is a discovery snapshot,
-updated when frames arrive; continuously refreshing configuration is not yet
-implemented. Restart to discover added/reconnected inputs.
+larger models need verified adapter changes. Camera availability is cached for
+60 seconds. While views are active, the backend refreshes expired status through
+the existing native SDK login and reconciles subscriptions automatically. An
+offline camera that recovers starts in all subscribed grids without reloading
+the page. Concurrent viewers share one refresh; healthy streams remain shared.
+The `/api/cameras` endpoint also requests a refresh when the cache has expired,
+returning the current snapshot while the SDK query completes. Idle viewers make
+no background recorder queries. Added/removed channels and name/configuration
+changes still require service restart for full discovery.
+
+Refreshes query work state and IP-channel status without rereading camera names
+or logging in again. Unknown/failed status results preserve the previous known
+state and may be queried again after a minute; they never trigger authentication
+retries. Recent decoded frames take precedence over an offline status hint.
+
+On 11 October, Storage (SDK channel 3) demonstrated this limitation: a running
+viewer cached it as offline and never attempted its preview, while a fresh SDK
+query reported normal signal/hardware and its encrypted substream decoded
+successfully. Restarting the viewer restored Storage through the normal web
+session/media API; three advancing, distinct JPEG frames were verified.
+The subsequent one-minute cache expiry and automatic status refresh address
+that recovery problem. Hikvision documents the signal/hardware flags in
+[NET_DVR_CHANNELSTATE_V30](https://open.hikvision.com/hardware/structures/NET_DVR_CHANNELSTATE_V30.html).
 
 ## Implemented API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/api/cameras` | Discover/cached configured inputs through the shared recorder connection; no preview starts |
+| GET | `/api/cameras` | Cached configured inputs; requests availability refresh after 60 seconds through the shared recorder connection; no preview starts |
 | GET | `/api/status` | Cached backend state, source/view counts, tested capacity and saved-clip metadata |
 | POST | `/api/live/sessions` | Create a viewer's camera/overview selection; optional `Idempotency-Key` |
 | GET | `/api/live/sessions/{id}` | Per-camera state/freshness and this view's feed descriptor |
@@ -148,8 +168,9 @@ Private evidence is under `.local/grid-check/`: `capacity.json`,
 `resources.json`, browser screenshots and `browser/grid-check.json`. The
 browser reproduction tool is [check_live_grid.py](../tools/check_live_grid.py).
 Older one-camera browser/aspect tools document the previous frontend and are
-not the grid acceptance test. Long-running recovery, main-stream enlargement,
-continuous discovery refresh and historical timelines remain future work.
+not the grid acceptance test. Long-running failure recovery, main-stream
+enlargement, rediscovery of changed configuration and historical timelines
+remain future work.
 
 A real unrenewed lease expired after 90 seconds while a separate lease, renewed
 every 25 seconds, kept its camera live. Only the abandoned source stopped; the

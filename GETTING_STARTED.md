@@ -53,6 +53,9 @@ python3 tools/run_browser_viewer.py
 Open <http://localhost:8088/>. The live grid starts automatically. **Pause view**
 releases your subscriptions; other viewers keep their cameras.
 
+Camera availability is cached for one minute. Offline cameras are rechecked
+while the grid is active and return automatically when they recover.
+
 Click a camera picture to expand it; click again to collapse. Enter and Space
 work too. Expansion uses the same overview stream. Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
