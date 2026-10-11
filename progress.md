@@ -8,6 +8,15 @@ and historical use cases incrementally.
 
 ## Clip exports, frame downloads and fine seeking
 
+Exports previously appended new jobs below cached rows. Returning from History
+or refreshing kept the wrong order; a full reload rebuilt it newest first.
+A browser regression reproduced this, then passed after positioning reused rows
+in the API's newest-first order. It also covers refreshing for another viewer's
+new job while retaining existing row elements.
+Four focused browser cases passed for ordering, download/delete, cancellation,
+and preserving a separate live viewer. The running service serves the updated
+frontend; no restart or new recorder probe was needed.
+
 The approved export implementation was committed as `d97e032`. Queue confirmations
 now clear on Clear marks, after 60 seconds, or when leaving History/changing
 camera. A delayed queue response cannot restore a dismissed message, and an old

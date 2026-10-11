@@ -729,6 +729,33 @@ class ViewerUITests(unittest.TestCase):
         self.element(".export-job button").click()
         self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "expired")
 
+    def test_history_exports_keep_newest_first_on_return_and_refresh(self):
+        self.mark_clip(10); self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.element("#exports-tab").click()
+        self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
+        first = self.fixture.server.exports.list()["jobs"][0]["id"]
+        self.driver.execute_script("window.firstExportRow=document.querySelector('.export-job')")
+        self.open_history()
+        self.wait.until(lambda _:self.element("#clip-queue").is_enabled()); self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.element("#clip-message a").click()
+        self.wait.until(lambda _:len(self.driver.find_elements(By.CSS_SELECTOR,".export-job")) == 2)
+        expected = [job["id"] for job in self.fixture.server.exports.list()["jobs"]]
+        actual = lambda:[row.get_attribute("data-job-id") for row in self.driver.find_elements(By.CSS_SELECTOR,".export-job")]
+        self.assertEqual(actual(),expected)
+        self.assertNotEqual(actual()[0],first)
+        self.assertTrue(self.driver.execute_script("return firstExportRow===document.querySelector(arguments[0])",
+            f'.export-job[data-job-id="{first}"]'))
+        # Another browser can enqueue work while this page remains on Exports.
+        job = self.fixture.server.exports.list()["jobs"][0]
+        self.fixture.server.exports.create({key:job[key] for key in ("camera_id","from","to","aspect_ratio")})
+        self.element("#exports-refresh").click()
+        self.wait.until(lambda _:len(self.driver.find_elements(By.CSS_SELECTOR,".export-job")) == 3)
+        self.assertEqual(actual(),[job["id"] for job in self.fixture.server.exports.list()["jobs"]])
+        self.assertTrue(self.driver.execute_script("return firstExportRow===document.querySelector(arguments[0])",
+            f'.export-job[data-job-id="{first}"]'))
+
     def test_history_export_confirmation_clear_and_one_minute_expiry(self):
         self.mark_clip(10)
         # Control just the confirmation timers; playback and HTTP clocks stay real.

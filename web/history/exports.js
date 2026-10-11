@@ -16,14 +16,19 @@ export class ExportsView {
       if (!this.active || generation !== this.generation) return;
       this.panel.querySelector("#exports-limits").textContent = `Clips up to ${data.limits.max_duration_seconds} seconds · One export at a time · Downloads kept for ${data.limits.retention_hours} hours`;
       const existing = new Map([...this.list.children].map(row => [row.dataset.jobId, row]));
+      let position = 0;
       for (const job of data.jobs) {
         let row = existing.get(job.id); existing.delete(job.id);
         if (!row) {
           row = document.createElement("li"); row.className = "export-job"; row.dataset.jobId = job.id;
           const title = document.createElement("h2"), range = document.createElement("p"), status = document.createElement("p"), actions = document.createElement("div");
           range.className = "subtitle"; status.setAttribute("role", "status"); actions.className = "actions";
-          row.append(title, range, status, actions); this.list.append(row);
+          row.append(title, range, status, actions);
         }
+        // Keep the API's newest-first order when adding jobs to an existing list.
+        // Leave rows already in place untouched during routine polling.
+        if (this.list.children[position] !== row) this.list.insertBefore(row, this.list.children[position] || null);
+        ++position;
         row.dataset.state = job.state;
         const [title, range, status, actions] = row.children;
         title.textContent = job.camera_name;

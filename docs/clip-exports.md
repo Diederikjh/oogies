@@ -64,6 +64,8 @@ as well as path separators on Unix. No controls or letterboxing are included.
 | `GET /media/exports/{id}.mp4` | Ready attachment, single byte ranges; 409 pending/failed, 410 expired/deleted |
 
 States are `queued`, `running`, `ready`, `failed`, `cancelled`, `expired`.
+The list stays newest first when returning from History, refreshing, or receiving
+updates from another browser. Existing rows and their controls are reused.
 One worker runs, with three waiting jobs by default. A queued job holds no
 recorder slot. An active job reserves one slot in the same budget as live and
 historical viewers. Full capacity waits without probing or evicting another view.
