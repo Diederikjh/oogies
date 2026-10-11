@@ -2,6 +2,7 @@ import {api} from "/shared/api.js";
 import {FrameFeed} from "/shared/frame-feed.js";
 import {MediaDisplay} from "/shared/media-player.js";
 import {readAspect, saveAspect} from "/shared/display-preferences.js";
+import {downloadFrame} from "/history/frame-download.js";
 
 const LABELS = {starting:"Loading recording…", seeking:"Seeking…", playing:"Playing", paused:"Paused",
   pausing:"Pausing…", resuming:"Resuming…", ended:"End of selected range", error:"Playback unavailable"};
@@ -16,18 +17,24 @@ export class PlaybackControls {
     this.stopButton = panel.querySelector("#history-stop");
     this.speedButtons = [...panel.querySelectorAll("#history-speeds button")];
     this.speedMessage = panel.querySelector("#history-speed-status");
+    this.stepButtons = [...panel.querySelectorAll("#history-steps button[data-seconds]")];
+    this.downloadButton = panel.querySelector("#history-frame-download");
+    this.downloadMessage = panel.querySelector("#history-frame-message");
     this.viewer = panel.querySelector("#history-viewer");
     this.display = new MediaDisplay(this.image, this.viewer);
     this.epoch = 0; this.renderEpoch = 0; this.controlVersion = 0; this.session = null;
     this.pauseButton.addEventListener("click", () => this.control());
     this.stopButton.addEventListener("click", () => this.stop());
     for (const button of this.speedButtons) button.addEventListener("click", () => this.changeRate(Number(button.dataset.rate)));
+    for (const button of this.stepButtons) button.addEventListener("click", () => this.step(Number(button.dataset.seconds)));
+    this.downloadButton.addEventListener("click", () => this.download());
     this.paint(null);
   }
 
   setAspect(cameraId, value) {
     if (this.camera?.id !== cameraId) return;
     this.display.setAspect(saveAspect(cameraId, value));
+    this.paintFrameControls();
   }
 
   select(camera, position, from, to, rate = this.session?.camera_id === camera.id ? this.session.requested_rate : 1, autoplay = false) {
@@ -104,11 +111,16 @@ export class PlaybackControls {
     if (this.drawing) return;
     this.drawing = true;
     const epoch = this.renderEpoch, previous = this.url;
-    const next = URL.createObjectURL(new Blob([jpeg], {type:"image/jpeg"})); this.url = next;
+    const blob = new Blob([jpeg], {type:"image/jpeg"});
+    const next = URL.createObjectURL(blob); this.url = next;
     this.image.onload = () => {
       if (previous) URL.revokeObjectURL(previous);
       if (epoch !== this.renderEpoch || this.image.currentSrc !== next) return;
       this.drawing = false; this.image.hidden = false; this.placeholder.hidden = true;
+      this.snapshot = header.position ? Object.freeze({blob, cameraId:this.camera.id, cameraName:this.camera.name,
+        generation:header.generation, sequence:header.sequence, position:Date.parse(header.position),
+        width:this.image.naturalWidth, height:this.image.naturalHeight}) : null;
+      this.paintFrameControls();
       if (header.position) this.onPosition(Date.parse(header.position));
     };
     this.image.onerror = () => { if (previous) URL.revokeObjectURL(previous); this.drawing = false; };
@@ -131,7 +143,33 @@ export class PlaybackControls {
     }
     this.speedMessage.textContent = status?.rate_error || (pendingRate ? "Changing playback speed…" : "");
     this.stopButton.disabled = !this.session;
-    if (state === "error") this.image.hidden = true;
+    if (state === "error") { this.image.hidden = true; this.snapshot = null; }
+    this.paintFrameControls();
+  }
+
+  paintFrameControls() {
+    const ready = this.snapshot && !this.loading && !this.controlling && this.session && ["playing", "paused"].includes(this.session.state);
+    for (const button of this.stepButtons) {
+      const delta = Number(button.dataset.seconds);
+      button.disabled = !ready || (delta < 0 ? this.snapshot.position <= Date.parse(this.session.from) : this.snapshot.position >= Date.parse(this.session.to) - 1000);
+    }
+    this.downloadButton.disabled = !this.snapshot || this.downloading;
+    this.onSnapshot?.();
+  }
+
+  step(seconds) {
+    if (!this.snapshot || !this.session || this.loading || this.controlling) return;
+    const position = Math.max(Date.parse(this.session.from), Math.min(Date.parse(this.session.to) - 1000, this.snapshot.position + seconds * 1000));
+    this.select(this.camera, position, Date.parse(this.session.from), Date.parse(this.session.to), this.session.requested_rate);
+  }
+
+  async download() {
+    if (!this.snapshot || this.downloading) return;
+    const snapshot = this.snapshot, aspect = readAspect(snapshot.cameraId, this.camera.aspect_ratio);
+    this.downloading = true; this.paintFrameControls(); this.downloadMessage.textContent = "Saving frame…";
+    try { await downloadFrame(snapshot, aspect); this.downloadMessage.textContent = "Frame downloaded."; }
+    catch (error) { this.downloadMessage.textContent = error.message; }
+    finally { this.downloading = false; this.paintFrameControls(); }
   }
 
   async poll() {
@@ -184,10 +222,12 @@ export class PlaybackControls {
   }
 
   clearPicture() {
+    this.snapshot = null; this.downloadMessage.textContent = "";
     ++this.renderEpoch; this.drawing = false;
     this.image.onload = this.image.onerror = null; this.image.removeAttribute("src");
     if (this.url) URL.revokeObjectURL(this.url); this.url = null;
     this.image.hidden = true; this.placeholder.hidden = false;
+    this.paintFrameControls();
   }
 
   async release() {

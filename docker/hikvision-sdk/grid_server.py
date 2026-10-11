@@ -9,9 +9,11 @@ from pathlib import Path
 import re
 import signal
 import threading
+import tempfile
 from urllib.parse import parse_qs, urlsplit
 
-from browser_server import Handler as BaseHandler
+from browser_server import Handler as BaseHandler, byte_range
+from export_jobs import ExportJobs
 from grid_worker import GridWorker
 from live_sessions import LiveSessions, SessionError
 from history_timeline import HistoryTimeline
@@ -31,6 +33,9 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/live/tile-expansion.js": ("live/tile-expansion.js", "text/javascript"),
     "/history/history-view.js": ("history/history-view.js", "text/javascript"),
     "/history/date-time-navigation.js": ("history/date-time-navigation.js", "text/javascript"),
+    "/history/frame-download.js": ("history/frame-download.js", "text/javascript"),
+    "/history/clip-selection.js": ("history/clip-selection.js", "text/javascript"),
+    "/history/exports.js": ("history/exports.js", "text/javascript"),
     "/history/timeline.js": ("history/timeline.js", "text/javascript"),
     "/history/playback-controls.js": ("history/playback-controls.js", "text/javascript"),
     "/history/history.css": ("history/history.css", "text/css")}
@@ -66,7 +71,15 @@ class Handler(BaseHandler):
         match = re.fullmatch(r"/api/live/sessions/([a-f0-9]{32})", path)
         playback = re.fullmatch(r"/api/playback/sessions/([a-f0-9]{32})", path)
         try:
-            if operation == "POST" and path == "/api/playback/sessions":
+            export = re.fullmatch(r"/api/exports/([a-f0-9]{32})", path)
+            if operation == "POST" and path == "/api/exports":
+                self.json_response(self.server.exports.create(self.body(), self.headers.get("Idempotency-Key")), 202)
+            elif operation == "DELETE" and export:
+                if self.headers.get("Origin") not in (None, "http://" + self.headers["Host"]):
+                    raise SessionError("Invalid origin.", 403)
+                self.server.exports.delete(export[1])
+                self.send_response(204); self.send_header("Content-Length", "0"); self.end_headers()
+            elif operation == "POST" and path == "/api/playback/sessions":
                 self.json_response(self.server.playback.create(self.body()), 201)
             elif operation == "PATCH" and playback:
                 self.json_response(self.server.playback.patch(playback[1], self.body()))
@@ -104,7 +117,13 @@ class Handler(BaseHandler):
         path = urlsplit(self.path).path
         sessions, worker = self.server.sessions, self.server.worker
         try:
-            if path == "/api/cameras":
+            if path == "/api/exports":
+                self.json_response(self.server.exports.list())
+            elif (match := re.fullmatch(r"/api/exports/([a-f0-9]{32})", path)):
+                self.json_response(self.server.exports.get(match[1]))
+            elif (match := re.fullmatch(r"/media/exports/([a-f0-9]{32})\.mp4", path)):
+                self.export_file(match[1])
+            elif path == "/api/cameras":
                 worker.ensure_ready()
                 worker.refresh_availability()
                 with worker.condition:
@@ -114,6 +133,7 @@ class Handler(BaseHandler):
                     self.json_response(dict(state=worker.state, error=worker.error,
                         active_live_sources=len(sessions.wanted), viewer_sessions=len(sessions.sessions),
                         playback_sessions=len(self.server.playback.sessions),
+                        active_exports=int(self.server.exports.active is not None),
                         device_stream_limit=None, source_limit=sessions.limit,
                         tested_concurrent_streams=worker.tested_capacity, sdk_login_calls=worker.login_calls,
                         sdk_adapter=worker.adapter.sdk_id, recording_available=self.server.recording.is_file(),
@@ -178,8 +198,28 @@ class Handler(BaseHandler):
             with self.server.worker.condition:
                 self.server.feeds.discard(identifier)
 
+    def export_file(self, identifier):
+        with self.server.exports.download(identifier) as (file, filename):
+            size = os.fstat(file.fileno()).st_size
+            try: first, last = byte_range(self.headers.get("Range"), size)
+            except ValueError:
+                self.send_response(416); self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0"); self.end_headers(); return
+            ranged = self.headers.get("Range") is not None
+            self.send_response(206 if ranged else 200)
+            self.send_header("Content-Type", "video/mp4")
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Accept-Ranges", "bytes")
+            if ranged: self.send_header("Content-Range", f"bytes {first}-{last}/{size}")
+            self.send_header("Content-Length", str(last - first + 1)); self.end_headers()
+            self.connection.settimeout(5); file.seek(first); remaining = last - first + 1
+            while remaining:
+                chunk = file.read(min(65536, remaining))
+                if not chunk: break
+                self.wfile.write(chunk); remaining -= len(chunk)
 
-def create_server(worker, sessions, *, address, web, recording, recording_info=None, timeline=None, playback=None):
+
+def create_server(worker, sessions, *, address, web, recording, recording_info=None, timeline=None, playback=None, exports=None):
     """Wire the HTTP service without initializing an SDK or choosing a worker."""
     server = ThreadingHTTPServer(address, Handler)
     server.daemon_threads = True
@@ -191,6 +231,17 @@ def create_server(worker, sessions, *, address, web, recording, recording_info=N
     server.timeline = timeline or HistoryTimeline(worker, worker.config.get("timezone", "Africa/Johannesburg"))
     server.playback = playback or PlaybackSessions(worker, sessions, lease_seconds=sessions.lease_seconds)
     sessions.playback_sessions = server.playback
+    temporary = None
+    if exports is None:
+        temporary = tempfile.TemporaryDirectory(prefix="oogies-exports-fixture-")
+        exports = ExportJobs(worker, sessions, temporary.name)
+    server.exports = exports
+    close = server.server_close
+    def close_exports():
+        server.exports.close()
+        close()
+        if temporary: temporary.cleanup()
+    server.server_close = close_exports
     return server
 
 
@@ -209,7 +260,8 @@ def main():
     recording_info = {"recording_begin": os.environ.get("CAM_RECORDING_BEGIN"),
         "recording_end": os.environ.get("CAM_RECORDING_END"), "recording_seconds": os.environ.get("CAM_RECORDING_SECONDS")}
     server = create_server(worker, sessions, address=("0.0.0.0", args.port),
-        web="/web", recording="/recording/historical-clip.mp4", recording_info=recording_info)
+        web="/web", recording="/recording/historical-clip.mp4", recording_info=recording_info,
+        exports=ExportJobs(worker, sessions, "/exports"))
     threading.Thread(target=sessions.run_reaper, daemon=True).start()
     def shutdown(*_): threading.Thread(target=server.shutdown, daemon=True).start()
     signal.signal(signal.SIGTERM, shutdown); signal.signal(signal.SIGINT, shutdown)
@@ -217,7 +269,7 @@ def main():
     try:
         server.serve_forever()
     finally:
-        sessions.close(); server.playback.close(); worker.close(); server.timeline.close(); server.server_close()
+        server.exports.close(); sessions.close(); server.playback.close(); worker.close(); server.timeline.close(); server.server_close()
 
 
 if __name__ == "__main__": main()

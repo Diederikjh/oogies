@@ -1,9 +1,10 @@
 # Clip selection, frame downloads, export queue and fine seeking
 
-Proposed for owner review, 11 October 2026. **Not implemented.** Date/time
-navigation was committed as `bd0b069` before this plan. Implementation starts
-after the owner reviews it. Existing verification remains 60 unit and 41 Docker
-tests; no recorder probes or application changes were made for this plan.
+Approved and committed as `06c077d`, 11 October 2026, before implementation.
+Date/time navigation was committed as `bd0b069`. The design below records the
+agreed scope; [clip export implementation and evidence](clip-exports.md) describes
+the delivered behavior and real-recorder checks. Planning itself contacted no
+recorder and changed no application code.
 
 ## User flow
 
@@ -78,8 +79,11 @@ provides the image Blob for a normal download link. No resizing runs continuousl
 The same source JPEG could be downloaded unchanged, but that would preserve its
 native raster proportions instead of the corrected picture the owner sees.
 
-Use a safe filename such as `oogies-camera-3_20261011T080000Z_f123.png`, combining
-camera ID, recorded UTC time and frame sequence. Do not use machine paths,
+Use a safe filename such as `oogies-Driveway_20261011T080000Z_f123.png`, combining
+the sanitized camera name, recorded UTC time and frame sequence. The owner
+requested names instead of IDs after initial implementation. Replace invalid
+filename characters, bound length and use `Camera` when sanitization is empty.
+Do not use machine paths,
 recorder addresses or wall-clock arrival time. Include the full image, with no
 player controls, letterboxing or timeline markup. Keep conversion errors local
 and explicit; briefly disable repeated clicks while converting, then release
@@ -213,7 +217,7 @@ Proposed first-version defaults, configurable in private owner configuration:
 
 | Setting | Proposed value |
 | --- | --- |
-| Maximum clip duration | 5 minutes; minimum 1 second |
+| Maximum clip duration | 10 minutes; minimum 1 second (owner increased after initial implementation) |
 | Active export workers | 1 |
 | Waiting queue | 3 jobs in addition to the active job |
 | Completed clip retention | 24 hours after completion |
@@ -222,7 +226,7 @@ Proposed first-version defaults, configurable in private owner configuration:
 
 ### What constrains maximum clip length
 
-The five-minute limit is a proposed application default, not an established SDK
+The ten-minute limit is an application default, not an established SDK
 or recorder maximum. The official
 [time-playback API](https://open.hikvision.com/hardware/definitions/NET_DVR_PlayBackByTime_V40.html)
 and [download API](https://open.hikvision.com/hardware/definitions/NET_DVR_GetFileByTime_V40.html)

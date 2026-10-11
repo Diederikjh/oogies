@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -67,6 +68,7 @@ struct Source {
     unsigned long long sequence = 0, published = 0, jpegs = 0;
     std::string directory;
     std::string playback_id, position;
+    std::function<void(char *, int, FRAME_INFO *)> capture;
     explicit Source(int ch, const std::string &root) : channel(ch), directory(root + "/camera-" + std::to_string(ch)) {}
 };
 
@@ -75,6 +77,7 @@ static void CALLBACK decoded(int, char *data, int size, FRAME_INFO *info, void *
     if (!source || !source->active || !info || info->nType != T_YV12 || info->nWidth <= 0 || info->nHeight <= 0) return;
     const auto expected = 3ull * info->nWidth * info->nHeight / 2;
     if (expected != static_cast<unsigned>(size) || expected > 4ull * 1024 * 1024) { source->error = 17; return; }
+    if (source->capture) { source->capture(data, size, info); ++source->decoded; return; }
     std::lock_guard<std::mutex> guard(source->frames);
     source->latest.assign(data, data + size);
     source->width = info->nWidth; source->height = info->nHeight;
@@ -168,6 +171,7 @@ static void publish(Source &source) {
 }
 
 #include "history_playback.h"
+#include "export_capture.h"
 
 struct Camera { int channel; std::string name, online; };
 static std::vector<Camera> discover(LONG user, const NET_DVR_DEVICEINFO_V30 &device, bool read_names = true) {
@@ -214,6 +218,7 @@ static std::vector<Camera> discover(LONG user, const NET_DVR_DEVICEINFO_V30 &dev
 
 int main(int argc, char **argv) {
     std::signal(SIGTERM, interrupt); std::signal(SIGINT, interrupt);
+    std::signal(SIGPIPE, SIG_IGN);
     if (!initialize()) { event("{\"type\":\"fatal\",\"error\":" + std::to_string(NET_DVR_GetLastError()) + "}"); return 2; }
     if (argc > 1 && std::string(argv[1]) == "check") {
         int port = -1; std::string key = "DUMMYVERIFICATION";
@@ -248,6 +253,7 @@ int main(int argc, char **argv) {
     if (!root) { NET_DVR_Logout(user); NET_DVR_Cleanup(); return 2; }
     std::map<int, std::unique_ptr<Source>> sources;
     std::map<std::string, std::unique_ptr<Playback>> playbacks;
+    std::map<std::string, std::unique_ptr<ExportCapture>> exports;
     for (const auto &camera : cameras) sources[camera.channel] = std::make_unique<Source>(camera.channel, root);
     std::string buffer;
     std::thread history_job;
@@ -265,6 +271,20 @@ int main(int argc, char **argv) {
                 std::istringstream command(buffer.substr(0, newline)); buffer.erase(0, newline + 1);
                 std::string operation; int channel = 0; command >> operation >> channel;
                 if (operation == "quit") { stopping = 1; break; }
+                if (operation == "export-start" || operation == "export-stop") {
+                    std::string id, begin_text, end_text; command >> id;
+                    if (id.size() != 32 || id.find_first_not_of("0123456789abcdef") != std::string::npos) continue;
+                    if (operation == "export-stop") { exports.erase(id); continue; }
+                    command >> begin_text >> end_text;
+                    NET_DVR_TIME begin{}, end{};
+                    if (!sources.count(channel) || !parse_history_time(begin_text, begin) || !parse_history_time(end_text, end)) continue;
+                    for (auto it = exports.begin(); it != exports.end();) {
+                        if (it->second->done) it = exports.erase(it); else ++it;
+                    }
+                    if (!exports.empty()) { event("{\"type\":\"export\",\"id\":" + quote(id) + ",\"error\":41}"); continue; }
+                    exports[id] = std::make_unique<ExportCapture>(id, channel, user, key, begin, end);
+                    continue;
+                }
                 if (operation.rfind("playback-", 0) == 0) {
                     std::string id; int generation = 0; command >> id >> generation;
                     if (id.size() != 32 || id.find_first_not_of("0123456789abcdef") != std::string::npos || generation < 1) continue;
@@ -339,6 +359,7 @@ int main(int argc, char **argv) {
     }
     for (auto &item : sources) stop(*item.second);
     playbacks.clear();
+    exports.clear();
     if (history_job.joinable()) history_job.join();
     NET_DVR_Logout(user); NET_DVR_Cleanup();
     event("{\"type\":\"shutdown\",\"login_calls\":1}");

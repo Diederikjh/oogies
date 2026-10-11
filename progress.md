@@ -6,42 +6,66 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
-## Clip export and fine-seeking plan
+## Clip exports, frame downloads and fine seeking
 
-Date/time navigation was committed as `bd0b069` before planning this increment.
-The [proposed plan](docs/clip-export-plan.md) covers browser-only start/end marks
-from the displayed recorded clock, ±10/30-second seeks, immutable queued export
-jobs, download/cancellation, shared capacity, storage/retention and tests.
-Proposed defaults are five-minute clips, one active export plus three waiting,
-24-hour completed retention, a 1 GiB quota and 256 MiB per clip.
+The owner increased the default maximum to ten minutes (600 seconds). Setting
+both marks zooms the visible timeline around them, including an invalid draft.
+Mouse/touch dragging and keyboard arrows edit either handle, clamping to an
+ordered 1–600-second range (or a configured lower limit). The viewport stays
+fixed during a drag and metadata redraws wait until release. Zoom changes only
+the visible window; editing marks does not seek, pause or create SDK requests.
+Zoom to clip, Zoom out and Full range provide explicit viewport controls.
+All 78 backend tests and the full 56-case browser/native run passed. Follow-up
+checks passed after making the seek slider follow the zoom, including a new
+57th browser/native case. Overlong/reversed drafts, mouse/touch/keyboard limits,
+metadata refresh during a drag, mobile layout and unchanged playback were checked.
+The real ten-minute export produced a 599.134-second MP4 with 8,987 frames and
+16:9 display metadata. One live preview and historical viewer kept playing
+through one SDK login. Longer clips exposed a mismatch with the old quarter-
+second validation; duration validation now matches the reported one-second
+position precision and also verifies every captured frame reached the encoder.
+Recorded-time coverage and timestamp-gap checks still reject missing footage.
 
-The owner clarified visibility: the plan now specifies labelled Start/End flags
-and a shaded selection, plus a separate Exports tab listing camera, range,
-duration, job state, download/cancel/delete actions, file size and expiry.
-Official time-playback/download references reviewed do not give a universal
-duration maximum. Event pre/post-recording padding guidance and the SDK's default
-1024 MB download splitting are distinct from application clip limits. The plan
-records actual recording availability, encoding cost, disk quota and verification
-requirements, with a 10–30-second, one-minute, five-minute validation ladder.
-Routine tools remain native; SDK/codec dependencies remain in Docker under the
-owner's updated tooling instructions.
+Date/time navigation was committed as `bd0b069`; the owner-approved
+[plan](docs/clip-export-plan.md) was committed as `06c077d` before implementation.
+History now has browser-only Start/End marks and shaded timeline selection,
+±10/30-second seeking, and direct current-frame PNG downloads. Marks use the
+successfully displayed recorded clock. PNG conversion freezes that frame and
+picture proportions once, with no SDK/backend job or per-frame resizing.
+Image filenames now use the camera name, frozen with the displayed frame.
+Names are sanitized for path separators, reserved punctuation and control
+characters, trimmed and bounded, with a generic fallback for empty names.
+Three focused browser checks passed for named PNG downloads, freezing the name
+across camera/settings changes, and invalid/empty/Unicode/long-name sanitization.
+The Export word in a successful queue confirmation now links to the Exports
+tab. Its keyboard navigation and subsequent MP4 download/delete browser test passed.
 
-The owner also requested Download current frame on History. The plan proposes
-a direct browser PNG download from an immutable displayed-frame snapshot, with
-recorded-time/camera filename and one-time aspect correction. It requires no
-backend/SDK call, job, extra recorder slot or server artifact. Its tests cover
-playing/paused capture, frame/generation races, aspect, filename, errors and
-no API traffic. It is part of the first UI milestone; implementation remains
-pending review.
+The shared Exports tab lists immutable queued/running/ready/failed jobs, wait
+reasons, cancellation, MP4 downloads, deletion, size and expiry. Python owns the
+durable private manifest, admission, retention and HTTP byte ranges. A separate
+native playback/decoder context shares the existing SDK login; bounded raw and
+compressed queues feed FFmpeg without storing the whole raw clip. Cancellation
+wakes callbacks before SDK stop. Export jobs outlive browsers; ready/queued jobs
+survive service restart. Defaults are ten-minute clips, one active plus three
+waiting, 24-hour retention, 1 GiB storage and a 256 MiB file cap. Active exports
+reserve one stream slot without evicting views.
 
-The verified five-second SDK-to-H.264 extraction supports a separate all-frame
-decode/encode path. Its raw-disk diagnostic and the frame-skipping browser feed
-are insufficient production exporters. The plan requires a short clock/trim and
-coexistence check before integrating the job pipeline. Saved video proportions
-must be encoded into aspect metadata rather than depending on browser CSS.
-Only planning documents changed after the commit: no feature implementation,
-SDK probe, service restart or additional test run occurred. Existing verification
-remains 60 unit and 41 Docker tests. Implementation awaits owner review.
+Real SDK exports of 1/10/60/300 seconds produced 0.934/9.867/59.934/299.867-second
+H.264 MP4s, at 960 × 1088 with correct 16:9 display metadata. The 1/60/300 ladder
+kept one live preview and one historical viewer running, with one SDK login.
+Sampled memory stayed about 280–300 MiB. The initial frame can lack OSD time;
+capture waits for a usable clock and validates subsequent stamps and coverage.
+Clip bounds have second precision, not frame-exact guarantees. Full-grid plus
+history plus export capacity remains unverified. Details, reproduction commands
+and test scope are in [clip exports](docs/clip-exports.md).
+Real cancellation also released the export slot and kept an independent live
+preview advancing through the same login. Ready clips survived service restart
+and remained downloadable with HTTP byte ranges, without a new recorder login.
+
+Backend unit checks passed (78 cases); the complete Docker browser/native suite
+passed (56 cases), plus the new zoomed-slider case and affected follow-up checks.
+Both getting-started guides now cover the
+export configuration, storage mount, source budget and verification steps.
 
 ## Direct date/time navigation
 

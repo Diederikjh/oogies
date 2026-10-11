@@ -7,6 +7,23 @@ from pathlib import Path
 from sdk_adapters import DEFAULT_SDK_ID, get_sdk_adapter
 
 DEFAULT_CONFIG_FILE = Path(__file__).resolve().parents[1] / ".local/nvr-config.json"
+EXPORT_DEFAULTS = dict(max_duration_seconds=600, max_waiting_jobs=3, retention_hours=24,
+                       storage_bytes=1024 ** 3, max_file_bytes=256 * 1024 ** 2)
+
+
+def export_limits(value=None):
+    if value is None: value = {}
+    if not isinstance(value, dict) or set(value) - EXPORT_DEFAULTS.keys():
+        raise ValueError("invalid export configuration")
+    result = {**EXPORT_DEFAULTS, **value}
+    for name, lower, upper in (("max_duration_seconds", 1, 600), ("max_waiting_jobs", 1, 20),
+                               ("retention_hours", 1, 168), ("storage_bytes", 1024 ** 2, 16 * 1024 ** 3),
+                               ("max_file_bytes", 1024 ** 2, 1024 ** 3)):
+        if type(result[name]) is not int or not lower <= result[name] <= upper:
+            raise ValueError(f"invalid exports.{name}")
+    if result["storage_bytes"] < 2 * result["max_file_bytes"]:
+        raise ValueError("export storage must allow a clip plus finalization headroom")
+    return result
 
 
 def load_config(path=None):
@@ -15,12 +32,13 @@ def load_config(path=None):
         value = json.loads(source.read_text())
     except json.JSONDecodeError:
         raise ValueError("recorder configuration must contain valid JSON") from None
-    allowed = {"host", "sdk_port", "timezone", "sdk_profile", "max_live_sources", "lease_seconds", "camera_overrides"}
+    allowed = {"host", "sdk_port", "timezone", "sdk_profile", "max_live_sources", "lease_seconds", "camera_overrides", "exports"}
     if not isinstance(value, dict) or set(value) - allowed:
         raise ValueError("invalid or unknown recorder configuration fields")
     config = dict(sdk_port=8000, timezone="Africa/Johannesburg", sdk_profile=DEFAULT_SDK_ID,
                   max_live_sources=8, lease_seconds=90, camera_overrides={})
     config.update(value)
+    config["exports"] = export_limits(config.get("exports"))
     if not isinstance(config.get("host"), str):
         raise ValueError("recorder IP is required")
     ipaddress.ip_address(config["host"])

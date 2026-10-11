@@ -29,6 +29,7 @@ class GridWorker:
         self.history_results = {}
         self.history_lock = threading.Lock()
         self.playbacks = {}
+        self.exports = {}
         self.zone = ZoneInfo(config.get("timezone", "Africa/Johannesburg"))
 
     def ensure_ready(self):
@@ -92,6 +93,11 @@ class GridWorker:
     def _event(self, event):
         with self.condition:
             kind = event["type"]
+            if kind == "export":
+                if event["id"] in self.exports:
+                    self.exports[event["id"]] = event
+                self.condition.notify_all()
+                return
             if kind == "playback_rate":
                 source = self.playbacks.get(event["id"])
                 if source and source["generation"] == event["generation"] and source["requested_rate"] == event["requested_rate"]:
@@ -224,6 +230,32 @@ class GridWorker:
             level = {0.5:-1, 1:0, 2:1, 4:2}[rate]
             self._command(f"playback-start {self.cameras[camera_id]['channel']} {identifier} {generation} {begin} {end} {int(paused)} {level}")
             self.condition.notify_all()
+
+    def start_export(self, identifier, camera_id, begin, end):
+        with self.condition:
+            self.exports[identifier] = None
+            self._command(f"export-start {self.cameras[camera_id]['channel']} {identifier} {begin} {end}")
+
+    def stop_export(self, identifier):
+        self._command(f"export-stop 0 {identifier}")
+
+    def export_error(self, identifier):
+        with self.condition:
+            event = self.exports.get(identifier)
+            if self.state != "ready" or self.shutdown:
+                return "Recorder connection ended."
+            if event is not None and event.get("error"):
+                return f"Capture ended (SDK/decoder code {event.get('error', 0)})."
+            return None
+
+    def export_complete(self, identifier):
+        with self.condition:
+            event = self.exports.get(identifier)
+            return event is not None and not event.get("error")
+
+    def forget_export(self, identifier):
+        with self.condition:
+            self.exports.pop(identifier, None)
 
     def set_playback_rate(self, identifier, rate):
         with self.condition:

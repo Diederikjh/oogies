@@ -4,12 +4,13 @@ Status: owner configuration, discovery and the initial live grid are implemented
 and verified on the current recorder. The first History timeline slice is now
 implemented, with selected-time historical playback and pause/resume/seek. The
 [API document](backend-api-plan.md) distinguishes implemented viewing endpoints
-from export proposals; [live-grid.md](live-grid.md) records observed live capacity.
+and export endpoints; [live-grid.md](live-grid.md) records observed live capacity.
 The [History view plan](history-view-plan.md) expands milestones 3–4 into SDK
 feasibility, fixture-tested UI, real metadata and interactive playback stages.
-Date/time navigation is now committed as `bd0b069`. The next proposed increment
-is [clip selection, queued exports and ±10/30-second seeking](clip-export-plan.md),
-awaiting owner review before implementation.
+Date/time navigation is committed as `bd0b069`; the export plan was approved and
+committed as `06c077d` before work. Clip selection, queued MP4 exports, direct
+frame PNG downloads and ±10/30-second seeking are now implemented. See
+[clip exports](clip-exports.md) for limits, precision and verification.
 
 Milestone 1's seven-camera live checks pass; one live preview plus historical
 playback/control checks now coexist through one login. A fully fresh remote/LFS
@@ -149,4 +150,4 @@ Current Linux amd64 support and device-specific
 limitations remain explicit until broader compatibility is verified.
 
 See the [API document](backend-api-plan.md) for current live/timeline calls and
-implemented playback flows and future exports. Both setup guides describe History.
+implemented playback and export flows. Both setup guides describe History and exports.

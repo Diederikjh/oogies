@@ -76,6 +76,17 @@ preserved through seeking and Pause/Resume. One historical viewer slot is curren
 admitted; Stop releases it. The installing user's source budget must have room
 for live plus playback.
 
+In History, use **Back/Forward 10s/30s** for finer seeking. **Download current
+frame** saves a PNG directly, with your chosen picture proportions.
+Use **Mark start**, **Mark end**, then **Queue export** to save a clip of up to
+ten minutes. Setting both marks zooms the timeline around them. Drag either
+Start/End handle to adjust the range; it cannot cross the other handle or exceed
+the limit. Arrow keys also work. **Full range** restores the complete timeline.
+The **Exports** tab lists shared
+jobs and offers cancellation, MP4 download and deletion. Jobs keep running when
+you close the browser; downloads are retained for 24 hours by default. An active
+export needs one additional recorder stream slot. See [clip downloads](docs/clip-exports.md).
+
 To stop the service:
 
 ```sh

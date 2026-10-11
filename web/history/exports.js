@@ -1,0 +1,54 @@
+import {api} from "/shared/api.js";
+
+export class ExportsView {
+  constructor(panel) {
+    this.panel = panel; this.list = panel.querySelector("#export-jobs");
+    this.message = panel.querySelector("#exports-message"); this.generation = 0;
+    panel.querySelector("#exports-refresh").addEventListener("click", () => this.poll());
+  }
+  show() { this.active = true; this.poll(); clearInterval(this.timer); this.timer = setInterval(() => this.poll(), 1000); }
+  hide() { this.active = false; ++this.generation; clearInterval(this.timer); }
+  async poll() {
+    if (!this.active || this.loading) return;
+    const generation = this.generation; this.loading = true;
+    try {
+      const data = await api("/api/exports");
+      if (!this.active || generation !== this.generation) return;
+      this.panel.querySelector("#exports-limits").textContent = `Clips up to ${data.limits.max_duration_seconds} seconds · One export at a time · Downloads kept for ${data.limits.retention_hours} hours`;
+      const existing = new Map([...this.list.children].map(row => [row.dataset.jobId, row]));
+      for (const job of data.jobs) {
+        let row = existing.get(job.id); existing.delete(job.id);
+        if (!row) {
+          row = document.createElement("li"); row.className = "export-job"; row.dataset.jobId = job.id;
+          const title = document.createElement("h2"), range = document.createElement("p"), status = document.createElement("p"), actions = document.createElement("div");
+          range.className = "subtitle"; status.setAttribute("role", "status"); actions.className = "actions";
+          row.append(title, range, status, actions); this.list.append(row);
+        }
+        row.dataset.state = job.state;
+        const [title, range, status, actions] = row.children;
+        title.textContent = job.camera_name;
+        const time = new Intl.DateTimeFormat(undefined, {timeZone:job.timezone, dateStyle:"medium", timeStyle:"medium"});
+        range.textContent = `${time.format(new Date(job.from))} – ${time.format(new Date(job.to))} · ${job.timezone} · ${job.duration_seconds} seconds · ${job.aspect_ratio}`;
+        status.textContent = job.error || job.waiting_reason || (job.state === "running" ? `Exporting · ${Math.round(job.progress * 100)}%` : job.state === "ready" ? `Ready · ${(job.bytes / 1024 / 1024).toFixed(1)} MiB · Expires ${new Date(job.expires_at).toLocaleString()}` : job.state);
+        if (actions.dataset.state !== job.state) {
+          actions.replaceChildren(); actions.dataset.state = job.state;
+          if (job.state === "ready") {
+            const link = document.createElement("a"); link.className = "export-download"; link.textContent = "Download MP4";
+            link.href = job.media.url; link.download = job.media.filename; actions.append(link);
+          }
+          if (["queued", "running", "ready"].includes(job.state)) {
+            const button = document.createElement("button"); button.textContent = job.state === "ready" ? "Delete clip" : "Cancel export";
+            button.addEventListener("click", async () => {
+              button.disabled = true;
+              try { await api(`/api/exports/${job.id}`, "DELETE"); await this.poll(); }
+              catch (error) { this.message.textContent = error.message; button.disabled = false; }
+            }); actions.append(button);
+          }
+        }
+      }
+      for (const row of existing.values()) row.remove();
+      this.message.textContent = data.jobs.length ? "" : "No exports yet. Mark a start and end in History to queue a clip.";
+    } catch (error) { if (generation === this.generation) this.message.textContent = error.message; }
+    finally { this.loading = false; }
+  }
+}

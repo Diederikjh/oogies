@@ -287,7 +287,7 @@ sources when switching this page between Live and History.
 
 ## Clip export — milestone 4
 
-Still proposed. The owner-reviewable
+Now implemented; see [the implementation and evidence](clip-exports.md). The approved
 [clip export and fine-seeking plan](clip-export-plan.md) specifies selection,
 job states, SDK capture verification, initial limits and test coverage.
 That plan also adds Download current frame to History as a direct browser PNG
@@ -296,7 +296,7 @@ backend endpoint or export job. Only multi-frame video exports use these routes.
 
 | Method | Path | Meaning |
 | --- | --- | --- |
-| POST | `/api/exports` | Request a short clip using `camera_id`, `from`, `to` |
+| POST | `/api/exports` | Request a short clip using `camera_id`, `from`, `to`, `aspect_ratio`; optional Idempotency-Key |
 | GET | `/api/exports` | Bounded shared queue/recent jobs and configured limits |
 | GET | `/api/exports/{id}` | queued/running/ready/failed/cancelled/expired status and download URL when ready |
 | DELETE | `/api/exports/{id}` | Cancel pending work or remove the finished artifact |
@@ -330,8 +330,7 @@ ready result points only to its clip, never a workspace path or directory.
 
 ## Frontend files along functional boundaries
 
-Live, history/timeline and playback-control modules follow these boundaries;
-export modules remain planned:
+Live, history/timeline, playback controls and export modules follow these boundaries:
 
 ```text
 web/
@@ -351,7 +350,9 @@ web/
     history-view.js              camera/date/range selection and query lifecycle
     timeline.js                  recording/motion bands and timeline interaction
     playback-controls.js         playback session, seek, pause and speed
-    exports.js                   clip-export requests and job state
+    clip-selection.js            browser marks, immutable export requests
+    frame-download.js            frozen displayed-frame PNG conversion
+    exports.js                   shared job polling and download/cancel/delete
     history.css                  historical-view styling
 ```
 

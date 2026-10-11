@@ -344,6 +344,28 @@ can be 10–300; default 90 with frontend renewal every 30 seconds. The timezone
 sets the recorder's clock context for historical range conversion;
 live OSD timestamps are unchanged.
 
+Optional `exports` settings are a nested object in that same private JSON:
+
+```json
+{
+  "max_duration_seconds": 600,
+  "max_waiting_jobs": 3,
+  "retention_hours": 24,
+  "storage_bytes": 1073741824,
+  "max_file_bytes": 268435456
+}
+```
+
+Omitting `exports` keeps these defaults; there is one active worker. Duration
+may be 1–600 seconds, waiting jobs 1–20, retention 1–168 hours, file cap 1 MiB–1 GiB,
+and storage 1 MiB–16 GiB. Storage must allow at least twice the file cap for
+finalization headroom. Unknown fields and noninteger values are rejected.
+Retain the owner's existing settings when adding this optional object.
+The launcher creates private `.local/exports/` and mounts it writable at `/exports`;
+keep it across restarts. Its manifest and ready clips are durable. Confirm free
+disk space for the configured quota in addition to Docker images and SDK files.
+FFmpeg and FFprobe are already in the runtime; no host codec installation is needed.
+
 Optional `camera_overrides` keys are SDK channel numbers, for example:
 `"1": {"name":"Driveway", "aspect_ratio":"16:9"}` or
 `"4": {"enabled":false}`. Names and online state otherwise come from discovery.
@@ -462,8 +484,45 @@ is not a measured hardware guarantee. A full budget returns a capacity error
 and preserves existing viewers. Resume/seek reopen only that playback context
 at the confirmed/selected time; native combined pause was not usable on the
 verified profile. Speed changes adjust that viewer's file-mode decoder in place;
-audio and clip export are not implemented. The bounded manual speed check is
+audio is not implemented. The bounded manual speed check is
 `python3 tools/check_playback_rates.py` through the already-running service.
+
+Verify ±10/30-second steps preserve pause/speed and clamp at the timeline window.
+Download a paused current frame: it should be a PNG with the selected camera,
+recorded time and corrected proportions, without an export job. Mark a start/end
+while viewing; verify independent Start/End flags and shaded selection. Reject
+reversed/zero/over-limit ranges. Queue a short clip and verify viewing continues.
+Setting both marks should zoom around them, even when initially overlong. Verify
+mouse/touch dragging and arrow-key editing of both handles. Edits must clamp to
+at least one second, stay below the configured maximum, and leave video/speed
+unchanged. Full range must restore the queried window without an SDK request.
+An explicit lower export limit in private configuration still takes precedence
+over the new ten-minute default; change that value only when the owner wants it.
+Open Exports, check progress, download its MP4 and verify moving video and aspect.
+Cancel another job and verify its partial file and reserved stream slot are
+released. A full recorder budget waits without evicting existing streams.
+
+Verify `.local/exports` mode 0700, `jobs.json` mode 0600, and that a ready download
+survives a service restart. Expiry/deletion blocks new downloads and defers
+unlinking any download already open. Closing a browser releases only viewing
+leases; export jobs continue without a browser heartbeat. An active export
+reserves one additional source slot. Current real evidence covers one live,
+one playback and one export together; full-grid coexistence is not a measured
+hardware guarantee. Clip bounds are second precision, not frame-exact.
+
+An explicit recorder validation ladder is:
+
+```sh
+python3 tools/check_clip_exports.py --seconds 1 60 300 --with-views
+```
+
+This contacts the configured recorder, takes roughly six minutes, and saves
+private clips/reports under `.local/export-checks/`. Run only as an authorized
+recording check; routine CI uses synthetic media. See [clip exports](docs/clip-exports.md).
+For the ten-minute boundary, use `--seconds 600 --with-views`; this takes about
+ten minutes plus preparation/finalization. Export bounds are reported at second
+precision; final duration must be within one second and encoded frame count
+must match captured frames, with independent recorded-coverage/gap validation.
 
 Stop with:
 

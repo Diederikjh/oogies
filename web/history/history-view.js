@@ -2,9 +2,10 @@ import {api} from "/shared/api.js";
 import {Timeline} from "/history/timeline.js";
 import {PlaybackControls} from "/history/playback-controls.js";
 import {DateTimeNavigation} from "/history/date-time-navigation.js";
+import {ClipSelection} from "/history/clip-selection.js";
 
 export class HistoryView {
-  constructor(panel, onCameras = () => {}) {
+  constructor(panel, onCameras = () => {}, onExports = () => {}) {
     this.panel = panel;
     this.onCameras = onCameras;
     this.camera = panel.querySelector("#history-camera");
@@ -16,6 +17,8 @@ export class HistoryView {
         this.timeline.select(position, false);
     });
     this.timeline = new Timeline(panel, position => this.play(position));
+    this.clip = new ClipSelection(panel, this.player, this.timeline, onExports);
+    this.player.onSnapshot = () => this.clip.paint();
     this.dateNavigation = new DateTimeNavigation(panel, localTime => {
       const rate = this.player.session?.camera_id === this.camera.value ? this.player.session.requested_rate : 1;
       this.load(false, {localTime, rate});
@@ -80,6 +83,7 @@ export class HistoryView {
     this.abort?.abort(); this.abort = new AbortController();
     const signal = this.abort.signal;
     const cameraId = this.camera.value;
+    this.clip.cameraChanged(this.cameras?.find(item => item.id === cameraId));
     let query;
     if (dateJob) {
       query = new URLSearchParams({local_time:dateJob.localTime, hours:this.hours.value});

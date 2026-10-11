@@ -7,6 +7,16 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
+The export cases use the production job manager, HTTP routes, persistence and
+FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames
+through the same bounded pipe protocol. Cases cover local marks/shading, paused
+10/30-second steps and window limits, PNG colors and all aspect modes, a frozen
+download across camera/settings changes, mobile controls, queue/cancel/download/
+delete, per-file failure/retry, and preserving another live tab while an export
+waits for a slot. Host tests cover ranges, idempotency, FIFO/admission, restart,
+retention, storage limits, active-download deletion, and HTTP byte ranges/410.
+Real-recorder timing/coexistence evidence is separate in [clip exports](clip-exports.md).
+
 ## Run
 
 Docker must work as the current user without sudo. Build the existing browser

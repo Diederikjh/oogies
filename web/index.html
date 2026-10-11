@@ -12,6 +12,7 @@
       </div><span id="grid-summary" class="badge">Connecting…</span></header>
     <nav aria-label="Viewing mode"><button id="live-tab" class="selected" aria-pressed="true">Live overview</button>
       <button id="history-tab" aria-pressed="false">History</button>
+      <button id="exports-tab" aria-pressed="false">Exports</button>
       <button id="settings-open" aria-haspopup="dialog">Settings</button></nav>
     <section id="live-panel" aria-label="Live camera overview">
       <div class="toolbar"><p id="message" role="status" aria-live="polite">Discovering cameras…</p>
@@ -29,6 +30,12 @@
           <button type="button" data-rate="4" aria-pressed="false" disabled>4×</button>
         </div>
         <p id="history-speed-status" class="subtitle" role="status" aria-live="polite"></p>
+        <div id="history-steps" class="history-speeds" role="group" aria-label="Step through recording">
+          <button type="button" data-seconds="-30" disabled>Back 30s</button><button type="button" data-seconds="-10" disabled>Back 10s</button>
+          <button type="button" data-seconds="10" disabled>Forward 10s</button><button type="button" data-seconds="30" disabled>Forward 30s</button>
+          <button id="history-frame-download" type="button" disabled>Download current frame</button>
+        </div>
+        <p id="history-frame-message" class="subtitle" role="status" aria-live="polite"></p>
       </div>
       <div class="history-card">
         <div class="history-controls">
@@ -43,6 +50,7 @@
         </form>
         <p id="history-date-message" class="subtitle" role="status" aria-live="polite"></p>
         <h2>Camera timeline</h2><p class="subtitle" id="history-range"></p>
+        <div class="history-speeds" role="group" aria-label="Timeline zoom"><button id="history-zoom-clip" disabled>Zoom to clip</button><button id="history-zoom-out" disabled>Zoom out</button><button id="history-full-range" disabled>Full range</button></div>
         <p id="history-message" role="status" aria-live="polite"></p>
         <div class="timeline-rows">
           <span class="timeline-label">Recordings</span><div id="history-recordings" class="timeline-track" role="group" aria-label="Recording timeline"></div>
@@ -51,10 +59,13 @@
         <div id="history-axis" class="timeline-axis"></div>
         <div class="history-statuses" aria-live="polite"><p id="history-recordings-status"></p><p id="history-motion-status"></p></div>
         <label class="history-position">Selected time · <output id="history-selected">Choose a time</output><input id="history-position" type="range" min="0" step="1" value="0" disabled aria-label="Selected history time"></label>
+        <div class="history-speeds" role="group" aria-label="Clip selection"><button id="clip-start" disabled>Mark start</button><button id="clip-end" disabled>Mark end</button><button id="clip-clear">Clear marks</button><button id="clip-queue" disabled>Queue export</button><button id="clip-view-exports">View exports</button></div>
+        <p id="clip-range" class="subtitle"></p><p id="clip-duration" class="subtitle"></p><p id="clip-aspect" class="subtitle"></p><p id="clip-message" role="status" aria-live="polite"></p>
         <div class="history-event-controls"><button id="history-previous" disabled>Previous motion</button><button id="history-next" disabled>Next motion</button></div>
         <ul id="history-events" class="history-events" aria-label="Motion intervals"></ul>
       </div>
     </section>
+    <section id="exports-panel" aria-label="Export jobs" hidden><div class="toolbar"><h2>Export jobs</h2><button id="exports-refresh">Refresh</button></div><p id="exports-limits" class="subtitle"></p><p id="exports-message" role="status" aria-live="polite"></p><ul id="export-jobs" class="export-jobs"></ul></section>
     <footer><span class="dot"></span>Local camera viewer<span id="view-note">Video only · Overview quality</span></footer>
   </main>
   <dialog id="display-settings" aria-labelledby="settings-title">

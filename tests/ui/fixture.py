@@ -4,6 +4,9 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
+import os
+import json
+import select
 import threading
 import time
 from types import SimpleNamespace
@@ -37,6 +40,12 @@ class SyntheticMedia:
                      "-frames:v", "16", "-threads", "1", str(self.directory / "frame-%02d.jpg"))
         self.frames = {f"camera-{channel}": [(self.directory / f"frame-{(channel-1)*2+phase+1:02d}.jpg").read_bytes()
                         for phase in range(2)] for channel in range(1, 9)}
+        raw = self.directory / "frames.yv12"
+        self._ffmpeg("-framerate", "5", "-i", str(self.directory / "source-%02d.ppm"), "-frames:v", "16",
+                     "-vf", "swapuv", "-pix_fmt", "yuv420p", "-threads", "1", "-f", "rawvideo", str(raw))
+        data = raw.read_bytes(); size = 352 * 288 * 3 // 2
+        self.raw_frames = {f"camera-{channel}":[data[((channel-1)*2+phase)*size:((channel-1)*2+phase+1)*size]
+            for phase in range(2)] for channel in range(1,9)}
         self.recording = self.directory / "recording.mp4"
         self._ffmpeg("-framerate", "5", "-i", str(self.directory / "source-%02d.ppm"),
                      "-t", "2", "-threads", "1", "-pix_fmt", "yuv420p", "-c:v", "libx264",
@@ -48,9 +57,9 @@ class SyntheticMedia:
 
 
 class FakeRecorderWorker(GridWorker):
-    def __init__(self, media, *, failure=False, delayed=False, failed_camera=None, offline_camera=None):
+    def __init__(self, media, *, failure=False, delayed=False, failed_camera=None, offline_camera=None, exports_config=None):
         self.cache_now = 0
-        super().__init__(None, SimpleNamespace(sdk_id="ui-fixture"), {"camera_overrides": {}},
+        super().__init__(None, SimpleNamespace(sdk_id="ui-fixture"), {"camera_overrides": {}, "exports":exports_config or {}},
                          media.directory, clock=lambda:self.cache_now)
         self.media = media
         self.condition = threading.Condition(threading.RLock())
@@ -68,6 +77,7 @@ class FakeRecorderWorker(GridWorker):
         self.timeline_gate = threading.Event(); self.timeline_gate.set()
         self.playback_commands = []
         self.rate_failure = False
+        self.export_commands = []; self.export_stops = {}; self.export_gate = threading.Event(); self.export_gate.set()
         self.discovery_gate = threading.Event()
         if not delayed:
             self.discovery_gate.set()
@@ -156,6 +166,38 @@ class FakeRecorderWorker(GridWorker):
         if key == self.failed_camera:
             self.sources[key].update(state="error", error="Simulated camera stream failure.")
 
+    def start_export(self, identifier, camera_id, begin, end):
+        self.export_commands.append((identifier, camera_id, begin, end)); self.exports[identifier] = None
+        stop = threading.Event(); self.export_stops[identifier] = stop
+        def send():
+            fd = os.open(self.export_directory / identifier / "frames.pipe", os.O_WRONLY | os.O_NONBLOCK)
+            start, finish = recorder_utc(begin, self.zone), recorder_utc(end, self.zone)
+            try:
+                index = -2
+                while not stop.is_set():
+                    if not self.export_gate.wait(.1): continue
+                    position = start + timedelta(seconds=index / 5)
+                    frame = self.media.raw_frames.get(camera_id, self.media.raw_frames["camera-1"])[index % 2]
+                    header = dict(size=len(frame), width=352, height=288, fps=5, stamp=(index + 2)*200,
+                                  position=position.astimezone(self.zone).isoformat(timespec="seconds").split("+")[0],
+                                  ms=position.microsecond // 1000)
+                    packet = memoryview(json.dumps(header).encode() + b"\n" + frame)
+                    while packet and not stop.is_set():
+                        if not select.select([], [fd], [], .1)[1]: continue
+                        try: size = os.write(fd, packet)
+                        except BlockingIOError: continue
+                        packet = packet[size:]
+                    if position >= finish: break
+                    index += 1
+                    stop.wait(.04)
+            except BrokenPipeError: pass
+            finally:
+                os.close(fd); self._event(dict(type="export", id=identifier, error=0))
+        threading.Thread(target=send, daemon=True).start()
+
+    def stop_export(self, identifier):
+        if identifier in self.export_stops: self.export_stops[identifier].set()
+
     def stop_source(self, key):
         self.stopped[key] += 1
         self.sources[key].update(state="stopped", frame=None)
@@ -194,6 +236,8 @@ class FakeRecorderWorker(GridWorker):
         self.shutdown = True
         self.discovery_gate.set()
         self.timeline_gate.set()
+        self.export_gate.set()
+        for stop in self.export_stops.values(): stop.set()
         self.closed.set()
         self.thread.join(timeout=2)
 
@@ -205,6 +249,7 @@ class ViewerFixture:
         self.server = create_server(self.worker, self.sessions, address=("127.0.0.1", 0), web="/web",
             recording=media.recording if recording else media.directory / "missing.mp4",
             playback=PlaybackSessions(self.worker, self.sessions, limit=playback_limit, lease_seconds=lease))
+        self.worker.export_directory = self.server.exports.directory
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

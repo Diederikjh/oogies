@@ -1,6 +1,9 @@
 """Browser acceptance tests against the real service and a synthetic recorder."""
 
 import hashlib
+import json
+import struct
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
@@ -27,6 +30,8 @@ class ViewerUITests(unittest.TestCase):
         "test_history_playback_preserves_another_live_tab": {"limit":9},
         "test_history_playback_positions_are_independent_between_tabs": {"playback_limit":2},
         "test_history_settings_work_before_live_discovery_finishes": {"delayed":True},
+        "test_history_exports_preserve_another_live_tab": {"limit":9},
+        "test_history_clip_handles_respect_configured_limit": {"exports_config":{"max_duration_seconds":120}},
     }
 
     @classmethod
@@ -53,6 +58,10 @@ class ViewerUITests(unittest.TestCase):
                      "--autoplay-policy=no-user-gesture-required", "--user-data-dir=" + self.profile.name):
             options.add_argument(flag)
         options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+        self.downloads = Path(self.profile.name) / "downloads"
+        self.downloads.mkdir()
+        options.add_experimental_option("prefs", {"download.default_directory":str(self.downloads),
+                                                   "download.prompt_for_download":False})
         self.driver = webdriver.Chrome(options=options)
         self.addCleanup(self.driver.quit)
         self.wait = WebDriverWait(self.driver, 12)
@@ -455,6 +464,295 @@ class ViewerUITests(unittest.TestCase):
     def history_playing(self):
         self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "playing" and
             self.driver.execute_script("return document.getElementById('history-image').naturalWidth > 0 && !document.getElementById('history-image').hidden"))
+
+    def paused_history(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-events button")[0].click(); self.history_playing()
+        self.wait.until(lambda _:self.element("#history-pause").is_enabled())
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
+
+    def test_history_clip_marks_steps_and_camera_reset(self):
+        self.paused_history()
+        before = len(self.fixture.worker.playback_commands)
+        self.element("#clip-start").click(); start = self.element("#clip-range").text
+        self.assertEqual(len(self.fixture.worker.playback_commands), before)
+        self.element('#history-steps button[data-seconds="30"]').click()
+        self.wait.until(lambda _:next(iter(self.fixture.worker.playbacks.values()))["generation"] == 2 and self.element("#clip-end").is_enabled())
+        self.element("#clip-end").click()
+        self.assertEqual(self.element("#clip-duration").text, "30 seconds")
+        self.assertIn(start.split(" · End:")[0], self.element("#clip-range").text)
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, ".clip-marker")), 4)
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, ".clip-shade")), 2)
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"], "paused")
+        self.element("#live-tab").click(); self.wait_live(); self.open_history()
+        self.assertEqual(self.element("#clip-duration").text, "30 seconds")
+        Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        self.assertIn("Start: Not set · End: Not set", self.element("#clip-range").text)
+        self.assertFalse(self.element("#clip-queue").is_enabled())
+
+    def test_history_frame_download_is_png_with_saved_aspect_and_no_job(self):
+        self.paused_history()
+        before = len(self.fixture.worker.playback_commands)
+        self.element("#history-frame-download").click()
+        self.wait.until(lambda _:list(self.downloads.glob("*.png")))
+        file = next(self.downloads.glob("*.png")); data = file.read_bytes()
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+        width, height = struct.unpack(">II",data[16:24])
+        self.assertAlmostEqual(width/height,16/9,delta=.01)
+        self.assertIn("oogies-Driveway_", file.name); self.assertRegex(file.name,r"Z_f[0-9]+\.png$")
+        self.assertEqual(self.fixture.server.exports.list()["jobs"], [])
+        self.assertEqual(len(self.fixture.worker.playback_commands), before)
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"], "paused")
+        decoded = subprocess.run(["ffmpeg","-v","error","-i",str(file),"-frames:v","1","-f","rawvideo","-pix_fmt","rgb24","-threads","1","pipe:1"],capture_output=True,check=True,timeout=10).stdout
+        self.assertTrue(all(abs(a-b)<12 for a,b in zip(decoded[:3],COLORS[0])),decoded[:3])
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.assertFalse(self.element("#history-frame-download").is_enabled())
+        self.wait.until(lambda _:self.element("#history-frame-download").is_enabled())
+        self.element("#history-pause").click(); self.history_playing()
+        commands = len(self.fixture.worker.playback_commands)
+        self.element("#history-frame-download").click()
+        self.wait.until(lambda _:len(list(self.downloads.glob("*.png"))) == 2)
+        self.assertEqual(len(self.fixture.worker.playback_commands),commands)
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"],"playing")
+        self.assertEqual(self.fixture.server.exports.list()["jobs"],[])
+
+    def test_history_frame_download_freezes_camera_and_aspect_during_conversion(self):
+        self.paused_history()
+        self.driver.execute_script("""
+          const original=HTMLCanvasElement.prototype.toBlob;
+          HTMLCanvasElement.prototype.toBlob=function(callback,type){
+            window.finishFrame=()=>original.call(this,callback,type);
+          };
+        """)
+        self.element("#history-frame-download").click()
+        self.wait.until(lambda _:self.driver.execute_script("return typeof window.finishFrame==='function'"))
+        self.open_settings(); self.aspect("4:3"); self.close_settings()
+        Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        self.driver.execute_script("window.finishFrame()")
+        self.wait.until(lambda _:list(self.downloads.glob("*.png")))
+        file = next(self.downloads.glob("*.png")); width,height=struct.unpack(">II",file.read_bytes()[16:24])
+        self.assertAlmostEqual(width/height,16/9,delta=.01); self.assertIn("oogies-Driveway_",file.name)
+        self.assertEqual(self.fixture.worker.export_commands,[])
+
+    def test_history_frame_download_original_and_standard_proportions(self):
+        self.paused_history()
+        for index, (aspect, ratio) in enumerate((("original",352/288),("4:3",4/3))):
+            self.open_settings(); self.aspect(aspect); self.close_settings()
+            self.element("#history-frame-download").click()
+            self.wait.until(lambda _:len(list(self.downloads.glob("*.png"))) > index)
+            file=max(self.downloads.glob("*.png"),key=lambda path:path.stat().st_mtime)
+            width,height=struct.unpack(">II",file.read_bytes()[16:24])
+            self.assertAlmostEqual(width/height,ratio,delta=.01)
+            if aspect=="original": self.assertEqual((width,height),(352,288))
+
+    def test_history_frame_download_sanitizes_camera_names(self):
+        self.paused_history()
+        Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        self.element("#history-frame-download").click()
+        self.wait.until(lambda _:list(self.downloads.glob("*.png")))
+        filename=next(self.downloads.glob("*.png")).name
+        self.assertTrue(filename.startswith("oogies-Front -porch- & gate_"),filename)
+        self.assertNotRegex(filename,r'[<>:"/\\|?*\x00-\x1f]')
+        cases = [" Garage:/\\<>\"|?*\nDoor. ", "../..", "", "CON", "NUL.txt", "Café tuin", "e\u0301", "🎥"*100]
+        result=self.driver.execute_async_script("""
+            const [names,done]=arguments;
+            import('/history/frame-download.js').then(module=>done(names.map(module.safeCameraName)));
+        """,cases)
+        self.assertEqual(result[:7],["Garage-Door","Camera","Camera","CON","NUL.txt","Café tuin","é"])
+        self.assertLessEqual(len(result[7].encode("utf-8")),128)
+        for name in result: self.assertNotRegex(name,r'[<>:"/\\|?*\x00-\x1f]')
+
+    def test_history_clip_bounds_and_mobile_controls(self):
+        self.paused_history(); self.driver.set_window_size(390,844)
+        self.element("#clip-start").click(); self.element("#clip-end").click()
+        self.assertFalse(self.element("#clip-queue").is_enabled())
+        self.element("#history-full-range").click()
+        # Move the paused preview beyond ten minutes without changing marks.
+        self.driver.execute_script("const s=document.getElementById('history-position');s.value=Number(s.value)+601;s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.assertIn("up to 600 seconds",self.element("#clip-duration").text)
+        self.assertFalse(self.element("#clip-queue").is_enabled())
+        self.assertEqual(self.fixture.worker.export_commands,[])
+        self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth<=innerWidth"))
+
+    def clip_seconds(self):
+        start=self.element('#history-recordings .clip-marker[data-bound="from"]')
+        end=self.element('#history-recordings .clip-marker[data-bound="to"]')
+        return float(end.get_attribute("aria-valuenow"))-float(start.get_attribute("aria-valuenow"))
+
+    def mark_clip(self, seconds=30):
+        self.paused_history(); self.element("#clip-start").click()
+        self.driver.execute_script("const s=document.getElementById('history-position');s.value=Number(s.value)+arguments[0];s.dispatchEvent(new Event('change',{bubbles:true}))",seconds)
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+
+    def drag_clip(self, name, direction):
+        flag=self.element(f'#history-recordings .clip-marker[data-bound="{name}"]')
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'instant'})",flag)
+        offset=self.driver.execute_script("const f=arguments[0].getBoundingClientRect(),t=arguments[0].parentElement.getBoundingClientRect();return (arguments[1]<0?t.left+2:t.right-2)-(f.left+f.width/2)",flag,direction)
+        ActionChains(self.driver).move_to_element(flag).click_and_hold().move_by_offset(int(offset),0).release().perform()
+
+    def test_history_clip_drag_clamps_duration_and_order_without_seeking(self):
+        self.mark_clip()
+        self.assertIn("Zoomed",self.element("#history-range").text)
+        window=lambda:float(self.element("#history-recordings").get_attribute("data-view-to"))-float(self.element("#history-recordings").get_attribute("data-view-from"))
+        self.assertLess(window(),3*3600000)
+        for _ in range(6): self.element("#history-zoom-out").click()
+        before=len(self.fixture.worker.playback_commands)
+        generation=next(iter(self.fixture.worker.playbacks.values()))["generation"]
+        selected=self.element("#history-position").get_attribute("value")
+        frozen=(self.element("#history-recordings").get_attribute("data-view-from"),self.element("#history-recordings").get_attribute("data-view-to"))
+        for name,direction,seconds in (("to",1,600),("from",1,1),("from",-1,600),("to",-1,1)):
+            self.drag_clip(name,direction); self.assertEqual(self.clip_seconds(),seconds)
+        self.assertEqual(len(self.fixture.worker.playback_commands),before)
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["generation"],generation)
+        self.assertEqual(self.element("#history-position").get_attribute("value"),selected)
+        self.assertEqual(frozen,(self.element("#history-recordings").get_attribute("data-view-from"),self.element("#history-recordings").get_attribute("data-view-to")))
+        self.element("#history-full-range").click(); self.assertEqual(window(),3*3600000)
+        self.assertNotIn("Zoomed",self.element("#history-range").text)
+
+    def test_history_overlong_clip_zooms_and_can_be_repaired_with_keyboard(self):
+        self.mark_clip(1200)
+        self.assertEqual(self.clip_seconds(),1200); self.assertFalse(self.element("#clip-queue").is_enabled())
+        self.assertIn("Zoomed",self.element("#history-range").text)
+        commands=len(self.fixture.worker.playback_commands)
+        self.element('#history-recordings .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.assertEqual(self.clip_seconds(),600); self.assertTrue(self.element("#clip-queue").is_enabled())
+        self.element('#history-recordings .clip-marker[data-bound="from"]').send_keys(Keys.END)
+        self.assertEqual(self.clip_seconds(),1)
+        self.element('#history-recordings .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.assertEqual(self.clip_seconds(),1)
+        self.element('#history-recordings .clip-marker[data-bound="from"]').send_keys(Keys.HOME)
+        self.assertEqual(self.clip_seconds(),600)
+        self.element("#clip-start").click()  # Last displayed frame is after the edited end.
+        self.assertLess(self.clip_seconds(),0); self.assertFalse(self.element("#clip-queue").is_enabled())
+        self.element('#history-recordings .clip-marker[data-bound="from"]').send_keys(Keys.ARROW_LEFT)
+        self.assertEqual(self.clip_seconds(),1); self.assertTrue(self.element("#clip-queue").is_enabled())
+        self.assertEqual(len(self.fixture.worker.playback_commands),commands)
+
+    def test_history_clip_handles_respect_configured_limit(self):
+        self.mark_clip(180)
+        self.assertIn("up to 120 seconds",self.element("#clip-duration").text)
+        self.element('#history-motion .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.assertEqual(self.clip_seconds(),120)
+        self.assertTrue(self.element("#clip-queue").is_enabled())
+
+    def test_history_clip_touch_drag_survives_metadata_refresh(self):
+        self.mark_clip(); self.driver.set_window_size(390,844)
+        flag=self.element('#history-motion .clip-marker[data-bound="to"]')
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'instant'})",flag)
+        x,y,right=self.driver.execute_script("const f=arguments[0].getBoundingClientRect(),t=arguments[0].parentElement.getBoundingClientRect();return [f.left+f.width/2,f.top+f.height/2,t.right-2]",flag)
+        before=len(self.fixture.worker.playback_commands); searches=len(self.fixture.worker.timeline_calls)
+        self.driver.execute_cdp_cmd("Input.dispatchTouchEvent",{"type":"touchStart","touchPoints":[{"x":x,"y":y}]})
+        self.driver.execute_cdp_cmd("Input.dispatchTouchEvent",{"type":"touchMove","touchPoints":[{"x":right,"y":y}]})
+        self.assertGreater(self.clip_seconds(),30)
+        value=self.clip_seconds()
+        self.driver.execute_script("document.getElementById('history-refresh').click()")
+        self.wait.until(lambda _:len(self.fixture.worker.timeline_calls)>searches)
+        self.driver.execute_cdp_cmd("Input.dispatchTouchEvent",{"type":"touchEnd","touchPoints":[]})
+        self.history_ready(); self.assertEqual(self.clip_seconds(),value)
+        self.assertEqual(len(self.fixture.worker.playback_commands),before)
+        self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth<=innerWidth"))
+
+    def test_history_zoomed_slider_keeps_sdk_playback_range(self):
+        self.mark_clip()
+        self.assertEqual(float(self.element("#history-position").get_attribute("max")),59)
+        view_from=float(self.element("#history-recordings").get_attribute("data-view-from"))
+        identifier=next(iter(self.fixture.worker.playbacks))
+        session=self.fixture.server.playback.sessions[identifier]
+        bounds=session["begin"],session["end"]
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
+        self.driver.execute_script("const s=document.getElementById('history-position');s.value=0;s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1 and self.element("#clip-start").is_enabled())
+        position=datetime.fromisoformat(self.fixture.worker.playbacks[identifier]["position"].replace("Z","+00:00"))
+        self.assertEqual(position.timestamp()*1000,view_from)
+        self.assertEqual((session["begin"],session["end"]),bounds)
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["state"],"paused")
+
+    def test_history_steps_clamp_to_window_and_preserve_speed(self):
+        self.paused_history()
+        self.element('#history-speeds button[data-rate="4"]').click()
+        self.wait.until(lambda _:next(iter(self.fixture.worker.playbacks.values()))["rate"]==4)
+        self.driver.execute_script("const s=document.getElementById('history-position');s.value=0;s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
+        self.assertFalse(self.element('#history-steps button[data-seconds="-10"]').is_enabled())
+        self.assertFalse(self.element('#history-steps button[data-seconds="-30"]').is_enabled())
+        self.element('#history-steps button[data-seconds="30"]').click()
+        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
+        source=next(iter(self.fixture.worker.playbacks.values()))
+        self.assertEqual(source["state"],"paused"); self.assertEqual(source["rate"],4)
+        self.driver.execute_script("const s=document.getElementById('history-position');s.value=s.max;s.dispatchEvent(new Event('change',{bubbles:true}))")
+        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
+        self.assertFalse(self.element('#history-steps button[data-seconds="10"]').is_enabled())
+        self.assertFalse(self.element('#history-steps button[data-seconds="30"]').is_enabled())
+
+    def test_history_exports_preserve_another_live_tab(self):
+        self.wait_live(); first=self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url)
+        self.open_history(); self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        self.element("#history-pause").click(); self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state")=="paused")
+        self.element("#clip-start").click(); self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click(); self.element("#clip-queue").click()
+        self.wait.until(lambda _:any(job["waiting_reason"] for job in self.fixture.server.exports.list()["jobs"]))
+        self.assertEqual(self.fixture.worker.export_commands,[])
+        self.element("#exports-tab").click()
+        self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
+        self.assertFalse(self.fixture.worker.playbacks); self.assertEqual(len(self.fixture.sessions.wanted),8)
+        self.driver.switch_to.window(first); self.wait_live()
+        self.assertEqual(self.fixture.snapshot()["viewers"],1)
+
+    def test_history_export_queue_download_and_delete(self):
+        self.paused_history()
+        self.element("#clip-start").click()
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.assertTrue(self.element("#history-panel").is_displayed())
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"], "paused")
+        link = self.element("#clip-message a")
+        self.assertEqual(link.text,"Export")
+        self.assertEqual(link.get_attribute("aria-label"),"View export jobs")
+        link.send_keys(Keys.ENTER)
+        self.wait.until(lambda _:self.element("#exports-panel").is_displayed())
+        self.assertEqual(self.element("#exports-tab").get_attribute("aria-pressed"),"true")
+        self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
+        self.assertFalse(self.fixture.worker.playbacks); self.assertFalse(self.fixture.sessions.sessions)
+        job = self.fixture.server.exports.list()["jobs"][0]
+        self.assertEqual(job["duration_seconds"],10); self.assertEqual(job["display_aspect_ratio"],"16:9")
+        self.assertEqual(job["frames"],50)
+        self.element(".export-download").click(); self.wait.until(lambda _:list(self.downloads.glob("*.mp4")))
+        self.assertEqual(next(self.downloads.glob("*.mp4")).stat().st_size,job["bytes"])
+        self.element(".export-job button").click()
+        self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "expired")
+
+    def test_history_export_cancel_releases_slot_and_removes_partial(self):
+        self.paused_history(); self.fixture.worker.export_gate.clear()
+        self.element("#clip-start").click()
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.element("#clip-queue").click(); self.wait.until(lambda _:self.fixture.server.exports.active is not None)
+        self.element("#exports-tab").click()
+        self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="running"] button'))
+        self.element(".export-job button").click()
+        self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "cancelled" and self.fixture.sessions.reserved_sources == 0)
+        self.assertEqual(list(self.fixture.server.exports.directory.glob("*/clip*.mp4")),[])
+
+    def test_history_export_file_limit_failure_keeps_viewer_and_can_retry(self):
+        self.paused_history(); self.fixture.server.exports.encoder.max_bytes=1024
+        self.element("#clip-start").click(); self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click(); self.element("#clip-queue").click()
+        self.wait.until(lambda _:any(job["state"]=="failed" for job in self.fixture.server.exports.list()["jobs"]))
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"],"paused")
+        self.assertEqual(self.fixture.sessions.reserved_sources,1)
+        self.assertEqual(list(self.fixture.server.exports.directory.glob("*/clip*.mp4")),[])
+        self.fixture.server.exports.encoder.max_bytes=256*1024**2
+        self.wait.until(lambda _:self.element("#clip-queue").is_enabled()); self.element("#clip-queue").click()
+        self.element("#exports-tab").click()
+        self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
+        self.assertEqual(self.fixture.sessions.reserved_sources,0)
 
     def date_value(self, days=1):
         return (datetime.now(ZoneInfo("Africa/Johannesburg")) - timedelta(days=days)).replace(

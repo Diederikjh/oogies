@@ -47,6 +47,8 @@ def main():
     output = ROOT / ".local/browser-viewer"
     output.mkdir(parents=True, exist_ok=True)
     output.chmod(0o700)
+    exports = ROOT / ".local/exports"
+    exports.mkdir(parents=True, exist_ok=True); exports.chmod(0o700)
     command = ["docker", "run", "--detach", "--rm", "--init", "--name", NAME,
                "--read-only", "--user", f"{os.getuid()}:{os.getgid()}", "--cap-drop=ALL",
                "--security-opt=no-new-privileges", "--cpus=2", "--memory=2g", "--memory-swap=2g",
@@ -59,7 +61,7 @@ def main():
             (ROOT / "tools/nvr_config.py", "/support/nvr_config.py", False),
             (ROOT / ".local/nvr-config.json", "/configuration/nvr.json", False),
             (ROOT / "docker/hikvision-sdk", "/probe", False), (ROOT / "web", "/web", False),
-            (output, "/output", True)):
+            (output, "/output", True), (exports, "/exports", True)):
         command.extend(["--mount", f"type=bind,source={source},target={target}" + ("" if writable else ",readonly")])
     recordings = sorted((ROOT / ".local/hik-sdk/results").glob("sdk-capture-*/historical-clip.mp4"))
     if recordings:
