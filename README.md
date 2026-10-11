@@ -20,6 +20,8 @@ links to the detailed investigation notes.
 Planned milestones are recorded in [implementation-plan.md](docs/implementation-plan.md),
 with the automatic live grid before motion-timeline investigation. The proposed
 API calls and frontend module boundaries are in [backend-api-plan.md](docs/backend-api-plan.md).
+The staged [History view plan](docs/history-view-plan.md) covers the recent-hours
+timeline, SDK motion investigation, independent playback and required test changes.
 
 The SDK's recording APIs and the proposed bounded playback experiment are
 documented in [historical-playback investigation](docs/historical-playback-investigation.md).

@@ -85,6 +85,12 @@ exercise C++ callbacks, SDK authentication, decryption, discovery compatibility,
 native process events or real recorder capacity. Keep the bounded real-recorder
 checks for those claims. Chrome/Chromium is the currently tested browser engine.
 
+The proposed [History test changes](history-view-plan.md#test-changes) extend this
+same worker seam with synthetic timelines and independent playback contexts.
+They replace the saved-clip cases and add time selection, seeking, motion states,
+selected-camera aspect and multi-viewer cleanup checks. These are planned tests,
+not part of the currently verified suite.
+
 ## Verified result
 
 After the expand/collapse refinements on 11 October, all 18 browser cases and

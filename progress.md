@@ -6,6 +6,32 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## History view planning
+
+Animated camera expansion and manual-scroll cancellation were committed as
+`3ce2a65`; the local `origin/main` tracking ref now points to that commit after
+the owner's VS Code push. Terminal HTTPS and SSH pushes lacked accepted GitHub
+authentication; repository remotes were not changed.
+
+The [History view plan](docs/history-view-plan.md) proposes replacing Recorded
+clip with a single-camera, last-three-hours timeline, separate recording and
+motion tracks, and independent interactive playback. Its stages are SDK
+feasibility, a fixture-tested History UI, real timeline metadata, then moving
+historical playback with verified pause/resume/seek. Clip export follows that
+flow. The API proposal and milestone plan are aligned with these stages.
+
+SDK time playback is verified; motion markers, general recording discovery,
+interactive controls and live/history coexistence still need bounded checks.
+The plan includes unit/API cases, changes to existing saved-MP4 browser tests,
+new synthetic timeline/playback fixtures and unchanged offline CI commands.
+No history code or recorder probe was added during planning. Existing verified
+test counts remain 26 unit and 18 browser cases.
+
+Before implementation, the owner clarified that precise event equivalence is
+not required: present the SDK's returned motion-related intervals as provided,
+with correct channel/time conversion and honest granularity. This plan is the
+checkpoint before starting implementation.
+
 ## GitHub LFS authentication
 
 The HTTPS push reached the publication guard but failed during LFS upload:

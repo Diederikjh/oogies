@@ -4,6 +4,8 @@ Status: owner configuration, discovery and the initial live grid are implemented
 and verified on the current recorder. Next is motion-timeline feasibility. The
 [API document](backend-api-plan.md) distinguishes implemented live endpoints from
 historical proposals; [live-grid.md](live-grid.md) records observed capacity.
+The [History view plan](history-view-plan.md) expands milestones 3–4 into SDK
+feasibility, fixture-tested UI, real metadata and interactive playback stages.
 
 Milestone 1's seven-camera live checks pass; a fully fresh remote/LFS installation
 and simultaneous SDK historical playback remain unverified. Milestone 2's initial
@@ -58,8 +60,9 @@ timestamps.
 - Keep the frontend without a login for now and make the eventual viewer
   available on the home LAN. Backend access provides camera access; browsers
   need not connect directly to the NVR.
-- Keep SDK, decoder and new tools in Docker. Preserve resource limits and
-  private diagnostic outputs.
+- Keep SDK, decoder and new investigation tools in Docker, with the owner's
+  explicit exception for native Git LFS. Preserve resource limits and private
+  diagnostic outputs.
 - Do not assume the recorder's reported channel capacity equals the number of
   configured/online cameras, or that its connection limit is known.
 - Retain JPEG frames for the first grid milestone. Measure before deciding whether
@@ -71,8 +74,8 @@ timestamps.
 | --- | --- | --- |
 | 1. Recorder configuration, camera discovery and capacity | Read the installing user's NVR IP, SDK port and clock timezone from backend configuration, with separate private credentials and an explicit login-password policy. Remove hardcoded recorder settings in viewer/SDK runners. Read configured channels, names and online state. Test concurrent previews progressively: 1, 2, 4, then all active cameras. Inspect current stream counts and measure backend resource usage. | A fresh checkout starts using documented owner-supplied settings without source edits. Establish a tested operating capacity that accommodates the grid and one historical playback, accounting for other clients such as the Android app. |
 | 2. Automatic live grid | Introduce per-camera decoder contexts and shared live-source management. Start overview subscriptions on page load; add grid tiles, independent status and enlarged views. | All available cameras move simultaneously; another browser reuses the sources; one failed camera does not interrupt the rest; closing a page does not stop another viewer. |
-| 3. Motion timeline feasibility | Investigate the previous error-11 recording search with minimal supported requests. Query motion events for a bounded period and compare known intervals with the Android app. Check supported SDK alternatives, then read-only ISAPI through the SDK if needed. | Motion intervals match the app with correct channel/time conversion, or document a concrete limitation and viable alternative before building the timeline. |
-| 4. Historical timeline viewer | Add camera/date selection, recording and motion bands, time-based playback, pause/resume, seeking, next/previous events and short clip export. | Selecting a known event plays the correct footage and timestamp; recording gaps and unavailable motion metadata are displayed accurately. |
+| 3. Motion timeline feasibility | Investigate the previous error-11 recording search with minimal supported requests. Query motion-related recordings for a bounded period and present SDK-returned intervals. Check supported SDK alternatives, then read-only ISAPI through the SDK if needed. | Returned SDK intervals retain their granularity and correct channel/time conversion, or document a concrete limitation without confusing unavailable data with no motion. Precise Android event equivalence is not required. |
+| 4. Historical timeline viewer | Replace Recorded clip with History: camera selection, a recent-hours timeline, recording and motion tracks, time-based playback, pause/resume, seeking and next/previous events. Add clip export after that flow works. | Selecting a known event plays the correct footage and timestamp; recording gaps and unavailable motion metadata are displayed accurately; independent viewer positions and live/history coexistence pass. |
 | 5. Reliability and transport | Test sustained use, disconnects, cleanup, resource use and playback alongside the grid. Evaluate H.264 delivery if measurements justify it. | Both use cases remain usable over longer sessions without connection leaks or frozen frames presented as live. |
 
 ## Evidence and unresolved questions

@@ -4,6 +4,8 @@ Status: inventory and live-view leases are implemented. Historical timeline,
 playback-session and export APIs below remain proposals. The exact current live
 contract and verification are in [live-grid.md](live-grid.md); the milestone
 sequence is in [implementation-plan.md](implementation-plan.md).
+The detailed [History view plan](history-view-plan.md) records implementation
+stages, SDK feasibility checks and changes to offline/browser testing.
 
 ## Design choices
 
@@ -38,7 +40,9 @@ explicit backend operations.
 
 The first inventory request opens the shared SDK connection and discovers inputs;
 subsequent reads return the cache. Inventory opens no preview. Status does not
-contact the recorder. Added/reconnected inputs currently require service restart.
+contact the recorder. Availability is refreshed through the shared connection
+after 60 seconds; recovered cameras resume in existing views. Added/removed
+inputs currently require service restart.
 
 Example inventory entry:
 
@@ -126,7 +130,8 @@ The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
 Both timestamps must carry an explicit timezone; responses normalize them to
 UTC. Store source provenance and interval granularity in the backend. Display
-times in `Africa/Johannesburg` in the frontend.
+times in the configured recorder timezone (`Africa/Johannesburg` for the current
+installation), returned with timeline metadata.
 
 Example partial response: recording information is available, but motion is not:
 
@@ -163,6 +168,11 @@ as precise event durations unless the data supports that interpretation.
 Cache bounded camera/range queries and avoid querying the recorder while the
 user is dragging the timeline. Pending responses can be polled until ready;
 queries that need long processing return 202 with the same response shape.
+Initially bound requests to six hours and cache recent results for 60 seconds,
+sharing concurrent identical work. Include query time, completeness and queried
+coverage; truncated or unsearched ranges are unknown rather than confirmed gaps.
+Point events may have equal start/end. The detailed History plan describes the
+three-hour default UI and native search bounds to establish during feasibility.
 
 ## Independent historical playback — milestone 4
 
@@ -212,11 +222,17 @@ and report `seeking` until new frames arrive. Return supported controls only
 after their behavior has been verified. Use accurate decoded/playback timestamps
 for `position`; return null while unavailable rather than inventing precise
 positions from HTTP arrival times.
+Include playback generation and timestamp precision where needed to discard
+old frames after seeks and avoid implying greater accuracy than the SDK provides.
+Initial controls are pause/resume and time seek; speed selection is deferred.
 
 Playback state may be starting, playing, paused, seeking, ended or error. An
 ended session cannot silently switch to live video. Playback sessions do not
 share mutable position/controls between viewers. Admission counts playback
 resources alongside the shared live sources and retains room for other clients.
+Initially admit one historical playback until coexistence is verified. Reuse
+the live lease pattern (90 seconds, renewed every 30) and preserve other viewers'
+sources when switching this page between Live and History.
 
 ## Clip export — milestone 4
 
@@ -226,7 +242,8 @@ resources alongside the shared live sources and retains room for other clients.
 | GET | `/api/exports/{id}` | queued/processing/ready/error status and download URL when ready |
 | GET | `/media/exports/{id}.mp4` | Download the completed private clip; support byte ranges |
 
-Creation returns 202 because SDK extraction/encoding takes time. Validate a
+Export follows the first interactive History flow. Creation returns 202 because
+SDK extraction/encoding takes time. Validate a
 configurable duration limit, serialize or limit export jobs within the resource
 budget, and expire artifacts according to a documented retention policy. A
 ready result points only to its clip, never a workspace path or directory.
@@ -236,7 +253,8 @@ ready result points only to its clip, never a workspace path or directory.
 - JSON for state/control; binary media through `/media/...`. Return media URLs
   from the backend. The frontend does not recreate URLs from NVR addresses.
 - Explicit timezone on input timestamps, UTC ISO8601 on output, South Africa
-  display time in the UI. Verify source clock conversion before interpreting
+  display time in the UI for the current installation; other owners use their
+  configured recorder timezone. Verify source clock conversion before interpreting
   timeline intervals.
 - 400 for malformed input, 404 for unknown resources, 409 for conflicting state
   or capacity, 422 for invalid ranges/unsupported requested controls, 502 for a
