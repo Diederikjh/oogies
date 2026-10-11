@@ -717,6 +717,7 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(link.get_attribute("aria-label"),"View export jobs")
         link.send_keys(Keys.ENTER)
         self.wait.until(lambda _:self.element("#exports-panel").is_displayed())
+        self.assertEqual(self.element("#clip-message").get_attribute("textContent"), "")
         self.assertEqual(self.element("#exports-tab").get_attribute("aria-pressed"),"true")
         self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
         self.assertFalse(self.fixture.worker.playbacks); self.assertFalse(self.fixture.sessions.sessions)
@@ -727,6 +728,71 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(next(self.downloads.glob("*.mp4")).stat().st_size,job["bytes"])
         self.element(".export-job button").click()
         self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "expired")
+
+    def test_history_export_confirmation_clear_and_one_minute_expiry(self):
+        self.mark_clip(10)
+        # Control just the confirmation timers; playback and HTTP clocks stay real.
+        self.driver.execute_script("""
+            const schedule=window.setTimeout.bind(window), cancel=window.clearTimeout.bind(window);
+            window.confirmations=[]; window.cancelledConfirmations=[];
+            window.setTimeout=(callback,delay,...args)=>{
+              const id=schedule(callback,delay,...args);
+              if(delay===60000) window.confirmations.push({callback,id,delay});
+              return id;
+            };
+            window.clearTimeout=id=>{window.cancelledConfirmations.push(id);cancel(id);};
+        """)
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.assertEqual(self.driver.execute_script("return confirmations[0].delay"),60000)
+        self.element("#clip-clear").click()
+        self.assertEqual(self.element("#clip-message").text,"")
+        self.assertTrue(self.driver.execute_script("return cancelledConfirmations.includes(confirmations[0].id)"))
+        self.assertFalse(self.element("#clip-queue").is_enabled())
+        self.element("#clip-start").click()
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.assertEqual(self.driver.execute_script("return confirmations.length"),2)
+        self.driver.execute_script("confirmations[0].callback()")
+        self.assertIn("Export queued",self.element("#clip-message").text)
+        self.driver.execute_script("confirmations[1].callback()")
+        self.assertEqual(self.element("#clip-message").text,"")
+        self.assertTrue(self.element("#clip-queue").is_enabled())
+        self.wait.until(lambda _:len(self.fixture.server.exports.list()["jobs"]) == 2 and
+            all(job["state"] == "ready" for job in self.fixture.server.exports.list()["jobs"]))
+
+    def hold_export_response(self):
+        self.driver.execute_script("""
+            const original=window.fetch;
+            window.fetch=async (...args)=>{
+              const response=await original(...args);
+              if(String(args[0])==='/api/exports' && args[1]?.method==='POST')
+                await new Promise(resolve=>window.releaseExport=resolve);
+              return response;
+            };
+        """)
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:self.driver.execute_script("return Boolean(window.releaseExport)"))
+        self.assertIn("Queueing export",self.element("#clip-message").text)
+
+    def test_history_export_confirmation_clear_ignores_delayed_response(self):
+        self.mark_clip(10); self.hold_export_response()
+        self.element("#clip-clear").click()
+        self.driver.execute_async_script("""
+            const done=arguments[arguments.length-1];window.releaseExport();setTimeout(done,100);
+        """)
+        self.assertEqual(self.element("#clip-message").text,"")
+        self.wait.until(lambda _:self.fixture.server.exports.list()["jobs"][0]["state"] == "ready")
+
+    def test_history_export_confirmation_navigation_ignores_delayed_response(self):
+        self.mark_clip(10); self.hold_export_response()
+        self.element("#live-tab").click(); self.wait_live()
+        self.driver.execute_script("window.releaseExport()")
+        self.open_history()
+        self.assertEqual(self.element("#clip-message").text,"")
+        self.wait.until(lambda _:self.fixture.server.exports.list()["jobs"][0]["state"] == "ready")
 
     def test_history_export_cancel_releases_slot_and_removes_partial(self):
         self.paused_history(); self.fixture.worker.export_gate.clear()

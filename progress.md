@@ -8,6 +8,14 @@ and historical use cases incrementally.
 
 ## Clip exports, frame downloads and fine seeking
 
+The approved export implementation was committed as `d97e032`. Queue confirmations
+now clear on Clear marks, after 60 seconds, or when leaving History/changing
+camera. A delayed queue response cannot restore a dismissed message, and an old
+timer cannot erase a newer confirmation. Dismissal leaves the export job running.
+Four focused browser tests passed: Clear marks and the 60-second timer, delayed
+responses after clear/navigation, and the existing queue/download/delete flow.
+The timer check invokes the scheduled callback without waiting a real minute.
+
 The owner increased the default maximum to ten minutes (600 seconds). Setting
 both marks zooms the visible timeline around them, including an invalid draft.
 Mouse/touch dragging and keyboard arrows edit either handle, clamping to an

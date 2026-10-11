@@ -6,7 +6,7 @@ export class ClipSelection {
     this.panel = panel; this.player = player; this.timeline = timeline; this.onExports = onExports;
     this.start = panel.querySelector("#clip-start"); this.end = panel.querySelector("#clip-end");
     this.queue = panel.querySelector("#clip-queue"); this.message = panel.querySelector("#clip-message");
-    this.maxSeconds = 600;
+    this.maxSeconds = 600; this.messageGeneration = 0;
     timeline.onClipEdit = (name, value) => this.edit(name, value);
     timeline.clipBounds = name => this.bounds(name);
     for (const [name, button] of [["from", this.start], ["to", this.end]]) button.addEventListener("click", () => {
@@ -14,15 +14,21 @@ export class ClipSelection {
       this[name] = Math.floor(frame.position / 1000) * 1000; this.paint();
       timeline.zoomToClip();
     });
-    panel.querySelector("#clip-clear").addEventListener("click", () => { timeline.cancelDrag(); this.from = this.to = undefined; this.paint(); timeline.fullRange(); });
+    panel.querySelector("#clip-clear").addEventListener("click", () => {
+      this.clearMessage(); timeline.cancelDrag(); this.from = this.to = undefined; this.paint(); timeline.fullRange();
+    });
     this.queue.addEventListener("click", () => this.submit());
     panel.querySelector("#clip-view-exports").addEventListener("click", onExports);
     api("/api/exports").then(data => { this.maxSeconds = data.limits.max_duration_seconds; this.paint(); }).catch(() => {});
     this.paint();
   }
   cameraChanged(camera) {
-    if (this.camera?.id !== camera?.id) { this.timeline.cancelDrag(); this.from = this.to = undefined; }
+    if (this.camera?.id !== camera?.id) { this.clearMessage(); this.timeline.cancelDrag(); this.from = this.to = undefined; }
     this.camera = camera; this.paint();
+  }
+  clearMessage() {
+    ++this.messageGeneration; clearTimeout(this.messageTimer);
+    this.messageTimer = undefined; this.message.replaceChildren();
   }
   bounds(name) {
     const earliest = Date.UTC(2000, 0, 1), latest = Math.max(this.timeline.end || earliest, this.from || earliest, this.to || earliest);
@@ -56,15 +62,20 @@ export class ClipSelection {
       aspect_ratio:readAspect(this.camera.id, this.camera.aspect_ratio)};
     const serialized = JSON.stringify(body), cameraName = this.camera.name;
     if (this.submission?.body !== serialized) this.submission = {body:serialized, key:crypto.randomUUID()};
+    this.clearMessage(); const generation = this.messageGeneration;
     this.submitting = true; this.paint(); this.message.textContent = "Queueing export…";
     try {
       await api("/api/exports", "POST", body, {"Idempotency-Key":this.submission.key});
       this.submission = null;
+      if (generation !== this.messageGeneration) return;
       const link = document.createElement("a");
       link.href = "#exports-panel"; link.textContent = "Export"; link.setAttribute("aria-label", "View export jobs");
       link.addEventListener("click", event => { event.preventDefault(); this.onExports(); });
       this.message.replaceChildren(link, document.createTextNode(` queued for ${cameraName}. You can continue watching.`));
-    } catch (error) { this.message.textContent = error.message; }
+      this.messageTimer = setTimeout(() => {
+        if (generation === this.messageGeneration) this.clearMessage();
+      }, 60000);
+    } catch (error) { if (generation === this.messageGeneration) this.message.textContent = error.message; }
     finally { this.submitting = false; this.paint(); }
   }
 }

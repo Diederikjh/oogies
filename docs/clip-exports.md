@@ -15,7 +15,9 @@ when you move to another time window. The white playhead stays independent.
 Choose an end after the start, from one second to ten minutes. Review the camera,
 range and picture proportions, then press **Queue export**. The request freezes
 those values. The **Export** word in the success message links to the Exports
-tab. Continue viewing, or open **Exports** to monitor progress, cancel
+tab. The confirmation disappears after 60 seconds, on **Clear marks**, or when
+leaving History (including changing camera). Dismissing it does not cancel the
+queued job. Continue viewing, or open **Exports** to monitor progress, cancel
 work, download a ready MP4, or delete its file. Marks stay in this browser's
 memory across tab changes; changing camera clears them and reloading clears them.
 

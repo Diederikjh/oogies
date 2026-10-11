@@ -152,6 +152,7 @@ export class HistoryView {
 
   hide() {
     this.active = false; ++this.generation; this.abort?.abort(); clearInterval(this.refreshTimer);
+    this.clip.clearMessage();
     return this.player.stop();
   }
 }
