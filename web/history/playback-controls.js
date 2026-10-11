@@ -30,13 +30,13 @@ export class PlaybackControls {
     this.display.setAspect(saveAspect(cameraId, value));
   }
 
-  select(camera, position, from, to) {
+  select(camera, position, from, to, rate = this.session?.camera_id === camera.id ? this.session.requested_rate : 1, autoplay = false) {
     const epoch = ++this.epoch;
     this.controlling = false;
     this.camera = camera;
     this.display.setAspect(readAspect(camera.id, camera.aspect_ratio || "16:9"));
     this.image.alt = `Recorded video from ${camera.name}`;
-    this.pending = {camera, position, from, to, epoch};
+    this.pending = {camera, position, from, to, rate, autoplay, epoch};
     this.loading = true; this.bufferedFrame = null; this.clearPicture();
     this.paint({state:this.session ? "seeking" : "starting"});
     const bounds = this.viewer.getBoundingClientRect();
@@ -50,16 +50,20 @@ export class PlaybackControls {
     while (this.pending) {
       const job = this.pending; this.pending = null;
       try {
-        const same = this.session?.camera_id === job.camera.id && this.session.from === new Date(job.from).toISOString().replace(".000Z", "Z") &&
+        const sameCamera = this.session?.camera_id === job.camera.id;
+        const sameRange = sameCamera && this.session.from === new Date(job.from).toISOString().replace(".000Z", "Z") &&
           this.session.to === new Date(job.to).toISOString().replace(".000Z", "Z");
         let status;
-        if (same) {
+        if (sameCamera) {
           this.expectedGeneration = this.session.generation + 1;
-          status = await api(`/api/playback/sessions/${this.session.id}`, "PATCH", {position:new Date(job.position).toISOString()});
+          const update = {position:new Date(job.position).toISOString(), rate:job.rate};
+          if (!sameRange) { update.from = new Date(job.from).toISOString(); update.to = new Date(job.to).toISOString(); }
+          if (job.autoplay) update.state = "playing";
+          status = await api(`/api/playback/sessions/${this.session.id}`, "PATCH", update);
         } else {
           await this.release();
           status = await api("/api/playback/sessions", "POST", {camera_id:job.camera.id,
-            from:new Date(job.from).toISOString(), to:new Date(job.to).toISOString(), position:new Date(job.position).toISOString()});
+            from:new Date(job.from).toISOString(), to:new Date(job.to).toISOString(), position:new Date(job.position).toISOString(), rate:job.rate});
         }
         this.session = status;
         if (job.epoch !== this.epoch) {

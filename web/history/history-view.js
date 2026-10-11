@@ -1,6 +1,7 @@
 import {api} from "/shared/api.js";
 import {Timeline} from "/history/timeline.js";
 import {PlaybackControls} from "/history/playback-controls.js";
+import {DateTimeNavigation} from "/history/date-time-navigation.js";
 
 export class HistoryView {
   constructor(panel, onCameras = () => {}) {
@@ -14,10 +15,10 @@ export class HistoryView {
       if (this.active && !this.timeline.scrubbing && this.timeline.begin <= position && position < this.timeline.end)
         this.timeline.select(position, false);
     });
-    this.timeline = new Timeline(panel, position => {
-      this.recent = false;
-      const camera = this.cameras?.find(camera => camera.id === this.camera.value);
-      if (camera) this.player.select(camera, position, this.timeline.begin, this.timeline.end);
+    this.timeline = new Timeline(panel, position => this.play(position));
+    this.dateNavigation = new DateTimeNavigation(panel, localTime => {
+      const rate = this.player.session?.camera_id === this.camera.value ? this.player.session.requested_rate : 1;
+      this.load(false, {localTime, rate});
     });
     this.camera.addEventListener("change", () => { this.timeline.selected = undefined; this.load(); });
     this.hours.addEventListener("change", () => { this.recent = true; this.load(); });
@@ -41,6 +42,12 @@ export class HistoryView {
   }
 
   now() { return Math.floor(Date.now() / 60000) * 60000; }
+
+  play(position, rate, autoplay = false) {
+    this.recent = false;
+    const camera = this.cameras?.find(camera => camera.id === this.camera.value);
+    if (camera) this.player.select(camera, position, this.timeline.begin, this.timeline.end, rate, autoplay);
+  }
 
   async show(cameraId) {
     this.active = true;
@@ -67,29 +74,51 @@ export class HistoryView {
     }
   }
 
-  async load(refresh = false) {
+  async load(refresh = false, dateJob = null) {
     if (!this.active || !this.camera.value) return;
     const generation = ++this.generation;
     this.abort?.abort(); this.abort = new AbortController();
     const signal = this.abort.signal;
-    if (this.recent || !this.end) this.end = this.now();
-    const begin = this.end - Number(this.hours.value) * 3600000;
     const cameraId = this.camera.value;
-    if (this.player.session && (this.player.session.camera_id !== cameraId || Date.parse(this.player.session.from) !== begin || Date.parse(this.player.session.to) !== this.end)) {
-      this.player.stop(); this.timeline.selected = undefined;
+    let query;
+    if (dateJob) {
+      query = new URLSearchParams({local_time:dateJob.localTime, hours:this.hours.value});
+    } else {
+      this.dateNavigation.error("");
+      if (this.recent || !this.end) this.end = this.now();
+      const begin = this.end - Number(this.hours.value) * 3600000;
+      if (this.player.session && (this.player.session.camera_id !== cameraId || Date.parse(this.player.session.from) !== begin || Date.parse(this.player.session.to) !== this.end)) {
+        this.player.stop(); this.timeline.selected = undefined;
+      }
+      query = new URLSearchParams({from:new Date(begin).toISOString(), to:new Date(this.end).toISOString()});
+      this.data = null;
+      this.timeline.render({from:new Date(begin).toISOString(), to:new Date(this.end).toISOString(), timezone:this.timeline.zone || "UTC",
+        recordings:{state:"pending", intervals:null, complete:false}, motion:{state:"pending", intervals:null, complete:false}});
+      this.eventControls(false);
     }
-    const query = new URLSearchParams({from:new Date(begin).toISOString(), to:new Date(this.end).toISOString()});
     if (refresh) query.set("refresh", "1");
-    this.data = null;
-    this.timeline.render({from:new Date(begin).toISOString(), to:new Date(this.end).toISOString(), timezone:this.timeline.zone || "UTC",
-      recordings:{state:"pending", intervals:null, complete:false}, motion:{state:"pending", intervals:null, complete:false}});
-    this.eventControls(false);
-    this.message.textContent = "Loading history…";
+    if (dateJob) this.dateNavigation.error("Opening selected time…");
+    else this.message.textContent = "Loading history…";
+    let dateStarted = false;
     try {
       for (let poll = 0; poll < 60; poll++) {
         const data = await api(`/api/cameras/${cameraId}/timeline?${query}`, "GET", undefined, {}, signal);
         if (!this.active || generation !== this.generation) return;
+        if (dateJob && !dateStarted) {
+          // Validation succeeded. Keep the same viewer's slot for a range jump;
+          // its next playback PATCH replaces only that native context.
+          this.recent = false; this.end = Date.parse(data.to); this.timeline.selected = undefined;
+          this.data = null; this.eventControls(false); this.dateNavigation.error("");
+        }
         this.timeline.render(data);
+        this.dateNavigation.ready(data.timezone, this.timeline.selected ?? this.timeline.end - 1000);
+        if (dateJob && !dateStarted) {
+          this.timeline.select(Date.parse(data.selected_time), false);
+          this.play(this.timeline.selected, dateJob.rate, true);
+          dateStarted = true;
+          // Poll/cache the fixed UTC window even if the wall clock moves.
+          query = new URLSearchParams({from:data.from, to:data.to});
+        }
         if (data.recordings.state !== "pending" && data.motion.state !== "pending") {
           this.data = data;
           this.eventControls(Boolean(data.motion.intervals?.length));
@@ -106,7 +135,10 @@ export class HistoryView {
       }
       throw new Error("History query timed out. Use Refresh to try again.");
     } catch (error) {
-      if (this.active && generation === this.generation && error.name !== "AbortError") this.message.textContent = error.message;
+      if (this.active && generation === this.generation && error.name !== "AbortError") {
+        if (dateJob) this.dateNavigation.error(error.message);
+        else this.message.textContent = error.message;
+      }
     }
   }
 

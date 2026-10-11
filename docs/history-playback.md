@@ -14,6 +14,22 @@ interval's beginning. Keyboard time changes also seek. Dragging previews time
 locally and sends one seek when committed. The recorded clock moves the playhead
 as frames arrive, without overriding an in-progress drag.
 
+Date & time accepts a direct date/time for the selected camera, with seconds
+supported. The form labels the configured recorder timezone; the browser's
+timezone does not affect interpretation. Go to time resolves it in Python,
+opens a one/three/six-hour timeline centred on older times (clipped near now),
+and starts moving footage there, including from a previously paused view.
+It keeps the same camera's selected speed and, when already playing, its viewer
+lease/source slot. Timeline ranges and selected times include the year. Refresh
+keeps this pinned window; Recent returns to the latest hours. The field stays
+editable without being overwritten by arriving frames.
+
+Invalid/future or repeated/nonexistent daylight-saving times show a message and
+leave the current picture/window intact. Old date responses are discarded after
+camera changes or navigation. Recording availability and playback failures keep
+their existing states; the form does not select another camera or fall back to
+live footage.
+
 Pause retains the picture; Resume continues near its confirmed recorded time.
 Selecting a new time while paused displays that time's first frame and remains
 paused. Previous/next motion selects and plays the corresponding footage.
@@ -62,6 +78,13 @@ PATCH accepts `{position: utc}`, `{state: "paused"}`, `{state: "playing"}` or
 resume; old metadata, packets and pending image loads are discarded. The player
 serializes requests and drops superseded selections. A slow creation finishing
 after navigation is released, with lease expiry covering abandoned pages.
+
+PATCH also accepts a new `from`/`to` range together with `position`. Validation
+precedes mutation. This updates the same lease, retaining its capacity reservation
+and rate while replacing only that native context with a fresh generation. The
+date form explicitly starts it playing. This avoids releasing its slot to a
+concurrent live grid between ranges. The local-time timeline query is described
+in [the API notes](backend-api-plan.md).
 
 Leases use the existing configured duration (default 90 seconds) and renewal
 every third of that duration. GET/media reads do not renew them. Source capacity
@@ -179,3 +202,11 @@ it creates and deletes only its own session through the service API. Private
 reports are in `.local/browser-viewer/rates-check-*/report.json`. The default
 check takes roughly a minute. Achievable rates on other cameras depend on their
 resolution and decoder capacity.
+
+The date-navigation real browser check selected an hour earlier using the new
+form, and its first recorded UTC timestamp matched the chosen second exactly.
+It played continuously for thirty seconds, exercised all speeds and Pause, then
+jumped again while retaining the same playback ID and 4×. Stop left zero
+historical sessions with one SDK login. The manual `tools/check_history_ui.py`
+now covers this path; its private report/screenshot remain in
+`.local/browser-viewer/history-ui-check/`.

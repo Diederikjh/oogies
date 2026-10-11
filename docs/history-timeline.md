@@ -22,6 +22,13 @@ optional `refresh=1` requests fresh metadata. First/pending responses return
 202; polling the same query returns 200 when finished. Remove `refresh=1` while
 polling so completion does not immediately create another job.
 
+Date navigation also accepts `local_time=YYYY-MM-DDTHH:mm[:ss]&hours=1|3|6`
+instead of from/to. Python resolves the owner's recorder timezone and returns
+UTC `selected_time` and surrounding bounds. Future, invalid, ambiguous and
+nonexistent local times are rejected before SDK work. The UI starts playback
+at that time and polls the resolved UTC range using the same bounded cache.
+See [History playback](history-playback.md) for the date-jump session behavior.
+
 `HistoryTimeline` owns normalization, a 60-second cache measured from job
 completion, at most four outstanding jobs and 32 cached ranges. Identical
 concurrent requests share a job. It rejects ambiguous recorder wall times and

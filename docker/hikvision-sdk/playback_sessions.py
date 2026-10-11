@@ -16,6 +16,16 @@ def playback_rate(value):
         raise SessionError("Choose a playback speed of 0.5, 1, 2 or 4.", 422)
     return value
 
+def playback_range(begin_text, end_text, zone):
+    begin, end = timestamp(begin_text), timestamp(end_text)
+    if not begin < end or end - begin > timedelta(hours=6):
+        raise SessionError("Choose a positive playback range of at most six hours.", 422)
+    cursor = begin
+    while cursor < end:
+        recorder_wall(cursor, zone); cursor += timedelta(minutes=1)
+    recorder_wall(end, zone)
+    return begin, end
+
 class PlaybackSessions:
     def __init__(self, worker, live, limit=1, lease_seconds=90, clock=time.monotonic):
         self.worker, self.live, self.limit = worker, live, limit
@@ -29,16 +39,10 @@ class PlaybackSessions:
         if not isinstance(body, dict) or set(body) - {"camera_id", "from", "to", "position", "rate"} or not {"camera_id", "from", "to"} <= body.keys():
             raise SessionError("Camera and from/to range are required.")
         rate = playback_rate(body.get("rate", 1))
-        begin, end = timestamp(body["from"]), timestamp(body["to"])
-        if not begin < end or end - begin > timedelta(hours=6):
-            raise SessionError("Choose a positive playback range of at most six hours.", 422)
+        begin, end = playback_range(body["from"], body["to"], self.zone)
         position = timestamp(body.get("position", body["from"]))
         if not begin <= position < end:
             raise SessionError("Playback position must be inside its range.", 422)
-        cursor = begin
-        while cursor < end:
-            recorder_wall(cursor, self.zone); cursor += timedelta(minutes=1)
-        recorder_wall(end, self.zone)
         self.worker.ensure_ready()
         with self.lock:
             self.reap()
@@ -80,8 +84,13 @@ class PlaybackSessions:
                 media={"transport":"jpeg-frames-v1", "url":f"/media/playback/{identifier}"})
 
     def patch(self, identifier, body):
-        if not isinstance(body, dict) or set(body) - {"state", "position", "rate"}:
+        if not isinstance(body, dict) or set(body) - {"state", "position", "rate", "from", "to"}:
             raise SessionError("Invalid playback update.")
+        new_range = None
+        if {"from", "to"} & body.keys():
+            if not {"from", "to", "position"} <= body.keys():
+                raise SessionError("A new playback range requires from, to and position.")
+            new_range = playback_range(body["from"], body["to"], self.zone)
         if "rate" in body: playback_rate(body["rate"])
         if "state" in body and body["state"] not in ("paused", "playing"):
             raise SessionError("Choose paused or playing.", 422)
@@ -94,11 +103,13 @@ class PlaybackSessions:
             restarted = False
             if "position" in body:
                 position = timestamp(body["position"])
-                if not session["begin"] <= position < session["end"]:
+                begin, end = new_range or (session["begin"], session["end"])
+                if not begin <= position < end:
                     raise SessionError("Seek target must be inside the playback range.", 422)
                 wall = recorder_wall(position, self.zone)
                 paused = body.get("state", "paused" if current["state"] in ("paused", "pausing") else "playing") == "paused"
                 session["generation"] += 1
+                session.update(begin=begin, end=end)
                 session["requested_position"] = position
                 self.worker.start_playback(identifier, session["camera_id"], wall, recorder_wall(session["end"], self.zone),
                                            session["generation"], paused=paused, rate=rate)

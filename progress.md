@@ -6,6 +6,45 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Direct date/time navigation
+
+Camera History shortcuts and speeds were committed as `122b655` before this
+increment. History now offers Date & time and Go to time for the selected
+camera. The field labels the recorder's configured timezone and accepts seconds;
+browser timezone does not alter interpretation. Go loads a surrounding
+one/three/six-hour timeline and starts footage at that time, including from a
+paused view. Older windows are centred; near-now windows stop at current time.
+Ranges and selected times now show the year. Refresh keeps the pinned window,
+and Recent returns to the latest hours. Incoming frames do not overwrite input.
+
+The existing timeline endpoint accepts a local_time/hours query variant. Python
+resolves it with the configured ZoneInfo and returns UTC selected_time and range
+bounds, sharing the normal metadata cache. Invalid/future, repeated or nonexistent
+local times are rejected before SDK work. The prior picture/window remains
+working on invalid input, and superseded camera/date responses are ignored.
+
+Playback PATCH can replace from/to with position in the same session. It validates
+before mutation, preserves rate and the reserved viewer slot, and starts a fresh
+native generation. This avoids losing the slot to another live grid between
+date ranges. No native SDK change, new dependency or extra authentication flow
+was required. The frontend date form has its own small functional module.
+
+The actual Docker browser jumped to footage from an hour earlier, whose first
+recorded clock matched the requested UTC second exactly. It displayed moving
+footage for thirty seconds and exercised all speeds, Pause, and a second date
+jump. That jump retained its session and 4× speed. Stop left zero historical
+sessions and SDK login count stayed one. Private evidence remains in
+`.local/browser-viewer/history-ui-check/`.
+
+The five targeted browser cases passed: timezone independence/selected camera,
+slot/speed preservation beside a full live grid, rejected input preserving
+paused footage, delayed response cancellation, and mobile/keyboard submission.
+Both setup guides and the timeline/playback/API notes describe the new behavior.
+All 60 unit tests and 41 Docker cases (38 browser, three native queue tests)
+passed. The final supported-year guard also passed the unit suite. Whitespace
+and publication privacy checks passed.
+The service is running for review; these date-navigation changes are uncommitted.
+
 ## Camera History shortcuts and playback speeds
 
 Working interactive playback and its sustained-buffer fix were committed as

@@ -4,6 +4,7 @@
 .history-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:16px}
 .history-controls label{display:grid;gap:4px;font-size:13px;color:#adc0b9}.history-controls select{min-height:38px;max-width:100%}
 .history-controls .actions{flex-wrap:wrap}.history-card h2{font-size:18px;margin:0 0 6px}
+.history-date-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:12px}.history-date-controls label{display:grid;gap:4px;font-size:13px;color:#adc0b9;max-width:100%}.history-date-controls input{font:inherit;color:#d3e1db;background:#1c2926;border:1px solid #344440;border-radius:6px;padding:7px;min-height:38px;max-width:100%;box-sizing:border-box;color-scheme:dark}.history-date-controls input:focus-visible{outline:2px solid #96e6c1;outline-offset:3px}.history-date-controls .subtitle{margin:0;align-self:center}
 .timeline-rows{display:grid;grid-template-columns:90px minmax(0,1fr);gap:12px;margin:20px 0 4px;align-items:center}
 .timeline-label{font-size:13px;color:#adc0b9}.timeline-track{position:relative;height:38px;border:1px solid #52665d;border-radius:6px;overflow:hidden;background:#0a1210}
 .timeline-track:not([data-state=ready]),.timeline-track[data-complete=false]{background:repeating-linear-gradient(135deg,#1d2925,#1d2925 6px,#28312d 6px,#28312d 12px)}

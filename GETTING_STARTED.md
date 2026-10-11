@@ -67,6 +67,8 @@ Use a camera's **History** button to open its timeline, or open the **History**
 tab to select a camera and browse the last three hours. You can choose
 1/6 hours and earlier ranges. Recording coverage and motion are separate tracks.
 Click a band/event or commit a time-slider selection to play recorded footage.
+To jump directly, enter **Date & time** and press **Go to time**. The displayed
+recorder timezone applies; the chosen camera's timeline and playback move there.
 Pause/Resume and Stop control your player; another time selection seeks, including
 while paused. No saved footage is required. Switching views preserves other
 viewers' streams. Speed buttons select **0.5×, 1×, 2× or 4×**; your choice is

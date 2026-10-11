@@ -30,6 +30,7 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/live/camera-tile.js": ("live/camera-tile.js", "text/javascript"),
     "/live/tile-expansion.js": ("live/tile-expansion.js", "text/javascript"),
     "/history/history-view.js": ("history/history-view.js", "text/javascript"),
+    "/history/date-time-navigation.js": ("history/date-time-navigation.js", "text/javascript"),
     "/history/timeline.js": ("history/timeline.js", "text/javascript"),
     "/history/playback-controls.js": ("history/playback-controls.js", "text/javascript"),
     "/history/history.css": ("history/history.css", "text/css")}
@@ -119,11 +120,17 @@ class Handler(BaseHandler):
                         **self.server.recording_info))
             elif (match := re.fullmatch(r"/api/cameras/(camera-[0-9]+)/timeline", path)):
                 query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
-                if set(query) - {"from", "to", "refresh"} or any(len(values) != 1 for values in query.values()) or not {"from", "to"} <= query.keys():
-                    raise SessionError("A single from/to range is required.")
+                if any(len(values) != 1 for values in query.values()):
+                    raise SessionError("A single timeline range or local date/time is required.")
                 if query.get("refresh", ["0"])[0] not in ("0", "1"):
                     raise SessionError("Invalid refresh option.")
-                result, status = self.server.timeline.query(match[1], query["from"][0], query["to"][0], query.get("refresh") == ["1"])
+                keys = set(query) - {"refresh"}
+                if keys == {"local_time", "hours"}:
+                    result, status = self.server.timeline.query_local(match[1], query["local_time"][0], query["hours"][0], query.get("refresh") == ["1"])
+                elif keys == {"from", "to"}:
+                    result, status = self.server.timeline.query(match[1], query["from"][0], query["to"][0], query.get("refresh") == ["1"])
+                else:
+                    raise SessionError("Use either a from/to range or a local_time/hours selection.")
                 self.json_response(result, status)
             elif re.fullmatch(r"/api/live/sessions/[a-f0-9]{32}", path):
                 self.json_response(sessions.get(path.rsplit("/", 1)[1]))

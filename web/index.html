@@ -36,6 +36,12 @@
           <label>Range<select id="history-hours"><option value="1">1 hour</option><option value="3" selected>3 hours</option><option value="6">6 hours</option></select></label>
           <div class="actions"><button id="history-earlier">Earlier</button><button id="history-later" disabled>Later</button><button id="history-recent">Recent</button><button id="history-refresh">Refresh</button></div>
         </div>
+        <form id="history-date-form" class="history-date-controls">
+          <label>Date &amp; time<input id="history-date-time" type="datetime-local" step="1" min="2000-01-01T00:00:00" required disabled aria-describedby="history-date-zone history-date-message"></label>
+          <button id="history-go-time" type="submit" disabled>Go to time</button>
+          <span id="history-date-zone" class="subtitle">Loading recorder timezone…</span>
+        </form>
+        <p id="history-date-message" class="subtitle" role="status" aria-live="polite"></p>
         <h2>Camera timeline</h2><p class="subtitle" id="history-range"></p>
         <p id="history-message" role="status" aria-live="polite"></p>
         <div class="timeline-rows">

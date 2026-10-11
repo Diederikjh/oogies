@@ -19,7 +19,7 @@ export class Timeline {
 
   time(value, full = false) {
     return new Intl.DateTimeFormat(undefined, {timeZone:this.zone || "UTC",
-      ...(full ? {month:"short", day:"numeric"} : {}), hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23"}).format(new Date(value));
+      ...(full ? {year:"numeric", month:"short", day:"numeric"} : {}), hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23"}).format(new Date(value));
   }
 
   select(value, notify = true) {

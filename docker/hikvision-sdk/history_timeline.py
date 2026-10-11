@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import hashlib
+import re
 import threading
 import time
 from zoneinfo import ZoneInfo
@@ -48,13 +49,41 @@ class HistoryTimeline:
     max_entries = 32
     max_jobs = 4
 
-    def __init__(self, worker, timezone_name="Africa/Johannesburg", clock=time.monotonic):
+    def __init__(self, worker, timezone_name="Africa/Johannesburg", clock=time.monotonic, wall_clock=None):
         self.worker, self.clock = worker, clock
         self.zone = ZoneInfo(timezone_name)
+        self.wall_clock = wall_clock or (lambda:datetime.now(timezone.utc))
         self.lock = threading.RLock()
         self.entries = {}
         self.closed = False
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="history-query")
+
+    def query_local(self, camera_id, local_text, hours_text, refresh=False):
+        if not isinstance(local_text, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?", local_text):
+            raise SessionError("Choose a valid recorder date and time.", 422)
+        if hours_text not in ("1", "3", "6"):
+            raise SessionError("Choose a range of one, three or six hours.", 422)
+        if not 2000 <= int(local_text[:4]) <= 2100:
+            raise SessionError("Choose a recorder date/time between 2000 and 2100.", 422)
+        try:
+            position = recorder_utc(local_text, self.zone)
+        except ValueError:
+            raise SessionError("That date/time is invalid or ambiguous in the recorder timezone. Choose another time.", 422) from None
+        position = timestamp(utc_text(position))
+        now = self.wall_clock().astimezone(timezone.utc).replace(microsecond=0)
+        if position >= now:
+            raise SessionError("Choose a date/time earlier than now.", 422)
+        # Centre older footage, clipping near now and the SDK's earliest year.
+        earliest = max(datetime(2000, 1, 1, tzinfo=timezone.utc),
+                       datetime(2000, 1, 1, tzinfo=self.zone).astimezone(timezone.utc))
+        if position < earliest:
+            raise SessionError("That date/time is before the supported recording range.", 422)
+        span = timedelta(hours=int(hours_text))
+        end = min(position + span / 2, now)
+        begin = max(earliest, end - span)
+        result, status = self.query(camera_id, utc_text(begin), utc_text(end), refresh)
+        # The cached response belongs to its UTC range, not to one selected time.
+        return dict(result, selected_time=utc_text(position)), status
 
     def query(self, camera_id, begin_text, end_text, refresh=False):
         begin, end = timestamp(begin_text), timestamp(end_text)

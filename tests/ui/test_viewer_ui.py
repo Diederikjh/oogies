@@ -1,9 +1,11 @@
 """Browser acceptance tests against the real service and a synthetic recorder."""
 
 import hashlib
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 import unittest
+from zoneinfo import ZoneInfo
 
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
@@ -63,7 +65,8 @@ class ViewerUITests(unittest.TestCase):
         self.driver.save_screenshot(str(output / (self._testMethodName + ".png")))
         errors = [entry for entry in self.driver.get_log("browser") if entry["level"] == "SEVERE"
                   and "favicon.ico" not in entry["message"]]
-        expected = ("503",) if "rejection" in self._testMethodName else (("404",) if "expiry" in self._testMethodName else ())
+        expected = ("503",) if "rejection" in self._testMethodName else (("404",) if "expiry" in self._testMethodName else
+            (("422",) if "date_rejected" in self._testMethodName else ()))
         unexpected = [entry for entry in errors if not (entry.get("source") == "network" and
                        any(code in entry["message"] for code in expected))]
         self.assertEqual(unexpected, [], "Unexpected browser console errors")
@@ -452,6 +455,108 @@ class ViewerUITests(unittest.TestCase):
     def history_playing(self):
         self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "playing" and
             self.driver.execute_script("return document.getElementById('history-image').naturalWidth > 0 && !document.getElementById('history-image').hidden"))
+
+    def date_value(self, days=1):
+        return (datetime.now(ZoneInfo("Africa/Johannesburg")) - timedelta(days=days)).replace(
+            hour=0, minute=15, second=30, microsecond=0)
+
+    def go_to_date(self, value):
+        self.wait.until(lambda _:self.element("#history-go-time").is_enabled())
+        self.driver.execute_script("document.getElementById('history-date-time').value=arguments[0]", value.replace(tzinfo=None).isoformat())
+        self.element("#history-go-time").click()
+
+    def test_history_date_jump_uses_recorder_timezone_and_selected_camera(self):
+        self.wait_live()
+        self.driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId":"America/Los_Angeles"})
+        self.open_history(); Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        target = self.date_value()
+        self.go_to_date(target); self.history_playing(); self.history_ready()
+        source = next(iter(self.fixture.worker.playbacks.values()))
+        self.assertEqual(source["camera_id"], "camera-2")
+        start = [cmd for cmd in self.fixture.worker.playback_commands if cmd.startswith("playback-start")][-1].split()
+        self.assertEqual(start[4], target.replace(tzinfo=None).isoformat())
+        self.assertIn("Africa/Johannesburg", self.element("#history-date-zone").text)
+        self.assertIn(str(target.year), self.element("#history-range").text)
+        self.assertEqual(self.element("#history-date-time").get_attribute("value"), target.replace(tzinfo=None).isoformat())
+        self.assertTrue(self.element("#history-later").is_enabled())
+        selected = source["play_time"]
+        self.assertLess(abs((selected - target.astimezone(timezone.utc)).total_seconds()), 5)
+        before = self.history_pixels(); self.wait.until(lambda _:self.history_pixels() != before)
+
+    def test_history_date_jump_keeps_slot_speed_and_other_live_grid(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-recordings button")[0].click(); self.history_playing()
+        self.element('#history-speeds button[data-rate="4"]').click()
+        self.wait.until(lambda _:self.element('#history-speeds button[data-rate="4"]').get_attribute("aria-pressed") == "true")
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        identifier = next(iter(self.fixture.worker.playbacks)); original_tab = self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url); self.wait_live(range(1,8))
+        self.wait.until(lambda _:self.state(8) == "capacity_limited")
+        started, stopped = dict(self.fixture.worker.started), dict(self.fixture.worker.stopped)
+        self.driver.switch_to.window(original_tab)
+        self.go_to_date(self.date_value(days=3)); self.history_playing(); self.history_ready()
+        self.assertEqual(list(self.fixture.worker.playbacks), [identifier])
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"], 2)
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["rate"], 4)
+        self.assertEqual(self.fixture.sessions.reserved_sources, 1)
+        self.assertEqual(len(self.fixture.sessions.wanted), 7)
+        self.assertEqual(dict(self.fixture.worker.started), started)
+        self.assertEqual(dict(self.fixture.worker.stopped), stopped)
+        self.driver.switch_to.window(self.driver.window_handles[1]); self.wait_live(range(1,8))
+        before = self.pixels(); self.wait.until(lambda _:self.pixels() != before)
+
+    def test_history_date_rejected_preserves_working_picture_and_window(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-recordings button")[0].click(); self.history_playing()
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        identifier = next(iter(self.fixture.worker.playbacks))
+        span, picture = self.element("#history-range").text, self.history_pixels()
+        count, commands = len(self.fixture.worker.timeline_calls), len(self.fixture.worker.playback_commands)
+        self.go_to_date(self.date_value(days=-1))
+        self.wait.until(lambda _:"earlier than now" in self.element("#history-date-message").text)
+        self.assertEqual(self.element("#history-range").text, span)
+        self.assertEqual(self.history_pixels(), picture)
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"], 1)
+        self.assertEqual(len(self.fixture.worker.timeline_calls), count)
+        self.assertEqual(len(self.fixture.worker.playback_commands), commands)
+        self.driver.execute_script("document.getElementById('history-date-time').value=''")
+        self.element("#history-go-time").click()
+        self.assertEqual(len(self.fixture.worker.playback_commands), commands)
+        self.go_to_date(self.date_value()); self.history_playing()
+        self.assertEqual(self.element("#history-date-message").text, "")
+
+    def test_history_date_delayed_response_cannot_open_previous_camera(self):
+        self.wait_live(); self.open_history()
+        self.driver.execute_script("""
+            const original=window.fetch;
+            window.fetch=async (...args)=>{
+              const response=await original(...args);
+              if(String(args[0]).includes('local_time=')) {
+                const body=await response.text(); window.dateHeld=true;
+                await new Promise(resolve=>window.releaseDate=resolve);
+                return new Response(body,{status:response.status,headers:{'Content-Type':'application/json'}});
+              }
+              return response;
+            };
+        """)
+        self.go_to_date(self.date_value()); self.wait.until(lambda _:self.driver.execute_script("return window.dateHeld"))
+        Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
+        span = self.element("#history-range").text
+        self.driver.execute_script("window.releaseDate()")
+        self.driver.execute_async_script("const done=arguments[0];setTimeout(done,400)")
+        self.assertEqual(self.element("#history-camera").get_attribute("value"), "camera-2")
+        self.assertEqual(self.element("#history-range").text, span)
+        self.assertFalse(self.fixture.worker.playbacks)
+
+    def test_history_date_navigation_fits_mobile_and_keyboard_submission_plays(self):
+        self.wait_live(); self.driver.set_window_size(390, 844); self.open_history()
+        self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth <= innerWidth"))
+        target = self.date_value()
+        self.driver.execute_script("document.getElementById('history-date-time').value=arguments[0]", target.replace(tzinfo=None).isoformat())
+        self.element("#history-go-time").send_keys(Keys.ENTER); self.history_playing()
+        self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth <= innerWidth"))
 
     def test_camera_history_shortcuts_select_clicked_camera_and_work_offline(self):
         self.wait_live()

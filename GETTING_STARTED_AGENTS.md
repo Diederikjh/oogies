@@ -440,6 +440,14 @@ cameras with recordings. Check 0.5×, 1×, 2× and 4× controls against the visi
 recorded timestamp, preservation through seeks and Pause/Resume, and changing
 speed while paused without advancing the picture. A rejected decoder speed
 change must show an error and preserve moving video at its confirmed speed.
+Verify Date & time shows the configured recorder timezone. Choose a known older
+date/time for a non-default camera, press Go to time, and check its moving
+footage/recorded clock and surrounding timeline. It starts playback even if
+previously paused, retains that camera's selected speed and replaces the range
+within the same session/slot. Refresh should retain the chosen window; Recent
+returns to the current hours. Blank, future or ambiguous/nonexistent daylight-
+saving times must not start SDK playback. A rejected date leaves the prior
+window/picture working. Check keyboard submission and mobile fit as well.
 
 Inside the runtime, verify the configured IANA timezone can be loaded with
 Python's `zoneinfo.ZoneInfo`. It requires timezone data in Docker; install

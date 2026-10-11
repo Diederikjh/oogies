@@ -2,6 +2,7 @@
 """Bounded real-service History acceptance in Docker Chromium."""
 
 import argparse
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -33,12 +34,34 @@ def main():
         wait.until(lambda _:driver.find_element(By.ID, "history-camera").is_enabled())
         Select(driver.find_element(By.ID, "history-camera")).select_by_value("camera-1")
         wait.until(lambda _:driver.find_element(By.ID, "history-recordings").get_attribute("data-state") == "ready")
-        driver.execute_script("const input=document.getElementById('history-position');input.value=7200;input.dispatchEvent(new Event('change',{bubbles:true}));")
+        selection = driver.execute_script("""
+            const original=window.fetch; window.firstRecordedTime=null;
+            window.fetch=async(...args)=>{
+              const response=await original(...args);
+              if(String(args[0]).startsWith('/api/playback/sessions') && response.ok && response.status!==204) {
+                const state=await response.clone().json();
+                window.lastPlaybackState=state;
+                if((!args[1]?.method || args[1].method==='GET') && state.frames>0 && state.position && !window.firstRecordedTime) window.firstRecordedTime=state.position;
+              }
+              return response;
+            };
+            const zone=document.getElementById('history-date-zone').textContent.replace('Times in ', '');
+            const target=new Date(Math.floor((Date.now()-3600000)/1000)*1000);
+            const parts=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(target);
+            const v=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+            const local=`${v.year}-${v.month}-${v.day}T${v.hour}:${v.minute}:${v.second}`;
+            document.getElementById('history-date-time').value=local;
+            return {local_time:local,expected_utc:target.toISOString(),timezone:zone};
+        """)
+        driver.find_element(By.ID, "history-go-time").click()
         wait.until(lambda _:driver.execute_script("return !document.getElementById('history-image').hidden && document.getElementById('history-image').naturalWidth > 0"))
         def pixels():
             return driver.execute_script("const i=document.getElementById('history-image'),c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext('2d').drawImage(i,0,0);return c.toDataURL();")
         before = hashlib.sha256(pixels().encode()).hexdigest()
         wait.until(lambda _:hashlib.sha256(pixels().encode()).hexdigest() != before)
+        first_time = wait.until(lambda _:driver.execute_script("return window.firstRecordedTime"))
+        parse = lambda value:datetime.fromisoformat(value.replace("Z", "+00:00"))
+        assert abs((parse(first_time) - parse(selection["expected_utc"])).total_seconds()) <= 3
         started = time.monotonic()
         while time.monotonic() - started < args.continuous_seconds:
             assert driver.find_element(By.ID, "history-player").get_attribute("data-state") == "playing"
@@ -57,10 +80,23 @@ def main():
         dimensions = driver.execute_script("const i=document.getElementById('history-image'),r=i.getBoundingClientRect();return {width:i.naturalWidth,height:i.naturalHeight,ratio:r.width/r.height};")
         driver.save_screenshot(str(output / "history-playback.png"))
         assert abs(dimensions["ratio"] - 16/9) < .01
+        previous = driver.execute_script("return window.lastPlaybackState")
+        driver.execute_script("""
+            const input=document.getElementById('history-date-time');
+            const value=new Date(input.value+'Z');value.setUTCSeconds(value.getUTCSeconds()+60);
+            input.value=value.toISOString().slice(0,19);
+        """)
+        driver.find_element(By.ID, "history-go-time").click()
+        wait.until(lambda _:driver.find_element(By.ID, "history-player").get_attribute("data-state") == "playing" and
+                   driver.execute_script("return window.lastPlaybackState?.generation > arguments[0] && window.lastPlaybackState?.rate === 4", previous["generation"]))
+        changed = driver.execute_script("return window.lastPlaybackState")
+        assert changed["id"] == previous["id"] and changed["from"] != previous["from"]
         driver.find_element(By.ID, "history-stop").click()
         wait.until(lambda _:driver.find_element(By.ID, "history-player").get_attribute("data-state") == "idle")
         with urlopen(args.url + "/api/status", timeout=5) as response: status = json.load(response)
         report = dict(moving_picture=True, camera_history_shortcut=True, playback_rates=rates,
+                      date_navigation=True, first_recorded_time=first_time, **selection,
+                      date_jump_retains_session=True, date_jump_retains_speed=True,
                       continuous_seconds=args.continuous_seconds,
                       pause_holds_picture=True, sdk_login_calls=status["sdk_login_calls"],
                       playback_sessions_after_stop=status["playback_sessions"], **dimensions)

@@ -45,6 +45,8 @@ camera's recording/motion timeline without requiring a saved private clip.
 Click a time or motion interval to play its footage; Pause/Resume and Stop
 control only your playback. Each camera also has a **History** shortcut. Playback
 speed buttons offer **0.5×, 1×, 2× and 4×**, preserved through seeking and pause/resume.
+**Date & time → Go to time** jumps to a chosen recorder-local timestamp and
+starts that camera's recording, retaining the same viewer slot and speed.
 One historical viewer slot is currently admitted.
 Expand uses overview quality. Credentials stay in
 the Docker backend. To stop the web server:

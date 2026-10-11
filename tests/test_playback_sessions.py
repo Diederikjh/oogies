@@ -140,6 +140,36 @@ class PlaybackTests(unittest.TestCase):
             with self.assertRaises(SessionError): self.playback.patch(session["id"], {"rate":rate})
         self.assertEqual(len(self.worker.commands), 1)
 
+    def test_range_jump_retains_lease_slot_rate_and_other_live_view(self):
+        self.live.limit = 2
+        self.worker.cameras["camera-2"]["online"] = True
+        session = self.create(); identifier = session["id"]
+        self.worker.playbacks[identifier].update(state="playing", rate=4, requested_rate=4, frame=b"old")
+        live = self.live.create({"cameras":[{"id":f"camera-{i}", "quality":"overview"} for i in (1, 2)]})
+        self.assertEqual(len(self.live.wanted), 1)
+        result = self.playback.patch(identifier, dict(**{"from":"2026-10-09T10:00:00Z", "to":"2026-10-09T13:00:00Z"},
+            position="2026-10-09T11:15:30Z", state="playing"))
+        self.assertEqual(result["id"], identifier)
+        self.assertEqual(result["generation"], 2)
+        self.assertEqual(result["requested_rate"], 4)
+        self.assertEqual(result["from"], "2026-10-09T10:00:00Z")
+        self.assertEqual((len(self.live.wanted), self.live.reserved_sources), (1, 1))
+        self.assertEqual(self.live.get(live["id"])["cameras"][0]["state"], "live")
+        self.assertIsNone(self.worker.playbacks[identifier]["frame"])
+        self.assertTrue(self.worker.commands[-1].endswith("2026-10-09T13:15:30 2026-10-09T15:00:00 0 2"))
+
+    def test_invalid_range_jump_does_not_mutate_working_session(self):
+        session = self.create(); identifier = session["id"]
+        for body in ({"from":BEGIN}, {"from":BEGIN, "to":END},
+            {"from":END, "to":BEGIN, "position":BEGIN},
+            {"from":BEGIN, "to":"2026-10-11T17:00:00Z", "position":BEGIN},
+            {"from":BEGIN, "to":END, "position":END}):
+            with self.assertRaises(SessionError): self.playback.patch(identifier, body)
+            self.assertEqual(self.playback.get(identifier)["generation"], 1)
+            self.assertEqual(self.playback.get(identifier)["from"], BEGIN)
+            self.assertEqual(self.live.reserved_sources, 1)
+        self.assertEqual(len(self.worker.commands), 1)
+
     def test_independent_positions_controls_and_expiry(self):
         first, second = self.create(), self.create(position="2026-10-11T10:30:00Z")
         self.playback.patch(first["id"], {"position":"2026-10-11T10:10:00Z"})

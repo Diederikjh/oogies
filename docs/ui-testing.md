@@ -118,7 +118,21 @@ old request/generation rejection and independent viewer rates. The real check
 `python3 tools/check_playback_rates.py` measures SDK clock advancement; the fake
 decoder cannot establish actual native Fast/Slow behavior.
 
+Date-navigation cases check recorder timezone despite a different browser zone,
+cross-midnight date conversion, direct playback on the selected camera,
+preserving a reserved slot and speed beside a full live grid, future/blank
+validation preserving paused footage, delayed date responses after camera
+changes, and mobile/keyboard use. Backend cases cover centred/clipped ranges,
+minute/second input, DST ambiguity/gaps, strict HTTP query variants, shared UTC
+cache entries and invalid range updates leaving sessions unchanged.
+
 ## Verified result
+
+Direct date/time navigation passed all 60 unit tests and 41 Docker cases
+(38 browser and three native buffer tests). The real browser date form started
+footage at its exact requested recorded second and retained the session/4× speed
+through a second date jump. Thirty uninterrupted seconds, all speeds, Pause and
+Stop passed with one SDK login and zero historical sessions after cleanup.
 
 The camera-shortcut/speed increment passed all 54 unit tests and 36 Docker cases
 (33 browser and three native buffer regressions). The final shortcut keyboard

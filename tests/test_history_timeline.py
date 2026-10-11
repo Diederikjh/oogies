@@ -159,6 +159,57 @@ class HistoryTimelineTests(unittest.TestCase):
         with self.assertRaises(SessionError): recorder_wall(datetime(2026, 11, 1, 5, 30, tzinfo=timezone.utc), zone)
         with self.assertRaises(ValueError): recorder_utc("2026-03-08T02:30:00", zone)
 
+    def test_local_navigation_uses_recorder_timezone_and_centres_older_window(self):
+        self.timeline.wall_clock = lambda:datetime(2026, 10, 11, 11, tzinfo=timezone.utc)
+        result, status = self.timeline.query_local("camera-1", "2026-10-09T00:15:30", "3")
+        self.assertEqual(status, 202)
+        self.assertEqual(result["selected_time"], "2026-10-08T22:15:30Z")
+        self.assertEqual(result["from"], "2026-10-08T20:45:30Z")
+        self.assertEqual(result["to"], "2026-10-08T23:45:30Z")
+        entry = next(iter(self.timeline.entries.values())); entry["future"].result(timeout=3)
+        normal, status = self.timeline.query("camera-1", result["from"], result["to"])
+        self.assertEqual(status, 200)
+        self.assertNotIn("selected_time", normal, "Navigation must not mutate a cached range response")
+        self.assertEqual(len(self.worker.calls), 1)
+
+    def test_local_navigation_clips_near_now_and_accepts_minute_input(self):
+        self.timeline.wall_clock = lambda:datetime(2026, 10, 11, 11, tzinfo=timezone.utc)
+        result, _ = self.timeline.query_local("camera-1", "2026-10-11T12:59", "1")
+        self.assertEqual(result["selected_time"], "2026-10-11T10:59:00Z")
+        self.assertEqual(result["from"], BEGIN)
+        self.assertEqual(result["to"], END)
+        self.assertLess(timestamp(result["selected_time"]), timestamp(result["to"]))
+
+    def test_local_navigation_invalid_future_and_dst_times_do_not_query_recorder(self):
+        self.timeline.wall_clock = lambda:datetime(2026, 10, 11, 11, tzinfo=timezone.utc)
+        for value, hours in (("", "3"), ("2026-02-30T12:00", "3"), ("2026-10-11T13:00", "3"),
+            ("2026-10-11T13:00:01", "3"), ("2026-10-09T12:00+02:00", "3"),
+            ("2026-10-09T12:00Z", "3"), ("2026-10-09T12:00", "24"), (None, "3"),
+            ("0001-01-01T00:00", "3"), ("9999-12-31T23:59", "3")):
+            with self.assertRaises(SessionError): self.timeline.query_local("camera-1", value, hours)
+        self.timeline.zone = ZoneInfo("America/New_York")
+        self.timeline.wall_clock = lambda:datetime(2026, 12, 1, tzinfo=timezone.utc)
+        for value in ("2026-03-08T02:30", "2026-11-01T01:30"):
+            with self.assertRaises(SessionError) as failure: self.timeline.query_local("camera-1", value, "1")
+            self.assertEqual(failure.exception.status, 422)
+        self.assertEqual(self.worker.calls, [])
+
+    def test_http_local_navigation_and_mixed_duplicate_parameters(self):
+        self.timeline.wall_clock = lambda:datetime(2026, 10, 11, 11, tzinfo=timezone.utc)
+        server = create_server(self.worker, LiveSessions(self.worker), address=("127.0.0.1", 0),
+            web=ROOT / "web", recording=ROOT / ".local/not-used.mp4", timeline=self.timeline)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        self.addCleanup(server.server_close); self.addCleanup(server.shutdown)
+        base = f"http://127.0.0.1:{server.server_port}/api/cameras/camera-1/timeline?"
+        query = urlencode(dict(local_time="2026-10-09T00:15:30", hours="3"))
+        with urlopen(base + query, timeout=2) as response:
+            result = json.load(response)
+            self.assertEqual(response.status, 202)
+            self.assertEqual(result["selected_time"], "2026-10-08T22:15:30Z")
+        for suffix in ("&local_time=bad", "&from=" + BEGIN, "&hours=1"):
+            with self.assertRaises(HTTPError) as failure: urlopen(base + query + suffix, timeout=2)
+            self.assertEqual(failure.exception.code, 400)
+
     def test_http_contract_encodes_offsets_and_rejects_repeated_parameters(self):
         sessions = LiveSessions(self.worker)
         server = create_server(self.worker, sessions, address=("127.0.0.1", 0),

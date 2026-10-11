@@ -131,11 +131,20 @@ searches through the shared login; no API fallback or authentication retry occur
 | Method | Path | Meaning |
 | --- | --- | --- |
 | GET | `/api/cameras/{id}/timeline?from={utc}&to={utc}` | Recording availability and motion intervals over a bounded time range |
+| GET | `/api/cameras/{id}/timeline?local_time={recorder-wall-time}&hours={hours}` | Resolve a local date/time and return its surrounding 1, 3 or 6-hour timeline plus `selected_time` |
 
 Both timestamps must carry an explicit timezone; responses normalize them to
 UTC. Store source provenance and interval granularity in the backend. Display
 times in the configured recorder timezone (`Africa/Johannesburg` for the current
 installation), returned with timeline metadata.
+The local navigation variant accepts `YYYY-MM-DDTHH:mm[:ss]` without an offset,
+interpreted using the backend recorder timezone. It rejects invalid, future,
+repeated or nonexistent local times before recorder work. Older windows are
+centred on that timestamp; near-now windows end at server time. Responses
+include UTC `selected_time`, `from`/`to` and the recorder timezone, with the same
+202/200 metadata states and cache as ordinary queries. The browser polls the
+resolved UTC range after its first response. Do not combine both query variants
+or repeat parameters. Both forms optionally support `refresh=1`.
 
 Example partial response: recording information is available, but motion is not:
 
@@ -235,6 +244,19 @@ Example PATCH bodies:
 ```json
 {"rate": 2}
 ```
+
+To change the time window without losing this viewer's reserved slot, PATCH the
+same session with `from`, `to` and `position` together:
+
+```json
+{"from":"2026-10-09T10:00:00Z", "to":"2026-10-09T13:00:00Z", "position":"2026-10-09T11:15:30Z", "state":"playing"}
+```
+
+All range/date checks happen before mutation. The range remains at most six
+hours, and position must fall inside it. Accepted jumps increment generation,
+clear old decoder data, keep the lease ID/source reservation and preserve rate
+unless explicitly supplied. Other viewers are unchanged. Go to time uses
+`state: "playing"` to start footage even if the previous picture was paused.
 
 Unspecified fields remain unchanged; PATCH `{}` only renews the lease. Validate
 seek targets against the session range, clear old decoder buffers during seek,
