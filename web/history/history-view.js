@@ -113,6 +113,7 @@ export class HistoryView {
           // its next playback PATCH replaces only that native context.
           this.recent = false; this.end = Date.parse(data.to); this.timeline.selected = undefined;
           this.data = null; this.eventControls(false); this.dateNavigation.error("");
+          this.panel.querySelector(".history-date-picker").open = false;
         }
         this.timeline.render(data);
         this.dateNavigation.ready(data.timezone, this.timeline.selected ?? this.timeline.end - 1000);
@@ -153,6 +154,7 @@ export class HistoryView {
   hide() {
     this.active = false; ++this.generation; this.abort?.abort(); clearInterval(this.refreshTimer);
     this.clip.clearMessage();
+    this.panel.querySelector(".history-date-picker").open = false;
     return this.player.stop();
   }
 }

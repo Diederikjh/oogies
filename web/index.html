@@ -20,49 +20,74 @@
       <div id="camera-grid" class="camera-grid"></div>
     </section>
     <section id="history-panel" aria-label="Camera history" hidden>
-      <div id="history-player" class="history-player" data-state="idle">
-        <div id="history-viewer" class="viewer history-viewer"><img id="history-image" hidden alt="Recorded camera video"><span id="history-placeholder" class="tile-placeholder">Select a time or motion interval to play its recording.</span></div>
-        <div class="toolbar"><p id="history-playback-status" role="status" aria-live="polite"></p><div class="actions"><button id="history-pause" disabled>Pause</button><button id="history-stop" disabled>Stop playback</button></div></div>
-        <div id="history-speeds" class="history-speeds" role="group" aria-label="Playback speed">
-          <span>Speed</span><button type="button" data-rate="0.5" aria-pressed="false" disabled>0.5×</button>
-          <button type="button" data-rate="1" aria-pressed="true" disabled>1×</button>
-          <button type="button" data-rate="2" aria-pressed="false" disabled>2×</button>
-          <button type="button" data-rate="4" aria-pressed="false" disabled>4×</button>
-        </div>
-        <p id="history-speed-status" class="subtitle" role="status" aria-live="polite"></p>
-        <div id="history-steps" class="history-speeds" role="group" aria-label="Step through recording">
-          <button type="button" data-seconds="-30" disabled>Back 30s</button><button type="button" data-seconds="-10" disabled>Back 10s</button>
-          <button type="button" data-seconds="10" disabled>Forward 10s</button><button type="button" data-seconds="30" disabled>Forward 30s</button>
-          <button id="history-frame-download" type="button" disabled>Download current frame</button>
-        </div>
-        <p id="history-frame-message" class="subtitle" role="status" aria-live="polite"></p>
+      <div class="history-navigation">
+        <label>Camera<select id="history-camera" disabled aria-label="History camera"></select></label>
+        <label>Range<select id="history-hours"><option value="1">1 hour</option><option value="3" selected>3 hours</option><option value="6">6 hours</option></select></label>
+        <div class="actions"><button id="history-earlier">Earlier</button><button id="history-later" disabled>Later</button><button id="history-recent">Recent</button></div>
+        <details class="history-date-picker">
+          <summary>Go to date/time</summary>
+          <div class="history-date-popover">
+            <form id="history-date-form" class="history-date-controls">
+              <label>Date &amp; time<input id="history-date-time" type="datetime-local" step="1" min="2000-01-01T00:00:00" required disabled aria-describedby="history-date-zone history-date-message"></label>
+              <button id="history-go-time" type="submit" disabled>Go to time</button>
+              <span id="history-date-zone" class="subtitle">Loading recorder timezone…</span>
+            </form>
+            <p id="history-date-message" class="subtitle" role="status" aria-live="polite"></p>
+          </div>
+        </details>
+        <button id="history-refresh">Refresh</button>
       </div>
-      <div class="history-card">
-        <div class="history-controls">
-          <label>Camera<select id="history-camera" disabled aria-label="History camera"></select></label>
-          <label>Range<select id="history-hours"><option value="1">1 hour</option><option value="3" selected>3 hours</option><option value="6">6 hours</option></select></label>
-          <div class="actions"><button id="history-earlier">Earlier</button><button id="history-later" disabled>Later</button><button id="history-recent">Recent</button><button id="history-refresh">Refresh</button></div>
+      <div class="history-workspace">
+        <div id="history-player" class="history-player history-main" data-state="idle">
+          <div id="history-viewer" class="viewer history-viewer"><img id="history-image" hidden alt="Recorded camera video"><span id="history-placeholder" class="tile-placeholder">Select a time or motion interval to play its recording.</span></div>
+          <div class="history-timeline">
+            <div class="history-timeline-heading">
+              <h2>Timeline</h2>
+              <div class="history-speeds" role="group" aria-label="Timeline zoom"><button id="history-zoom-clip" disabled>Zoom to clip</button><button id="history-zoom-out" disabled>Zoom out</button><button id="history-full-range" disabled>Full range</button></div>
+            </div>
+            <p class="subtitle" id="history-range"></p>
+            <p id="history-message" role="status" aria-live="polite"></p>
+            <div class="timeline-rows">
+              <span class="timeline-label">Recordings</span><div id="history-recordings" class="timeline-track" role="group" aria-label="Recording timeline"></div>
+              <span class="timeline-label">Motion</span><div id="history-motion" class="timeline-track" role="group" aria-label="Motion timeline"></div>
+            </div>
+            <div id="history-axis" class="timeline-axis"></div>
+            <label class="history-position"><span><output id="history-selected">Choose a time</output></span><input id="history-position" type="range" min="0" step="1" value="0" disabled aria-label="Selected history time"></label>
+          </div>
+          <div class="history-transport">
+            <div class="actions"><button id="history-pause" disabled>Pause</button><button id="history-stop" disabled>Stop</button></div>
+            <div id="history-steps" class="history-speeds" role="group" aria-label="Step through recording">
+              <button type="button" data-seconds="-30" disabled aria-label="Back 30 seconds">−30s</button><button type="button" data-seconds="-10" disabled aria-label="Back 10 seconds">−10s</button>
+              <button type="button" data-seconds="10" disabled aria-label="Forward 10 seconds">+10s</button><button type="button" data-seconds="30" disabled aria-label="Forward 30 seconds">+30s</button>
+            </div>
+            <div id="history-speeds" class="history-speeds" role="group" aria-label="Playback speed">
+              <button type="button" data-rate="0.5" aria-pressed="false" disabled>0.5×</button>
+              <button type="button" data-rate="1" aria-pressed="true" disabled>1×</button>
+              <button type="button" data-rate="2" aria-pressed="false" disabled>2×</button>
+              <button type="button" data-rate="4" aria-pressed="false" disabled>4×</button>
+            </div>
+            <button id="history-frame-download" type="button" disabled>Save frame</button>
+          </div>
+          <div class="history-feedback">
+            <p id="history-playback-status" role="status" aria-live="polite"></p>
+            <p id="history-speed-status" role="status" aria-live="polite"></p>
+            <p id="history-frame-message" role="status" aria-live="polite"></p>
+          </div>
         </div>
-        <form id="history-date-form" class="history-date-controls">
-          <label>Date &amp; time<input id="history-date-time" type="datetime-local" step="1" min="2000-01-01T00:00:00" required disabled aria-describedby="history-date-zone history-date-message"></label>
-          <button id="history-go-time" type="submit" disabled>Go to time</button>
-          <span id="history-date-zone" class="subtitle">Loading recorder timezone…</span>
-        </form>
-        <p id="history-date-message" class="subtitle" role="status" aria-live="polite"></p>
-        <h2>Camera timeline</h2><p class="subtitle" id="history-range"></p>
-        <div class="history-speeds" role="group" aria-label="Timeline zoom"><button id="history-zoom-clip" disabled>Zoom to clip</button><button id="history-zoom-out" disabled>Zoom out</button><button id="history-full-range" disabled>Full range</button></div>
-        <p id="history-message" role="status" aria-live="polite"></p>
-        <div class="timeline-rows">
-          <span class="timeline-label">Recordings</span><div id="history-recordings" class="timeline-track" role="group" aria-label="Recording timeline"></div>
-          <span class="timeline-label">Motion</span><div id="history-motion" class="timeline-track" role="group" aria-label="Motion timeline"></div>
+        <div class="history-side-column">
+          <div class="history-clip-strip">
+            <h2>Export a clip</h2>
+            <div class="history-speeds" role="group" aria-label="Clip selection"><button id="clip-start" disabled>Mark start</button><button id="clip-end" disabled>Mark end</button><button id="clip-clear">Clear marks</button><button id="clip-queue" disabled>Queue export</button><button id="clip-view-exports">View exports</button></div>
+            <div class="history-clip-summary"><p id="clip-range"></p><p id="clip-duration"></p><p id="clip-aspect"></p></div>
+            <p id="clip-message" role="status" aria-live="polite"></p>
+          </div>
+          <details class="history-events-panel" open>
+            <summary>Motion events</summary>
+            <div class="history-event-controls"><button id="history-previous" disabled aria-label="Previous motion">Previous</button><button id="history-next" disabled aria-label="Next motion">Next</button></div>
+            <div class="history-statuses" aria-live="polite"><p id="history-recordings-status"></p><p id="history-motion-status"></p></div>
+            <ul id="history-events" class="history-events" aria-label="Motion intervals"></ul>
+          </details>
         </div>
-        <div id="history-axis" class="timeline-axis"></div>
-        <div class="history-statuses" aria-live="polite"><p id="history-recordings-status"></p><p id="history-motion-status"></p></div>
-        <label class="history-position">Selected time · <output id="history-selected">Choose a time</output><input id="history-position" type="range" min="0" step="1" value="0" disabled aria-label="Selected history time"></label>
-        <div class="history-speeds" role="group" aria-label="Clip selection"><button id="clip-start" disabled>Mark start</button><button id="clip-end" disabled>Mark end</button><button id="clip-clear">Clear marks</button><button id="clip-queue" disabled>Queue export</button><button id="clip-view-exports">View exports</button></div>
-        <p id="clip-range" class="subtitle"></p><p id="clip-duration" class="subtitle"></p><p id="clip-aspect" class="subtitle"></p><p id="clip-message" role="status" aria-live="polite"></p>
-        <div class="history-event-controls"><button id="history-previous" disabled>Previous motion</button><button id="history-next" disabled>Next motion</button></div>
-        <ul id="history-events" class="history-events" aria-label="Motion intervals"></ul>
       </div>
     </section>
     <section id="exports-panel" aria-label="Export jobs" hidden><div class="toolbar"><h2>Export jobs</h2><button id="exports-refresh">Refresh</button></div><p id="exports-limits" class="subtitle"></p><p id="exports-message" role="status" aria-live="polite"></p><ul id="export-jobs" class="export-jobs"></ul></section>

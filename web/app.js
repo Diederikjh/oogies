@@ -4,6 +4,8 @@ import {DisplaySettings} from "/settings/display-settings.js";
 import {ExportsView} from "/history/exports.js";
 
 const byId = id => document.getElementById(id);
+const historyEvents = document.querySelector(".history-events-panel");
+historyEvents.open = !window.matchMedia("(max-width: 900px)").matches;
 let mode = "live";
 const overview = new Overview(byId("camera-grid"), session => {
   const live = session?.cameras.filter(camera => camera.state === "live").length || 0;
@@ -20,6 +22,7 @@ const settings = new DisplaySettings(byId("display-settings"), overview.tiles, (
 
 async function showMode(next, cameraId) {
   mode = next;
+  document.body.classList.toggle("history-mode", next === "history");
   byId("live-panel").hidden = next !== "live";
   byId("history-panel").hidden = next !== "history";
   byId("exports-panel").hidden = next !== "exports";

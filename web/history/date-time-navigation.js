@@ -6,6 +6,13 @@ export class DateTimeNavigation {
     this.button = panel.querySelector("#history-go-time");
     this.zoneLabel = panel.querySelector("#history-date-zone");
     this.message = panel.querySelector("#history-date-message");
+    this.picker = panel.querySelector(".history-date-picker");
+    document.addEventListener("pointerdown", event => {
+      if (this.picker.open && !this.picker.contains(event.target)) this.picker.open = false;
+    });
+    this.picker.addEventListener("keydown", event => {
+      if (event.key === "Escape") { this.picker.open = false; this.picker.querySelector("summary").focus(); }
+    });
     this.form.addEventListener("submit", event => {
       event.preventDefault();
       if (!this.input.disabled && this.form.reportValidity()) {

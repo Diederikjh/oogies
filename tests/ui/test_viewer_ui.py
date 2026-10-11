@@ -20,6 +20,7 @@ from fixture import COLORS, SyntheticMedia, ViewerFixture
 
 
 class ViewerUITests(unittest.TestCase):
+    WINDOW_SIZES = {"test_history_mobile_collapsed_events_can_play_seek_and_mark":(390,844)}
     OPTIONS = {
         "test_capacity_limit_keeps_admitted_cameras_live": {"limit": 2},
         "test_camera_start_failure_is_local_to_its_tile": {"failed_camera": "camera-2"},
@@ -65,7 +66,7 @@ class ViewerUITests(unittest.TestCase):
         self.driver = webdriver.Chrome(options=options)
         self.addCleanup(self.driver.quit)
         self.wait = WebDriverWait(self.driver, 12)
-        self.driver.set_window_size(1600, 1100)
+        self.driver.set_window_size(*self.WINDOW_SIZES.get(self._testMethodName,(1600,1100)))
         self.driver.get(self.fixture.url)
 
     def tearDown(self):
@@ -86,6 +87,11 @@ class ViewerUITests(unittest.TestCase):
 
     def element(self, selector):
         return self.driver.find_element(By.CSS_SELECTOR, selector)
+
+    def rendered(self, selector):
+        # Chromium hides closed <details> with content-visibility. Selenium's
+        # legacy is_displayed() reports those descendants as visible.
+        return self.driver.execute_script("return document.querySelector(arguments[0]).checkVisibility()",selector)
 
     def state(self, channel):
         elements = self.driver.find_elements(By.CSS_SELECTOR, self.tile(channel))
@@ -461,6 +467,122 @@ class ViewerUITests(unittest.TestCase):
         self.assertGreater(float(self.element("#history-position").get_attribute("value")), 0)
         self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,".timeline-cursor")), 2)
 
+    def assert_history_controls_in_view(self):
+        selectors = ["#history-viewer", "#history-position", "#history-pause", "#history-speeds",
+                     "#clip-start", "#clip-end", "#clip-queue", "#clip-clear"]
+        layout = self.driver.execute_script("""
+            return {height:innerHeight, width:innerWidth, pageHeight:document.documentElement.scrollHeight,
+              pageWidth:document.documentElement.scrollWidth, scroll:scrollY,
+              parts:arguments[0].map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();
+                return {selector,top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height};})};
+        """, selectors)
+        self.assertEqual(layout["scroll"],0,"History should not need page scrolling")
+        self.assertLessEqual(layout["pageHeight"],layout["height"]+1)
+        self.assertLessEqual(layout["pageWidth"],layout["width"])
+        for rect in layout["parts"]:
+            with self.subTest(control=rect["selector"]):
+                self.assertGreater(rect["height"],0)
+                self.assertGreaterEqual(rect["top"],0)
+                self.assertLessEqual(rect["bottom"],layout["height"]+1)
+                self.assertGreaterEqual(rect["left"],0)
+                self.assertLessEqual(rect["right"],layout["width"]+1)
+        self.assertGreaterEqual(layout["parts"][0]["height"],100)
+
+    def test_history_compact_workspace_keeps_video_seek_and_marks_in_view(self):
+        self.mark_clip(10)
+        for width,height in ((1600,1100),(1366,768)):
+            with self.subTest(window=(width,height)):
+                self.driver.set_window_size(width,height)
+                self.assert_history_controls_in_view()
+                self.assertAlmostEqual(self.ratio("#history-image"),16/9,delta=.01)
+                markers=self.driver.find_elements(By.CSS_SELECTOR,".clip-marker")
+                self.assertEqual(sum(marker.is_displayed() for marker in markers),2)
+                self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,".clip-shade")),2)
+        self.fixture.worker.export_gate.clear()
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.assert_history_controls_in_view()
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"],"paused")
+        self.element("#clip-clear").click()
+        self.assert_history_controls_in_view()
+        self.assertEqual(self.element("#clip-message").text,"")
+
+    def test_history_motion_list_scroll_preserves_video_and_can_seek(self):
+        original=self.fixture.worker.query_timeline
+        def many_events(camera,begin,end):
+            data=original(camera,begin,end)
+            start,stop=datetime.fromisoformat(begin),datetime.fromisoformat(end)
+            data["motion"]["intervals"]=[{
+                "start":(start+(stop-start)*(.1+.8*index/36)).isoformat(timespec="seconds"),
+                "end":(start+(stop-start)*(.1+.8*index/36)+timedelta(seconds=20)).isoformat(timespec="seconds"),
+                "recording_type":1} for index in range(36)]
+            return data
+        self.fixture.worker.query_timeline=many_events
+        self.driver.set_window_size(1366,768); self.wait_live(); self.open_history()
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")),36)
+        self.element("#history-recordings button").click(); self.history_playing()
+        identifier=next(iter(self.fixture.worker.playbacks))
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
+        before=len(self.fixture.worker.playback_commands)
+        picture=self.history_pixels()
+        top=self.element("#history-viewer").rect["y"]
+        x,y=self.driver.execute_script("const r=document.querySelector('.history-events-panel').getBoundingClientRect();return [r.left+r.width/2,r.bottom-20]")
+        self.driver.execute_cdp_cmd("Input.dispatchMouseEvent",{"type":"mouseWheel","x":x,"y":y,"deltaX":0,"deltaY":500})
+        self.wait.until(lambda _:self.driver.execute_script("return document.querySelector('.history-events-panel').scrollTop>0"))
+        self.assertEqual(self.element("#history-viewer").rect["y"],top)
+        self.assert_history_controls_in_view()
+        self.assertEqual(len(self.fixture.worker.playback_commands),before)
+        self.wait.until(lambda _:self.history_pixels()!=picture)
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[-1].click()
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1)
+        self.history_playing(); self.assert_history_controls_in_view()
+
+    def test_history_date_picker_keyboard_dismissal_and_navigation_preserve_draft(self):
+        self.paused_history()
+        summary=self.element(".history-date-picker summary")
+        self.assertFalse(self.rendered("#history-date-time"))
+        commands=len(self.fixture.worker.playback_commands)
+        picture=self.history_pixels()
+        summary.send_keys(Keys.ENTER)
+        self.wait.until(lambda _:self.rendered("#history-date-time"))
+        value=self.date_value(2).replace(tzinfo=None).isoformat()
+        self.driver.execute_script("document.getElementById('history-date-time').value=arguments[0]",value)
+        self.element("#history-date-time").send_keys(Keys.ESCAPE)
+        self.assertFalse(self.rendered("#history-date-time"))
+        self.assertEqual(self.driver.switch_to.active_element,summary)
+        summary.send_keys(Keys.ENTER)
+        self.assertEqual(self.element("#history-date-time").get_attribute("value"),value)
+        self.element(".history-timeline h2").click()
+        self.assertFalse(self.rendered("#history-date-time"))
+        self.assertEqual(len(self.fixture.worker.playback_commands),commands)
+        self.assertEqual(self.history_pixels(),picture)
+        summary.click(); self.element("#exports-tab").click()
+        self.open_history()
+        self.assertFalse(self.rendered("#history-date-time"))
+        self.open_date_picker()
+        self.assertEqual(self.element("#history-date-time").get_attribute("value"),value)
+
+    def test_history_mobile_collapsed_events_can_play_seek_and_mark(self):
+        self.wait_live(); self.open_history()
+        self.assertFalse(self.element(".history-events-panel").get_attribute("open"))
+        self.assertFalse(self.rendered("#history-events button"))
+        self.element("#history-motion button").click(); self.history_playing()
+        self.element(".history-events-panel summary").click()
+        self.assertTrue(self.rendered("#history-events button"))
+        identifier=next(iter(self.fixture.worker.playbacks))
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[1].click()
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1)
+        self.history_playing()
+        self.element(".history-events-panel summary").click()
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state")=="paused" and self.element("#clip-start").is_enabled())
+        self.element("#clip-start").click(); self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
+        self.assertEqual(self.clip_seconds(),10)
+        self.assertTrue(self.element("#clip-queue").is_enabled())
+        self.assertFalse(self.driver.execute_script("return document.documentElement.scrollWidth>innerWidth"))
+
     def history_playing(self):
         self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "playing" and
             self.driver.execute_script("return document.getElementById('history-image').naturalWidth > 0 && !document.getElementById('history-image').hidden"))
@@ -635,13 +757,13 @@ class ViewerUITests(unittest.TestCase):
     def test_history_clip_handles_respect_configured_limit(self):
         self.mark_clip(180)
         self.assertIn("up to 120 seconds",self.element("#clip-duration").text)
-        self.element('#history-motion .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
+        self.element('#history-recordings .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
         self.assertEqual(self.clip_seconds(),120)
         self.assertTrue(self.element("#clip-queue").is_enabled())
 
     def test_history_clip_touch_drag_survives_metadata_refresh(self):
         self.mark_clip(); self.driver.set_window_size(390,844)
-        flag=self.element('#history-motion .clip-marker[data-bound="to"]')
+        flag=self.element('#history-recordings .clip-marker[data-bound="to"]')
         self.driver.execute_script("arguments[0].scrollIntoView({block:'center',behavior:'instant'})",flag)
         x,y,right=self.driver.execute_script("const f=arguments[0].getBoundingClientRect(),t=arguments[0].parentElement.getBoundingClientRect();return [f.left+f.width/2,f.top+f.height/2,t.right-2]",flag)
         before=len(self.fixture.worker.playback_commands); searches=len(self.fixture.worker.timeline_calls)
@@ -887,7 +1009,13 @@ class ViewerUITests(unittest.TestCase):
         return (datetime.now(ZoneInfo("Africa/Johannesburg")) - timedelta(days=days)).replace(
             hour=0, minute=15, second=30, microsecond=0)
 
+    def open_date_picker(self):
+        if not self.element(".history-date-picker").get_attribute("open"):
+            self.element(".history-date-picker summary").click()
+        self.wait.until(lambda _:self.rendered("#history-date-time"))
+
     def go_to_date(self, value):
+        self.open_date_picker()
         self.wait.until(lambda _:self.element("#history-go-time").is_enabled())
         self.driver.execute_script("document.getElementById('history-date-time').value=arguments[0]", value.replace(tzinfo=None).isoformat())
         self.element("#history-go-time").click()
@@ -902,9 +1030,12 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(source["camera_id"], "camera-2")
         start = [cmd for cmd in self.fixture.worker.playback_commands if cmd.startswith("playback-start")][-1].split()
         self.assertEqual(start[4], target.replace(tzinfo=None).isoformat())
+        self.assertFalse(self.element(".history-date-picker").get_attribute("open"))
+        self.open_date_picker()
         self.assertIn("Africa/Johannesburg", self.element("#history-date-zone").text)
         self.assertIn(str(target.year), self.element("#history-range").text)
         self.assertEqual(self.element("#history-date-time").get_attribute("value"), target.replace(tzinfo=None).isoformat())
+        self.element("#history-date-time").send_keys(Keys.ESCAPE)
         self.assertTrue(self.element("#history-later").is_enabled())
         selected = source["play_time"]
         self.assertLess(abs((selected - target.astimezone(timezone.utc)).total_seconds()), 5)
@@ -943,6 +1074,7 @@ class ViewerUITests(unittest.TestCase):
         count, commands = len(self.fixture.worker.timeline_calls), len(self.fixture.worker.playback_commands)
         self.go_to_date(self.date_value(days=-1))
         self.wait.until(lambda _:"earlier than now" in self.element("#history-date-message").text)
+        self.assertTrue(self.rendered("#history-date-time"))
         self.assertEqual(self.element("#history-range").text, span)
         self.assertEqual(self.history_pixels(), picture)
         self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"], 1)
@@ -979,10 +1111,12 @@ class ViewerUITests(unittest.TestCase):
 
     def test_history_date_navigation_fits_mobile_and_keyboard_submission_plays(self):
         self.wait_live(); self.driver.set_window_size(390, 844); self.open_history()
+        self.open_date_picker()
         self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth <= innerWidth"))
         target = self.date_value()
         self.driver.execute_script("document.getElementById('history-date-time').value=arguments[0]", target.replace(tzinfo=None).isoformat())
         self.element("#history-go-time").send_keys(Keys.ENTER); self.history_playing()
+        self.assertFalse(self.rendered("#history-date-time"))
         self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth <= innerWidth"))
 
     def test_camera_history_shortcuts_select_clicked_camera_and_work_offline(self):

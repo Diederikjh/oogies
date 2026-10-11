@@ -6,6 +6,26 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Compact History workspace
+
+The owner approved the initial layout-only prototype and requested UI coverage. Desktop
+History now fits the available viewport: video, timeline, seeking and playback
+controls share the main pane; clip marks/export controls sit beside them, above
+an independently scrolling motion list. Duplicate draggable marks on the motion
+track are hidden, retaining its selection shading and the recording-track handles.
+Camera/range navigation is above the workspace. Date/time opens in a dismissible
+popover and closes after successful navigation. Smaller screens stack the panels
+and initially collapse the motion list. Existing playback/export APIs are unchanged.
+Synthetic browser previews were used to review desktop/mobile layout and exercise
+playback, paused seeking, marking and date navigation. Four browser regressions
+now cover simultaneous visibility on laptop/desktop screens, independent motion
+list scrolling with playback/selection, date-picker keyboard/outside/navigation
+dismissal and draft retention, and mobile collapsed-event playback/seeking/marks.
+Existing date and mouse/touch/keyboard mark tests use the new visible controls.
+The complete offline suite passed all 66 cases (63 browser and three native
+buffer regressions). The existing GitHub Actions UI command discovers these
+cases automatically. No recorder access or SDK credentials were used.
+
 ## Clip exports, frame downloads and fine seeking
 
 The export ordering fix was committed as `5f3c9fd`. Running exports now use a

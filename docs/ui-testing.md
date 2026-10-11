@@ -7,6 +7,20 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
+Compact History cases check that video, seeking, speed and mark/export controls
+stay inside the laptop/desktop viewport, including an active clip and queue
+confirmation. A long motion list scrolls without moving the video or page, and
+its last event still seeks correctly. Keyboard opening/Escape, outside clicks,
+navigation dismissal and date draft retention are checked. Fresh mobile loads
+start with collapsed events; timeline selection, event expansion/selection,
+paused stepping and marking remain usable without horizontal overflow. Existing
+date cases also verify successful submission closes the picker and invalid
+dates keep the error visible without disturbing playback.
+Visibility inside native closed `<details>` uses Chromium's `checkVisibility()`;
+the installed Selenium version reports those unpainted descendants as visible.
+The complete local run with this layout passed 66 cases: 63 browser cases and
+three native buffer regressions, using the same command as GitHub Actions.
+
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames
 through the same bounded pipe protocol. Cases cover local marks/shading, paused
