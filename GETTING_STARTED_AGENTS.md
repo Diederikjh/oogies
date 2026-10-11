@@ -30,14 +30,15 @@ owner's existing installation policy, and verify each stage below. Reuse working
 installations and private configuration. Do not replace an existing Docker
 installation, overwrite credentials, or delete `.local/` to repeat setup.
 
-This project keeps compilers, decoder libraries, Git LFS and additional tools
-in Docker. Only the host essentials listed below need host installation if
+This project keeps compilers, decoder libraries and additional investigation
+tools in Docker. Git LFS is installed on the host so it uses the same
+authentication as Git and VS Code. Only the host essentials listed below need host installation if
 absent. If the owner prohibits new host installations, report any missing host
 essentials as blocked prerequisites. These instructions do not change that
 policy; the current investigation machine uses existing host tools.
 
-**Docker must work without `sudo` as the installing user.** Run Git, the LFS
-wrapper and Python launchers as that user too. A successful `sudo docker` test
+**Docker must work without `sudo` as the installing user.** Run Git, Git LFS
+and Python launchers as that user too. A successful `sudo docker` test
 does not satisfy this requirement: the launchers invoke Docker directly.
 
 Collect the checkout path, recorder IP, SDK port, recorder timezone and account
@@ -51,19 +52,20 @@ environment readiness from recorder connectivity and successful live video.
 | --- | --- | --- |
 | Linux x86-64/amd64 | Use a compatible machine; other architectures and operating systems are unverified | `uname -s` is `Linux`; `uname -m` is `x86_64` |
 | Git | Host package `git` | `git --version` succeeds |
+| Git LFS | Host package `git-lfs`; configure this checkout using `python3 tools/setup_git_lfs.py` | `git lfs version` and `git lfs fsck` succeed; local filters use native `git-lfs` |
 | Python 3.9+ | Host package `python3`; no pip packages needed | Version assertion below succeeds |
 | Docker CLI and running daemon | Host Docker Engine or an existing compatible Docker installation | `docker info` succeeds **without sudo** |
 | Docker build support | Host Buildx plugin when using Docker Engine | `docker buildx version` succeeds and the project images build |
 | Current user's Docker access | Configure the existing Docker installation's user access | `docker run --rm hello-world` succeeds **without sudo** |
 | Bash and core utilities | Normally provided by Linux; `bash` and `coreutils` packages if absent | `command -v bash sha256sum chmod mkdir mv id` succeeds |
-| SDK ZIP | Already in repository; retrieve its Git LFS object in Docker | Expected SHA-256 matches; archive is not an LFS pointer |
+| SDK ZIP | Already in repository; retrieve with native `git lfs pull` | Expected SHA-256 matches; archive is not an LFS pointer |
 | SDK and decoder runtime | Build `cam-hik-sdk-runtime:local`; extract SDK to `.local/` | Offline SDK check exits 0 with zero login calls |
 | Browser | Reuse the owner's browser; a browser on the service machine is needed for the current localhost-only UI | Viewer page opens and, during live validation, displays changing frames |
 | Recorder settings and account | Owner provides them; they are not software to install | Private JSON validates; configured address matches the intended recorder |
 | Network access | Internet for image/LFS retrieval, LAN route from Docker to the NVR | Builds/LFS pull succeed; bounded TCP check below reaches the SDK port |
 | Resources and storage | Inspect machine and Docker capacity; leave headroom for the host | Runtime currently has a 2 GiB memory cap and a 2-CPU limit; adequate disk space for images, SDK and private outputs |
 
-Docker Compose, host Git LFS, host FFmpeg, host C++ compilers, Node.js and host
+Docker Compose, host FFmpeg, host C++ compilers, Node.js and host
 Selenium are not prerequisites for the current prototype. Automated browser
 checks use a separate Docker image and are optional. The grid check skips
 recorded playback when a fresh checkout has no private historical clip.
@@ -79,6 +81,7 @@ uname -s
 uname -m
 command -v git python3 docker bash sha256sum chmod mkdir mv id
 git --version
+git lfs version
 python3 -c 'import sys; assert sys.version_info >= (3, 9), "Python 3.9+ required"; print(sys.version.split()[0])'
 docker --version
 docker buildx version
@@ -98,7 +101,7 @@ package mapping; do not run these commands blindly.
 
 ```sh
 sudo apt-get update
-sudo apt-get install git python3 bash coreutils
+sudo apt-get install git git-lfs python3 bash coreutils
 ```
 
 If Docker already passes the checks above, skip its installation. For a fresh
@@ -176,17 +179,16 @@ Replace `<repository-url>` with the repository's published Git URL:
 ```sh
 GIT_LFS_SKIP_SMUDGE=1 git clone <repository-url> cam-visualiser
 cd cam-visualiser
-docker build --tag cam-git-lfs:local docker/git-lfs
 python3 tools/setup_git_lfs.py
-tools/git_lfs_docker.sh pull
-tools/git_lfs_docker.sh fsck
+git lfs pull
+git lfs fsck
 ```
 
-The setup script configures this checkout to use Git LFS in Docker, including
-the repository's pre-push hook. Git history contains a small pointer to the SDK;
+The setup script configures native Git LFS in this checkout and enables the
+repository's publication pre-push hook. It replaces any older Docker filter
+configuration without overwriting the committed hook. Git history contains a small pointer to the SDK;
 `pull` retrieves the actual ZIP. The published remote must hold the LFS object
-as well as the Git history. At present the investigation repository is local;
-a public clone URL has not been configured.
+as well as the Git history.
 
 Confirm the restored archive:
 
@@ -202,9 +204,12 @@ Expected SHA-256:
 
 If the file is a small text pointer, LFS retrieval has not finished. Resolve
 that before extracting; the archive should be 67,235,848 bytes. Remote
-authentication must be available to the containerized LFS command if the remote
-is private; host Git authentication is not automatically forwarded by the
-current wrapper.
+authentication must be available to host Git if the remote is private. Native
+Git LFS uses host Git's authentication, including VS Code's credential helper.
+For GitHub, have the user complete `gh auth login --hostname github.com
+--git-protocol https --web`, then run `gh auth setup-git --hostname github.com`.
+Do not ask the user to paste a token into chat. Use the setup script rather than
+`git lfs install --force` alone, which could overwrite the publication hook.
 
 ## 2. Build the backend and extract the SDK
 
@@ -482,5 +487,5 @@ and shutdown commands, network binding, session cleanup, data retention,
 supported platforms, upgrades and any new prerequisites here.
 
 Before a GitHub push, run the [publication check](docs/publication-checks.md).
-The pre-push hook checks reachable history before the Docker Git LFS transfer.
+The pre-push hook checks reachable history before the native Git LFS transfer.
 Private recorder configuration, credentials and captures must remain in `.local/`.

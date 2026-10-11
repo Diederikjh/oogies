@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
-"""Configure this repository to use Docker for Git LFS; no host install."""
+"""Configure native Git LFS while preserving the publication pre-push hook."""
 from pathlib import Path
-import shlex
 import subprocess
 
 
 def main():
     root = Path(__file__).resolve().parents[1]
-    wrapper = shlex.quote(str(root / "tools/git_lfs_docker.sh"))
-    settings = {
-        "filter.lfs.clean": f"{wrapper} clean -- %f",
-        "filter.lfs.smudge": f"{wrapper} smudge -- %f",
-        "filter.lfs.process": f"{wrapper} filter-process",
-        "filter.lfs.required": "true",
-        "core.hooksPath": ".githooks",
-    }
-    for key, value in settings.items():
-        subprocess.run(["git", "config", "--local", key, value], cwd=root, check=True)
-    print("Repository configured for containerized Git LFS.")
+    available = subprocess.run(["git", "lfs", "version"], cwd=root, capture_output=True)
+    if available.returncode:
+        raise SystemExit("Install native Git LFS first (Ubuntu/Debian: sudo apt-get install git-lfs).")
+    # Force replaces this checkout's old Docker filter commands. Skip-repo
+    # prevents LFS from overwriting the committed publication guard hook.
+    subprocess.run(["git", "lfs", "install", "--local", "--force", "--skip-repo"], cwd=root, check=True)
+    subprocess.run(["git", "config", "--local", "core.hooksPath", ".githooks"], cwd=root, check=True)
+    print("Repository configured for native Git LFS and publication checks.")
 
 
 if __name__ == "__main__":

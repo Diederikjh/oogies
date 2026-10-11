@@ -42,38 +42,50 @@ the Docker backend. To stop the web server:
 python3 tools/run_browser_viewer.py --stop
 ```
 
-## Git LFS through Docker
+## Native Git LFS
 
 The complete original Linux64 SDK archive is in `vendor/hikvision/` using Git
 LFS. It includes the vendor binaries and documents, so they can be restored
 without repeating the difficult download. Extracted files stay in `.local/`.
 
-Git LFS runs in Docker rather than being installed on the host. On this Linux
-amd64 setup, build the tool and configure repository-local filters and the
-pre-push hook:
+Install Git LFS on the host so it shares Git and VS Code authentication.
+On Ubuntu/Debian, install it and configure this checkout:
 
 ```sh
-docker build --tag cam-git-lfs:local docker/git-lfs
+sudo apt-get install git-lfs
 python3 tools/setup_git_lfs.py
-tools/git_lfs_docker.sh version
+git lfs version
 ```
 
-Normal host `git add`, `git status`, `git commit` and the pre-push hook then use
-the Docker wrapper for LFS. Docker must be available to the current user. This
-setup configures `core.hooksPath` to the committed `.githooks` directory.
+The setup script replaces older Docker LFS filters with native ones and
+configures `core.hooksPath` to the committed `.githooks` directory. It preserves
+the publication pre-push hook, which scans history before `git lfs pre-push`.
+Run Git and the setup script as your normal user, without sudo. Compilers,
+decoder libraries and investigation/browser tools still run in Docker.
 
 After cloning from a future remote that stores the LFS objects, run the setup
 above, then retrieve and materialize the SDK:
 
 ```sh
-tools/git_lfs_docker.sh pull
-tools/git_lfs_docker.sh fsck
+git lfs pull
+git lfs fsck
 ```
 
-The initial repository is local only. Its ZIP lives in `.git/lfs/objects/`,
-while Git history contains an LFS pointer. A future remote must support LFS;
-pushing through the configured hook uploads those objects as well as history.
-Remote authentication can be configured when a destination is chosen.
+The ZIP's Git LFS object lives in `.git/lfs/objects/`, while Git history contains
+an LFS pointer. The remote must support LFS; pushing through the configured hook
+uploads those objects as well as history. Native Git LFS uses host Git's
+credentials, including VS Code's authentication when pushing from VS Code.
+For terminal pushes to GitHub, configure the already-installed GitHub CLI:
+
+```sh
+gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git --hostname github.com
+git push --set-upstream origin main
+```
+
+GitHub CLI's login is interactive; complete it yourself. Keep tokens out of
+remote URLs and repository files. Use the setup script rather than
+`git lfs install --force` alone, which could overwrite the publication hook.
 
 ## Restore the SDK and check it offline
 

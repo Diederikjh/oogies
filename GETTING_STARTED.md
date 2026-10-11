@@ -10,7 +10,7 @@ installation commands, prerequisite checks and verification checklist.
 
 ## What you need
 
-- A Linux x86-64 machine with Git, Python 3.9+ and Docker with build support.
+- A Linux x86-64 machine with Git, native Git LFS, Python 3.9+ and Docker with build support.
 - Docker working as your normal user **without sudo**. Verify with
   `docker info` and `docker run --rm hello-world`.
 - A browser, internet access for initial setup, and network access to your NVR.
@@ -23,8 +23,8 @@ run in Docker.
 
 ## Setup flow
 
-1. Clone the repository and retrieve its SDK archive through the Docker-based
-   Git LFS wrapper.
+1. Install native Git LFS, clone the repository, run
+   `python3 tools/setup_git_lfs.py`, then retrieve its SDK archive with `git lfs pull`.
 2. Build the Docker runtime, extract the SDK into `.local/`, and run the offline
    SDK check.
 3. Save your account details in `.local/nvr-credentials.json`. Its
@@ -40,7 +40,7 @@ and instructions for installing missing prerequisites.
 
 The current SDK has been verified on the original DS-7108HGHI-K1, including
 seven simultaneous analog/IP previews. Other recorder/firmware combinations need
-verification. No public repository remote has been configured yet.
+verification. The repository remote must include the SDK's Git LFS object.
 
 ## Run the viewer
 

@@ -1,10 +1,30 @@
 # Camera viewing investigation progress
 
-Updated: 2026-10-10 (South Africa time).
+Updated: 2026-10-11 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
+
+## GitHub LFS authentication
+
+The HTTPS push reached the publication guard but failed during LFS upload:
+the container could not access host Git/VS Code credentials. The owner prefers
+native Git LFS as an exception to Docker-only investigation tools. The setup
+script now configures native filters locally, while the publication hook runs
+the existing privacy scan before native `git lfs pre-push`. Setup guides list
+host Git LFS explicitly. The Docker credential bridge is removed.
+
+The owner installed native Git LFS on the host; version 3.4.1 is available.
+The checkout's local filters now invoke native `git-lfs`, and its hook path
+remains `.githooks`. Native `git lfs fsck` passed and the SDK archive's SHA-256
+still matches the original. No push was attempted for this change.
+
+All 21 existing unit tests and the full publication privacy check passed. An
+offline hook check verified that native LFS receives the original remote
+arguments and ref-update input, and that a privacy failure prevents upload.
+Future checkouts use `python3 tools/setup_git_lfs.py` to configure native filters
+while preserving the publication hook, then `git lfs fsck` to verify the SDK.
 
 ## Current milestone: automatic live grid verified
 

@@ -5,4 +5,4 @@ updates=$(mktemp)
 trap 'rm -f "$updates"' EXIT HUP INT TERM
 cat > "$updates"
 python3 "$repo/tools/check_publication.py" --history --push-updates "$updates"
-"$repo/tools/git_lfs_docker.sh" pre-push "$@" < "$updates"
+git lfs pre-push "$@" < "$updates"

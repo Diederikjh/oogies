@@ -24,10 +24,25 @@ check exits nonzero on findings or an incomplete scan. Common account names can
 also be ordinary technical vocabulary; they are not treated as secret substrings.
 Synthetic fixtures and loopback/documentation addresses remain usable.
 
-The repository's pre-push hook runs this check before the existing Docker Git
+The repository's pre-push hook runs this check before the native Git
 LFS upload. Configure that hook with `python3 tools/setup_git_lfs.py` after
 cloning. GitHub CI also checks branch/tag history. The local check can compare
 known private values; CI has no recorder credentials to compare.
+
+If pushing fails with `Git credentials ... not found` during the LFS upload,
+configure host Git authentication first. Native Git LFS uses the same host
+credential helpers as Git; no Docker credential forwarding is needed. For GitHub:
+
+```sh
+gh auth login --hostname github.com --git-protocol https --web
+gh auth setup-git --hostname github.com
+git push --set-upstream origin main
+```
+
+The login requires the owner's interactive browser approval. The publication
+check still runs before any upload. Keep tokens out of remote URLs and repository
+files. Run `python3 tools/setup_git_lfs.py` when migrating from the earlier
+Docker setup; it updates local filters while preserving the publication hook.
 
 For a general token/password-pattern scan, run Gitleaks in Docker. Keep its
 fully redacted reports private:
