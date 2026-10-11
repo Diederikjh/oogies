@@ -7,6 +7,9 @@ implemented, with selected-time historical playback and pause/resume/seek. The
 from export proposals; [live-grid.md](live-grid.md) records observed live capacity.
 The [History view plan](history-view-plan.md) expands milestones 3–4 into SDK
 feasibility, fixture-tested UI, real metadata and interactive playback stages.
+Date/time navigation is now committed as `bd0b069`. The next proposed increment
+is [clip selection, queued exports and ±10/30-second seeking](clip-export-plan.md),
+awaiting owner review before implementation.
 
 Milestone 1's seven-camera live checks pass; one live preview plus historical
 playback/control checks now coexist through one login. A fully fresh remote/LFS

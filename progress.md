@@ -6,6 +6,43 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Clip export and fine-seeking plan
+
+Date/time navigation was committed as `bd0b069` before planning this increment.
+The [proposed plan](docs/clip-export-plan.md) covers browser-only start/end marks
+from the displayed recorded clock, ±10/30-second seeks, immutable queued export
+jobs, download/cancellation, shared capacity, storage/retention and tests.
+Proposed defaults are five-minute clips, one active export plus three waiting,
+24-hour completed retention, a 1 GiB quota and 256 MiB per clip.
+
+The owner clarified visibility: the plan now specifies labelled Start/End flags
+and a shaded selection, plus a separate Exports tab listing camera, range,
+duration, job state, download/cancel/delete actions, file size and expiry.
+Official time-playback/download references reviewed do not give a universal
+duration maximum. Event pre/post-recording padding guidance and the SDK's default
+1024 MB download splitting are distinct from application clip limits. The plan
+records actual recording availability, encoding cost, disk quota and verification
+requirements, with a 10–30-second, one-minute, five-minute validation ladder.
+Routine tools remain native; SDK/codec dependencies remain in Docker under the
+owner's updated tooling instructions.
+
+The owner also requested Download current frame on History. The plan proposes
+a direct browser PNG download from an immutable displayed-frame snapshot, with
+recorded-time/camera filename and one-time aspect correction. It requires no
+backend/SDK call, job, extra recorder slot or server artifact. Its tests cover
+playing/paused capture, frame/generation races, aspect, filename, errors and
+no API traffic. It is part of the first UI milestone; implementation remains
+pending review.
+
+The verified five-second SDK-to-H.264 extraction supports a separate all-frame
+decode/encode path. Its raw-disk diagnostic and the frame-skipping browser feed
+are insufficient production exporters. The plan requires a short clock/trim and
+coexistence check before integrating the job pipeline. Saved video proportions
+must be encoded into aspect metadata rather than depending on browser CSS.
+Only planning documents changed after the commit: no feature implementation,
+SDK probe, service restart or additional test run occurred. Existing verification
+remains 60 unit and 41 Docker tests. Implementation awaits owner review.
+
 ## Direct date/time navigation
 
 Camera History shortcuts and speeds were committed as `122b655` before this
@@ -43,7 +80,8 @@ Both setup guides and the timeline/playback/API notes describe the new behavior.
 All 60 unit tests and 41 Docker cases (38 browser, three native queue tests)
 passed. The final supported-year guard also passed the unit suite. Whitespace
 and publication privacy checks passed.
-The service is running for review; these date-navigation changes are uncommitted.
+These date-navigation changes were committed as `bd0b069`; the service remains
+available. The newer export plan is documentation only and awaits review.
 
 ## Camera History shortcuts and playback speeds
 

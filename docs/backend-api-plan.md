@@ -287,10 +287,19 @@ sources when switching this page between Live and History.
 
 ## Clip export — milestone 4
 
+Still proposed. The owner-reviewable
+[clip export and fine-seeking plan](clip-export-plan.md) specifies selection,
+job states, SDK capture verification, initial limits and test coverage.
+That plan also adds Download current frame to History as a direct browser PNG
+download from the displayed frame, preserving the selected aspect. It needs no
+backend endpoint or export job. Only multi-frame video exports use these routes.
+
 | Method | Path | Meaning |
 | --- | --- | --- |
 | POST | `/api/exports` | Request a short clip using `camera_id`, `from`, `to` |
-| GET | `/api/exports/{id}` | queued/processing/ready/error status and download URL when ready |
+| GET | `/api/exports` | Bounded shared queue/recent jobs and configured limits |
+| GET | `/api/exports/{id}` | queued/running/ready/failed/cancelled/expired status and download URL when ready |
+| DELETE | `/api/exports/{id}` | Cancel pending work or remove the finished artifact |
 | GET | `/media/exports/{id}.mp4` | Download the completed private clip; support byte ranges |
 
 Export follows the first interactive History flow. Creation returns 202 because
