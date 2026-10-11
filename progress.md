@@ -6,6 +6,39 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Camera History shortcuts and playback speeds
+
+Working interactive playback and its sustained-buffer fix were committed as
+`563a6d7` before this increment. Each live tile now has a keyboard-accessible
+History button which opens that camera's recent timeline and focuses the
+selector. Offline cameras can still open historical recordings. Selecting a
+time starts video; the shortcut itself only navigates and selects the camera.
+
+The player now has 0.5×, 1×, 2× and 4× buttons. The Python worker seam accepts
+normalized rates; the native bridge adjusts that file-mode decoder with
+PlayCtrl Fast/Slow increments and confirms its actual rate. Playing changes
+retain the same handle, generation and position. Seek/resume preserve the
+selection; changing it while paused holds the picture/time. A rejected rate
+reports a separate control error and keeps footage moving at its actual speed.
+Other viewers' rates and live sources are independent. JPEG publication and
+compressed queue bounds remain unchanged.
+
+A real SDK check measured 5/10/20/40 recorded seconds in approximately ten wall
+seconds at 0.5×/1×/2×/4×, followed by normal speed again at 1×. All speed changes
+kept generation 1 and one login. Paused changes held their frame/clock, and
+resume/seek preserved 4×. The actual Docker browser also opened the camera's
+History shortcut, played continuously for thirty seconds, clicked every speed,
+verified Pause and left zero historical sessions after Stop.
+
+All 54 unit and 36 Docker cases passed (33 browser, three native queue tests),
+including the new shortcut/rate cases. The final keyboard-focus case also passed
+after its last adjustment. Offline native compilation and decoder initialization
+passed without credentials or network. The updated service is running for review.
+Both setup guides, API/seam notes and
+[History playback](docs/history-playback.md) document the new controls. Private
+speed evidence is under `.local/browser-viewer/rates-check-*/report.json`.
+The bounded check can be repeated with `python3 tools/check_playback_rates.py`.
+
 ## Sustained History playback correction
 
 The owner reported playback stopping after a few seconds with code 43. The
@@ -74,7 +107,8 @@ Details and private evidence paths are in
 [History playback](docs/history-playback.md). Guides and API proposals now
 describe implemented playback; audio, speed and export remain future work.
 The updated service is running with the player and its new assets served. The
-functional timeline checkpoint remains `bb40e0f`; playback changes await review.
+functional timeline checkpoint remains `bb40e0f`; playback and its flow-control
+correction were subsequently committed as `563a6d7`.
 
 ## First History timeline slice
 

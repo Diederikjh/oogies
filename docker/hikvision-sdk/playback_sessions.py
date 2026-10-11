@@ -9,6 +9,12 @@ from zoneinfo import ZoneInfo
 from history_timeline import timestamp, utc_text, recorder_wall
 from live_sessions import SessionError
 
+RATES = (0.5, 1, 2, 4)
+
+def playback_rate(value):
+    if type(value) not in (int, float) or value not in RATES:
+        raise SessionError("Choose a playback speed of 0.5, 1, 2 or 4.", 422)
+    return value
 
 class PlaybackSessions:
     def __init__(self, worker, live, limit=1, lease_seconds=90, clock=time.monotonic):
@@ -20,8 +26,9 @@ class PlaybackSessions:
         self.closed = False
 
     def create(self, body):
-        if not isinstance(body, dict) or set(body) - {"camera_id", "from", "to", "position"} or not {"camera_id", "from", "to"} <= body.keys():
+        if not isinstance(body, dict) or set(body) - {"camera_id", "from", "to", "position", "rate"} or not {"camera_id", "from", "to"} <= body.keys():
             raise SessionError("Camera and from/to range are required.")
+        rate = playback_rate(body.get("rate", 1))
         begin, end = timestamp(body["from"]), timestamp(body["to"])
         if not begin < end or end - begin > timedelta(hours=6):
             raise SessionError("Choose a positive playback range of at most six hours.", 422)
@@ -49,7 +56,7 @@ class PlaybackSessions:
             self.sessions[identifier] = session
             self.live.reserved_sources += 1
             try:
-                self.worker.start_playback(identifier, camera, recorder_wall(position, self.zone), recorder_wall(end, self.zone), 1)
+                self.worker.start_playback(identifier, camera, recorder_wall(position, self.zone), recorder_wall(end, self.zone), 1, rate=rate)
             except (OSError, ValueError):
                 self.delete(identifier)
                 raise SessionError("Historical playback could not start.", 503) from None
@@ -66,18 +73,25 @@ class PlaybackSessions:
                 **{"from":utc_text(session["begin"]), "to":utc_text(session["end"])},
                 position=source.get("position"), position_precision="second", generation=session["generation"],
                 state=source.get("state", "error"), error=source.get("error"), frames=source.get("received", 0),
+                rate=source.get("rate", 1), requested_rate=source.get("requested_rate", 1),
+                supported_rates=list(RATES), rate_error=source.get("rate_error"),
                 width=source.get("width", 0), height=source.get("height", 0),
-                supported_controls=["pause", "resume", "seek"], expires_at=utc_text(expires), lease_seconds=self.lease_seconds,
+                supported_controls=["pause", "resume", "seek", "rate"], expires_at=utc_text(expires), lease_seconds=self.lease_seconds,
                 media={"transport":"jpeg-frames-v1", "url":f"/media/playback/{identifier}"})
 
     def patch(self, identifier, body):
-        if not isinstance(body, dict) or set(body) - {"state", "position"}:
+        if not isinstance(body, dict) or set(body) - {"state", "position", "rate"}:
             raise SessionError("Invalid playback update.")
+        if "rate" in body: playback_rate(body["rate"])
         if "state" in body and body["state"] not in ("paused", "playing"):
             raise SessionError("Choose paused or playing.", 422)
         with self.lock:
             current = self.get(identifier)
             session = self.sessions[identifier]
+            rate = body.get("rate", current["requested_rate"])
+            if "rate" in body and "position" not in body and current["state"] in ("ended", "error"):
+                raise SessionError("Select a time to restart playback.", 409)
+            restarted = False
             if "position" in body:
                 position = timestamp(body["position"])
                 if not session["begin"] <= position < session["end"]:
@@ -87,7 +101,8 @@ class PlaybackSessions:
                 session["generation"] += 1
                 session["requested_position"] = position
                 self.worker.start_playback(identifier, session["camera_id"], wall, recorder_wall(session["end"], self.zone),
-                                           session["generation"], paused=paused)
+                                           session["generation"], paused=paused, rate=rate)
+                restarted = True
             elif "state" in body:
                 if current["state"] in ("ended", "error"):
                     raise SessionError("Select a time to restart playback.", 409)
@@ -97,9 +112,11 @@ class PlaybackSessions:
                     session["generation"] += 1
                     session["requested_position"] = position
                     self.worker.start_playback(identifier, session["camera_id"], recorder_wall(position, self.zone),
-                                               recorder_wall(session["end"], self.zone), session["generation"])
+                                               recorder_wall(session["end"], self.zone), session["generation"], rate=rate)
+                    restarted = True
                 elif body["state"] == "paused" and current["state"] not in ("paused", "pausing"):
                     self.worker.control_playback(identifier, True)
+            if "rate" in body and not restarted: self.worker.set_playback_rate(identifier, rate)
             session["expires"] = self.clock() + self.lease_seconds
             return self.get(identifier)
 

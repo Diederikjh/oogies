@@ -5,6 +5,7 @@ struct Playback {
     Source source;
     LONG handle = -1;
     bool paused = false, ended = false, error_reported = false, pause_on_frame = false;
+    int rate_level = 0, desired_rate_level = 0;
     PlaybackBuffer buffer{16 * 1024 * 1024};
     NET_DVR_TIME end{};
     std::chrono::steady_clock::time_point last_status{}, last_frame{}, last_heartbeat{};
@@ -32,7 +33,30 @@ struct Playback {
         if (playback->buffer.push(type, data, size) == PlaybackBuffer::Result::oversized)
             playback->source.error = 43;
     }
-    void start(LONG user, const std::string &key, NET_DVR_TIME begin, NET_DVR_TIME stop_time, bool initially_paused) {
+    static std::string rate_text(int level) { return level < 0 ? "0.5" : std::to_string(1 << level); }
+    void apply_rate() {
+        if (!source.playing || !source.active) return;
+        const int requested = desired_rate_level;
+        unsigned error = 0;
+        while (rate_level != desired_rate_level) {
+            const bool faster = rate_level < desired_rate_level;
+            if (!(faster ? PlayM4_Fast(source.port) : PlayM4_Slow(source.port))) {
+                error = PlayM4_GetLastError(source.port); desired_rate_level = rate_level; break;
+            }
+            rate_level += faster ? 1 : -1;
+        }
+        event("{\"type\":\"playback_rate\",\"id\":" + quote(source.playback_id) +
+            ",\"generation\":" + std::to_string(source.generation) +
+            ",\"rate\":" + rate_text(rate_level) + ",\"requested_rate\":" + rate_text(requested) +
+            ",\"error\":" + std::to_string(error) + "}");
+    }
+    void set_rate(int level) {
+        if (level < -1 || level > 2) return;
+        desired_rate_level = level;
+        apply_rate();
+    }
+    void start(LONG user, const std::string &key, NET_DVR_TIME begin, NET_DVR_TIME stop_time, bool initially_paused, int initial_rate_level) {
+        desired_rate_level = initial_rate_level;
         end = stop_time;
         mkdir(source.directory.c_str(), 0700);
         if (!PlayM4_GetPort(&source.port) || !PlayM4_SetStreamOpenMode(source.port, STREAME_FILE) ||
@@ -92,6 +116,7 @@ struct Playback {
                         return false;
                     }
                 } else stream(handle, chunk.type, chunk.data.data(), chunk.data.size(), &source);
+                if (source.playing && desired_rate_level != rate_level) apply_rate();
                 bytes += chunk.data.size();
                 return true;
             })) break;

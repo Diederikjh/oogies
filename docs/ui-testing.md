@@ -109,7 +109,22 @@ recordings, selected-camera aspect, and Settings opened before discovery finishe
 The fixture supplies decoded frames/clocks through the production worker/session
 boundary; SDK compatibility and native resource behavior still use manual checks.
 
+The camera-shortcut and speed cases verify selection of a non-default camera,
+keyboard activation/focus, navigation to an offline camera's recordings,
+0.5×/1×/2×/4× recorded-clock advancement, in-place controls, rate preservation
+through seek/pause/resume, and a rejected rate retaining moving video. Unit
+tests cover rate validation before SDK calls, native acknowledgement handling,
+old request/generation rejection and independent viewer rates. The real check
+`python3 tools/check_playback_rates.py` measures SDK clock advancement; the fake
+decoder cannot establish actual native Fast/Slow behavior.
+
 ## Verified result
+
+The camera-shortcut/speed increment passed all 54 unit tests and 36 Docker cases
+(33 browser and three native buffer regressions). The final shortcut keyboard
+focus adjustment passed a targeted repeat. Real SDK clock measurements matched
+all four rates, and a Docker browser exercised the new controls against moving
+camera footage through the same SDK login, followed by Pause/Stop cleanup.
 
 After the sustained-playback correction, all 50 unit tests and 33 Docker cases
 passed (30 browser and three native buffer regressions). The real API check

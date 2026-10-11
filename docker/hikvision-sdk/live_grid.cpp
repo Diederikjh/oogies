@@ -269,21 +269,25 @@ int main(int argc, char **argv) {
                     std::string id; int generation = 0; command >> id >> generation;
                     if (id.size() != 32 || id.find_first_not_of("0123456789abcdef") != std::string::npos || generation < 1) continue;
                     if (operation == "playback-start") {
-                        std::string begin_text, end_text; int paused = 0; command >> begin_text >> end_text >> paused;
+                        std::string begin_text, end_text; int paused = 0, rate_level = 0;
+                        command >> begin_text >> end_text >> paused >> rate_level;
                         NET_DVR_TIME begin{}, end{};
-                        if (!sources.count(channel) || !parse_history_time(begin_text, begin) || !parse_history_time(end_text, end)) continue;
+                        if (rate_level < -1 || rate_level > 2 || !sources.count(channel) || !parse_history_time(begin_text, begin) || !parse_history_time(end_text, end)) continue;
                         if (playbacks.count(id)) playbacks.erase(id);
                         if (playbacks.size() >= 8) {
                             event("{\"type\":\"playback\",\"id\":" + quote(id) + ",\"generation\":" + std::to_string(generation) + ",\"state\":\"error\",\"error\":41}");
                             continue;
                         }
                         auto playback = std::make_unique<Playback>(id, generation, channel, root);
-                        playback->start(user, key, begin, end, paused != 0);
+                        playback->start(user, key, begin, end, paused != 0, rate_level);
                         playbacks[id] = std::move(playback);
                     } else if (playbacks.count(id) && playbacks[id]->source.generation == generation) {
                         if (operation == "playback-stop") playbacks.erase(id);
                         else if (operation == "playback-pause") playbacks[id]->pause(true);
                         else if (operation == "playback-resume") playbacks[id]->pause(false);
+                        else if (operation == "playback-rate") {
+                            int level = 0; if (command >> level) playbacks[id]->set_rate(level);
+                        }
                     }
                     continue;
                 }

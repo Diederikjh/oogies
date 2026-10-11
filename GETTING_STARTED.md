@@ -63,13 +63,16 @@ respected. Expansion uses the same overview stream. Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
 choice, including that camera's History playback.
 
-Open **History** to select a camera and browse the last three hours, or choose
+Use a camera's **History** button to open its timeline, or open the **History**
+tab to select a camera and browse the last three hours. You can choose
 1/6 hours and earlier ranges. Recording coverage and motion are separate tracks.
 Click a band/event or commit a time-slider selection to play recorded footage.
 Pause/Resume and Stop control your player; another time selection seeks, including
 while paused. No saved footage is required. Switching views preserves other
-viewers' streams. One historical viewer slot is currently admitted; Stop releases
-it. The installing user's source budget must have room for live plus playback.
+viewers' streams. Speed buttons select **0.5×, 1×, 2× or 4×**; your choice is
+preserved through seeking and Pause/Resume. One historical viewer slot is currently
+admitted; Stop releases it. The installing user's source budget must have room
+for live plus playback.
 
 To stop the service:
 

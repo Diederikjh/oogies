@@ -11,11 +11,12 @@ const overview = new Overview(byId("camera-grid"), session => {
   byId("stop").disabled = !session;
   byId("start").disabled = Boolean(session);
   if (session) byId("message").textContent = "";
-}, message => { byId("message").textContent = message; byId("start").disabled = false; }, () => settings.camerasReady());
+}, message => { byId("message").textContent = message; byId("start").disabled = false; },
+  () => settings.camerasReady(), cameraId => showMode("history", cameraId));
 const history = new HistoryView(byId("history-panel"), () => settings.camerasReady());
 const settings = new DisplaySettings(byId("display-settings"), overview.tiles, (id, aspect) => history.player.setAspect(id, aspect), () => history.cameras || []);
 
-async function showMode(next) {
+async function showMode(next, cameraId) {
   mode = next;
   byId("live-panel").hidden = next !== "live";
   byId("history-panel").hidden = next !== "history";
@@ -27,7 +28,7 @@ async function showMode(next) {
     byId(name + "-tab").classList.toggle("selected", name === next);
     byId(name + "-tab").setAttribute("aria-pressed", String(name === next));
   }
-  if (next === "history") { history.show(); await overview.stop(); }
+  if (next === "history") { history.show(cameraId); await overview.stop(); }
   else { await history.hide(); if (mode === "live") await overview.start(); }
 }
 

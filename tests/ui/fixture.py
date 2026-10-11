@@ -67,6 +67,7 @@ class FakeRecorderWorker(GridWorker):
         self.timeline_states = {}
         self.timeline_gate = threading.Event(); self.timeline_gate.set()
         self.playback_commands = []
+        self.rate_failure = False
         self.discovery_gate = threading.Event()
         if not delayed:
             self.discovery_gate.set()
@@ -108,12 +109,18 @@ class FakeRecorderWorker(GridWorker):
             if source and source["generation"] == generation:
                 if parts[0] == "playback-start":
                     source.update(ready_at=time.monotonic() + .15,
+                        rate=source["requested_rate"],
                         play_time=recorder_utc(parts[4], self.zone), end_time=recorder_utc(parts[5], self.zone),
                         pause_on_frame=parts[6] == "1")
                     self._event(dict(type="playback", id=identifier, generation=generation, state="starting", error=0))
                 elif parts[0] in ("playback-pause", "playback-resume"):
                     self._event(dict(type="playback", id=identifier, generation=generation,
                         state="paused" if parts[0] == "playback-pause" else "playing", error=0))
+                elif parts[0] == "playback-rate":
+                    self._event(dict(type="playback_rate", id=identifier, generation=generation,
+                        requested_rate=source["requested_rate"],
+                        rate=source["rate"] if self.rate_failure else source["requested_rate"],
+                        error=2 if self.rate_failure else 0))
             return
         if command != "refresh":
             raise AssertionError("Unexpected fake SDK command")
@@ -177,7 +184,7 @@ class FakeRecorderWorker(GridWorker):
                     key = source["camera_id"] if source["camera_id"] in self.media.frames else "camera-1"
                     source.update(state="playing", frame=self.media.frames[key][source["sequence"] % 2],
                         width=352, height=288, received=source["sequence"], last_frame=time.monotonic(), position=utc_text(source["play_time"].replace(microsecond=0)))
-                    source["play_time"] += timedelta(seconds=.2)
+                    source["play_time"] += timedelta(seconds=.2 * source["rate"])
                     if source["pause_on_frame"]:
                         source["pause_on_frame"] = False
                         self._event(dict(type="playback", id=identifier, generation=source["generation"], state="paused", error=0))

@@ -435,6 +435,11 @@ timezone. Clicking a time or motion interval starts recorded video. Verify the
 visible recorder timestamp, Pause/Resume, a second time selection while paused,
 and Stop releasing the playback. No private MP4 is required on a fresh clone. The existing
 historical extraction diagnostic uses the same private recorder configuration.
+Verify each live camera's History button selects that camera, including offline
+cameras with recordings. Check 0.5×, 1×, 2× and 4× controls against the visible
+recorded timestamp, preservation through seeks and Pause/Resume, and changing
+speed while paused without advancing the picture. A rejected decoder speed
+change must show an error and preserve moving video at its confirmed speed.
 
 Inside the runtime, verify the configured IANA timezone can be loaded with
 Python's `zoneinfo.ZoneInfo`. It requires timezone data in Docker; install
@@ -448,7 +453,9 @@ previews and one playback fit the default application budget of eight, but that
 is not a measured hardware guarantee. A full budget returns a capacity error
 and preserves existing viewers. Resume/seek reopen only that playback context
 at the confirmed/selected time; native combined pause was not usable on the
-verified profile. Audio, speed and clip export are not implemented.
+verified profile. Speed changes adjust that viewer's file-mode decoder in place;
+audio and clip export are not implemented. The bounded manual speed check is
+`python3 tools/check_playback_rates.py` through the already-running service.
 
 Stop with:
 

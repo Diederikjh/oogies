@@ -22,6 +22,13 @@
       <div id="history-player" class="history-player" data-state="idle">
         <div id="history-viewer" class="viewer history-viewer"><img id="history-image" hidden alt="Recorded camera video"><span id="history-placeholder" class="tile-placeholder">Select a time or motion interval to play its recording.</span></div>
         <div class="toolbar"><p id="history-playback-status" role="status" aria-live="polite"></p><div class="actions"><button id="history-pause" disabled>Pause</button><button id="history-stop" disabled>Stop playback</button></div></div>
+        <div id="history-speeds" class="history-speeds" role="group" aria-label="Playback speed">
+          <span>Speed</span><button type="button" data-rate="0.5" aria-pressed="false" disabled>0.5×</button>
+          <button type="button" data-rate="1" aria-pressed="true" disabled>1×</button>
+          <button type="button" data-rate="2" aria-pressed="false" disabled>2×</button>
+          <button type="button" data-rate="4" aria-pressed="false" disabled>4×</button>
+        </div>
+        <p id="history-speed-status" class="subtitle" role="status" aria-live="polite"></p>
       </div>
       <div class="history-card">
         <div class="history-controls">

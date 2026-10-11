@@ -6,7 +6,7 @@ const LABELS = {starting:"Connecting", live:"Live", stale:"Video delayed", offli
   error:"Unavailable", capacity_limited:"Stream limit", stopping:"Stopping", stopped:"Stopped"};
 
 export class CameraTile {
-  constructor(camera, grid) {
+  constructor(camera, grid, onHistory = () => {}) {
     this.camera = camera;
     this.element = document.createElement("article");
     this.element.className = "camera-tile";
@@ -14,8 +14,11 @@ export class CameraTile {
     this.element.innerHTML = `<div class="tile-heading"><h2></h2><span class="tile-badge">Connecting</span></div>
       <button type="button" class="viewer camera-view" aria-expanded="false"><img hidden><span class="tile-placeholder">Connecting to camera…</span>
         <span class="expand-hint" aria-hidden="true">Expand</span></button>
-      <div class="tile-controls"><span class="tile-metrics">Overview</span></div>`;
+      <div class="tile-controls"><span class="tile-metrics">Overview</span><button type="button" class="camera-history">History</button></div>`;
     this.element.querySelector("h2").textContent = camera.name;
+    const history = this.element.querySelector(".camera-history");
+    history.setAttribute("aria-label", `View history for ${camera.name}`);
+    history.addEventListener("click", () => onHistory(camera.id));
     this.image = this.element.querySelector("img");
     this.image.alt = `Live video from ${camera.name}`;
     this.placeholder = this.element.querySelector(".tile-placeholder");

@@ -14,11 +14,14 @@ export class PlaybackControls {
     this.message = panel.querySelector("#history-playback-status");
     this.pauseButton = panel.querySelector("#history-pause");
     this.stopButton = panel.querySelector("#history-stop");
+    this.speedButtons = [...panel.querySelectorAll("#history-speeds button")];
+    this.speedMessage = panel.querySelector("#history-speed-status");
     this.viewer = panel.querySelector("#history-viewer");
     this.display = new MediaDisplay(this.image, this.viewer);
-    this.epoch = 0; this.renderEpoch = 0; this.session = null;
+    this.epoch = 0; this.renderEpoch = 0; this.controlVersion = 0; this.session = null;
     this.pauseButton.addEventListener("click", () => this.control());
     this.stopButton.addEventListener("click", () => this.stop());
+    for (const button of this.speedButtons) button.addEventListener("click", () => this.changeRate(Number(button.dataset.rate)));
     this.paint(null);
   }
 
@@ -29,6 +32,7 @@ export class PlaybackControls {
 
   select(camera, position, from, to) {
     const epoch = ++this.epoch;
+    this.controlling = false;
     this.camera = camera;
     this.display.setAspect(readAspect(camera.id, camera.aspect_ratio || "16:9"));
     this.image.alt = `Recorded video from ${camera.name}`;
@@ -113,37 +117,59 @@ export class PlaybackControls {
     this.message.textContent = status?.error || LABELS[state] || "Select a time or motion interval to play its recording.";
     this.placeholder.textContent = this.message.textContent;
     this.pauseButton.textContent = state === "paused" ? "Resume" : "Pause";
-    this.pauseButton.disabled = !this.session || !["playing", "paused"].includes(state) || this.loading;
+    const rate = status?.rate ?? this.session?.rate ?? 1;
+    const pendingRate = this.session && this.session.requested_rate !== this.session.rate;
+    const controlsEnabled = this.session && ["playing", "paused"].includes(state) && !this.loading && !this.controlling && !pendingRate;
+    this.pauseButton.disabled = !controlsEnabled;
+    for (const button of this.speedButtons) {
+      button.setAttribute("aria-pressed", String(Number(button.dataset.rate) === rate));
+      button.disabled = !controlsEnabled || !this.session.supported_rates?.includes(Number(button.dataset.rate));
+    }
+    this.speedMessage.textContent = status?.rate_error || (pendingRate ? "Changing playback speed…" : "");
     this.stopButton.disabled = !this.session;
     if (state === "error") this.image.hidden = true;
   }
 
   async poll() {
-    if (!this.session || this.loading) return;
-    const id = this.session.id, epoch = this.epoch;
+    if (!this.session || this.loading || this.controlling) return;
+    const id = this.session.id, epoch = this.epoch, controlVersion = this.controlVersion;
     try {
       const status = await api(`/api/playback/sessions/${id}`);
-      if (epoch !== this.epoch || this.session?.id !== id || status.generation !== this.expectedGeneration) return;
+      if (epoch !== this.epoch || controlVersion !== this.controlVersion || this.session?.id !== id || status.generation !== this.expectedGeneration) return;
       this.session = status; this.paint(status);
     } catch (error) { if (epoch === this.epoch) this.paint({state:"error", error:error.message}); }
   }
 
   async control() {
-    if (!this.session || this.loading) return;
+    if (!this.session || this.loading || this.controlling) return;
     const id = this.session.id, epoch = this.epoch;
     const state = this.session.state === "paused" ? "playing" : "paused";
     if (state === "playing") {
       this.loading = true; this.expectedGeneration = this.session.generation + 1;
       this.clearPicture(); this.paint({state:"resuming"});
     }
-    this.pauseButton.disabled = true;
+    ++this.controlVersion; this.controlling = true; this.paint({state:state === "playing" ? "resuming" : "pausing"});
     try {
       const status = await api(`/api/playback/sessions/${id}`, "PATCH", {state});
       if (epoch === this.epoch && this.session?.id === id) {
-        this.session = status; this.expectedGeneration = status.generation; this.loading = false; this.paint(status);
+        this.session = status; this.expectedGeneration = status.generation; this.loading = false; this.controlling = false; this.paint(status);
         if (this.bufferedFrame) { const {jpeg, header} = this.bufferedFrame; this.bufferedFrame = null; this.frame(jpeg, header); }
       }
-    } catch (error) { if (epoch === this.epoch) this.paint({state:"error", error:error.message}); }
+    } catch (error) { if (epoch === this.epoch) { this.controlling = false; this.paint({state:"error", error:error.message}); } }
+  }
+
+  async changeRate(rate) {
+    if (!this.session || this.loading || this.controlling || this.session.requested_rate !== this.session.rate || rate === this.session.rate) return;
+    const id = this.session.id, epoch = this.epoch;
+    ++this.controlVersion; this.controlling = true; this.paint(this.session);
+    try {
+      const status = await api(`/api/playback/sessions/${id}`, "PATCH", {rate});
+      if (epoch === this.epoch && this.session?.id === id) {
+        this.session = status; this.controlling = false; this.paint(status);
+      }
+    } catch (error) {
+      if (epoch === this.epoch) { this.controlling = false; this.paint(this.session); this.speedMessage.textContent = error.message; }
+    }
   }
 
   async renew() {
@@ -168,7 +194,7 @@ export class PlaybackControls {
   }
 
   async stop() {
-    const epoch = ++this.epoch; this.pending = null; this.loading = true; this.clearPicture(); this.paint(null);
+    const epoch = ++this.epoch; this.pending = null; this.loading = true; this.controlling = false; this.clearPicture(); this.paint(null);
     if (this.draining) await this.draining;
     if (epoch === this.epoch) { await this.release(); this.loading = false; this.paint(null); }
   }

@@ -3,7 +3,7 @@
 Status: recorded before implementation in `ccee147`, 11 October 2026.
 The [History timeline](history-timeline.md) and
 [interactive playback](history-playback.md) are now implemented: metadata,
-selected-time video, pause/resume and seeking. Wider capacity, speed, audio and
+selected-time video, pause/resume, seeking and 0.5×–4× speed controls. Wider capacity, audio and
 export remain later work. This plan expands milestones 3 and 4 in
 [implementation-plan.md](implementation-plan.md); endpoint contracts remain in
 [backend-api-plan.md](backend-api-plan.md).
@@ -36,7 +36,8 @@ motion information, incomplete search results, and playback errors. Recording
 search failure must still allow an explicit time-playback attempt, since that
 already succeeded independently on this recorder. Never silently switch to live.
 
-Defer audio, speed selection, multi-camera synchronized playback, thumbnails,
+The later camera-shortcut/speed increment implements four speed steps; the
+original plan below deferred them. Defer audio, multi-camera synchronized playback, thumbnails,
 calendar browsing and clip export until this flow works. Export remains a later
 part of milestone 4, using its separate job API.
 

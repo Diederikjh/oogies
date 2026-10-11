@@ -92,6 +92,13 @@ class GridWorker:
     def _event(self, event):
         with self.condition:
             kind = event["type"]
+            if kind == "playback_rate":
+                source = self.playbacks.get(event["id"])
+                if source and source["generation"] == event["generation"] and source["requested_rate"] == event["requested_rate"]:
+                    source.update(rate=event["rate"], requested_rate=event["rate"],
+                        rate_error=f"Playback speed could not be changed (decoder code {event['error']})." if event.get("error") else None)
+                self.condition.notify_all()
+                return
             if kind == "playback":
                 source = self.playbacks.get(event["id"])
                 if source and source["generation"] == event["generation"]:
@@ -208,12 +215,26 @@ class GridWorker:
             source["state"], source["frame"] = "stopping", None
             self.send("stop", camera_id)
 
-    def start_playback(self, identifier, camera_id, begin, end, generation, paused=False):
+    def start_playback(self, identifier, camera_id, begin, end, generation, paused=False, rate=1):
         with self.condition:
             self.playbacks[identifier] = dict(camera_id=camera_id, generation=generation,
                 state="starting" if generation == 1 else "seeking", frame=None, position=None,
+                rate=1, requested_rate=rate, rate_error=None,
                 sequence=0, received=0, width=0, height=0, last_frame=0, requested_at=time.monotonic(), error=None)
-            self._command(f"playback-start {self.cameras[camera_id]['channel']} {identifier} {generation} {begin} {end} {int(paused)}")
+            level = {0.5:-1, 1:0, 2:1, 4:2}[rate]
+            self._command(f"playback-start {self.cameras[camera_id]['channel']} {identifier} {generation} {begin} {end} {int(paused)} {level}")
+            self.condition.notify_all()
+
+    def set_playback_rate(self, identifier, rate):
+        with self.condition:
+            source = self.playbacks[identifier]
+            source.update(requested_rate=rate, rate_error=None)
+            if source["state"] in ("paused", "pausing"):
+                # Paused native contexts are closed; apply on resume/paused seek.
+                source["rate"] = rate
+            else:
+                level = {0.5:-1, 1:0, 2:1, 4:2}[rate]
+                self._command(f"playback-rate 0 {identifier} {source['generation']} {level}")
             self.condition.notify_all()
 
     def control_playback(self, identifier, paused):

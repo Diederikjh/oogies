@@ -59,12 +59,16 @@ for the HTTP API. The fixture worker substitutes at this operation boundary.
 See [History timeline](history-timeline.md). This is a concrete extension, not a
 new abstract recorder hierarchy.
 
-The same worker now exposes `start_playback`, `control_playback` and
+The same worker now exposes `start_playback`, `control_playback`, `set_playback_rate` and
 `stop_playback` with independent session IDs/generations. The current native
 implementation owns file-mode decoder contexts; the Python manager owns leases,
 UTC ranges and capacity. Seeking/resuming use a fresh generation and time-based
 context rather than another login. The current pause strategy stops the native
-context and retains its last frame/time. [History playback](history-playback.md)
+context and retains its last frame/time. Playback rates are normalized numbers
+in Python (0.5, 1, 2, 4); this SDK worker maps them to incremental PlayCtrl
+Fast/Slow calls and confirms actual rate or an independent control error.
+Starting a decoder accepts the selected rate so seeking/resuming preserves it.
+[History playback](history-playback.md)
 records the verified behavior and limits a later SDK implementation must address.
 
 There is no abstract base class, dynamic loader, speculative camera/history

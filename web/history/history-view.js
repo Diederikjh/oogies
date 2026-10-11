@@ -42,7 +42,7 @@ export class HistoryView {
 
   now() { return Math.floor(Date.now() / 60000) * 60000; }
 
-  async show() {
+  async show(cameraId) {
     this.active = true;
     const generation = ++this.generation;
     this.abort?.abort(); this.abort = new AbortController();
@@ -50,13 +50,15 @@ export class HistoryView {
     try {
       const inventory = await api("/api/cameras", "GET", undefined, {}, this.abort.signal);
       if (!this.active || generation !== this.generation) return;
-      const previous = this.camera.value;
+      const previous = cameraId || this.camera.value;
       this.cameras = inventory.cameras;
       this.onCameras();
       this.camera.replaceChildren(...inventory.cameras.map(camera => new Option(camera.name, camera.id)));
       if ([...this.camera.options].some(option => option.value === previous)) this.camera.value = previous;
+      if (cameraId) { this.recent = true; this.timeline.selected = undefined; }
       this.camera.disabled = !inventory.cameras.length;
       if (!inventory.cameras.length) { this.message.textContent = "No configured cameras."; return; }
+      if (cameraId) this.camera.focus();
       this.load();
       clearInterval(this.refreshTimer);
       this.refreshTimer = setInterval(() => { if (this.active && this.recent) this.load(); }, 60000);

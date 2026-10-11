@@ -215,6 +215,8 @@ expiry and verified `supported_controls`. Select an available recorded stream;
 do not assume the live substream was also recorded.
 `position` is optional and defaults to `from`. The UI supplies its entire visible
 range and the clicked timestamp, so later seeks can go earlier or later within it.
+Creation optionally accepts `rate` (default 1). Responses include `rate`,
+`requested_rate`, `supported_rates: [0.5, 1, 2, 4]` and nullable `rate_error`.
 
 Example PATCH bodies:
 
@@ -230,10 +232,19 @@ Example PATCH bodies:
 {"position": "2026-10-10T11:52:10Z"}
 ```
 
+```json
+{"rate": 2}
+```
+
 Unspecified fields remain unchanged; PATCH `{}` only renews the lease. Validate
 seek targets against the session range, clear old decoder buffers during seek,
-and report `seeking` until new frames arrive. Pause/resume and seek are verified;
-rate control is not implemented. Use accurate decoded/playback timestamps
+and report `seeking` until new frames arrive. Rate requests are limited to
+0.5, 1, 2 and 4, with booleans/strings and other numbers rejected before SDK work.
+Playing speed changes affect only that decoder, retain its generation/position,
+and are confirmed asynchronously; pending `requested_rate` may differ from
+`rate`. A rejected rate preserves video and reports its actual speed plus
+`rate_error`. While paused the chosen rate applies on resume/seek. Seek and
+resume preserve it. Use accurate decoded/playback timestamps
 for `position`; return null while unavailable rather than inventing precise
 positions from HTTP arrival times.
 Include playback generation and timestamp precision where needed to discard

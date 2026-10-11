@@ -46,7 +46,7 @@ class PlaybackTests(unittest.TestCase):
         self.assertEqual(result["position"], None)
         self.assertEqual(result["generation"], 1)
         self.assertIn("playback-start 3", self.worker.commands[0])
-        self.assertTrue(self.worker.commands[0].endswith("2026-10-11T12:20:00 2026-10-11T13:00:00 0"))
+        self.assertTrue(self.worker.commands[0].endswith("2026-10-11T12:20:00 2026-10-11T13:00:00 0 0"))
         self.assertEqual(self.worker.login_calls, 1)
 
     def test_seek_clears_old_frame_and_discards_old_generation_events(self):
@@ -66,7 +66,7 @@ class PlaybackTests(unittest.TestCase):
         self.worker._event(dict(type="playback", id=identifier, generation=1, state="paused", error=0))
         self.assertEqual(self.playback.get(identifier)["state"], "paused")
         self.playback.patch(identifier, {"position":"2026-10-11T10:15:00Z"})
-        self.assertTrue(self.worker.commands[-1].endswith(" 1"))
+        self.assertTrue(self.worker.commands[-1].endswith(" 1 0"))
         self.worker._event(dict(type="playback", id=identifier, generation=2, state="paused", error=0))
         self.assertEqual(self.playback.get(identifier)["state"], "paused")
 
@@ -80,7 +80,65 @@ class PlaybackTests(unittest.TestCase):
         resumed = self.playback.patch(identifier, {"state":"playing"})
         self.assertEqual(resumed["generation"], 2)
         self.assertIsNone(self.worker.playbacks[identifier]["frame"])
-        self.assertTrue(self.worker.commands[-1].endswith("2026-10-11T12:17:05 2026-10-11T13:00:00 0"))
+        self.assertTrue(self.worker.commands[-1].endswith("2026-10-11T12:17:05 2026-10-11T13:00:00 0 0"))
+
+    def test_rate_changes_use_decoder_command_and_preserve_position_generation(self):
+        session = self.create(); identifier = session["id"]
+        source = self.worker.playbacks[identifier]
+        source.update(state="playing", position=BEGIN, frame=b"picture")
+        changed = self.playback.patch(identifier, {"rate":4})
+        self.assertEqual((changed["rate"], changed["requested_rate"]), (1, 4))
+        self.assertEqual(changed["generation"], 1)
+        self.assertEqual(source["frame"], b"picture")
+        self.assertTrue(self.worker.commands[-1].endswith(" 1 2"))
+        self.worker._event(dict(type="playback_rate", id=identifier, generation=1, rate=4, requested_rate=4, error=0))
+        self.assertEqual(self.playback.get(identifier)["rate"], 4)
+        seek = self.playback.patch(identifier, {"position":"2026-10-11T10:10:00Z"})
+        self.assertEqual(seek["requested_rate"], 4)
+        self.assertTrue(self.worker.commands[-1].endswith(" 0 2"))
+        self.assertEqual(self.worker.login_calls, 1)
+
+    def test_paused_speed_applies_on_resume_and_paused_seek(self):
+        session = self.create(); identifier = session["id"]
+        source = self.worker.playbacks[identifier]
+        source.update(state="paused", position=BEGIN)
+        count = len(self.worker.commands)
+        changed = self.playback.patch(identifier, {"rate":0.5})
+        self.assertEqual((changed["state"], changed["rate"]), ("paused", 0.5))
+        self.assertEqual(len(self.worker.commands), count)
+        self.playback.patch(identifier, {"position":"2026-10-11T10:15:00Z"})
+        self.assertTrue(self.worker.commands[-1].endswith(" 1 -1"))
+        self.worker.playbacks[identifier].update(state="paused", position=BEGIN)
+        self.playback.patch(identifier, {"state":"playing"})
+        self.assertTrue(self.worker.commands[-1].endswith(" 0 -1"))
+
+    def test_rate_rejection_and_stale_ack_keep_playback_and_other_view_unchanged(self):
+        first, second = self.create(), self.create(position="2026-10-11T10:30:00Z")
+        source = self.worker.playbacks[first["id"]]
+        source.update(state="playing", frame=b"picture")
+        self.playback.patch(first["id"], {"rate":4})
+        self.worker._event(dict(type="playback_rate", id=first["id"], generation=1, rate=2, requested_rate=2, error=0))
+        self.assertEqual(source["requested_rate"], 4)
+        self.worker._event(dict(type="playback_rate", id=first["id"], generation=1, rate=1, requested_rate=4, error=2))
+        rejected = self.playback.get(first["id"])
+        self.assertEqual(rejected["state"], "playing")
+        self.assertEqual((rejected["rate"], rejected["requested_rate"]), (1, 1))
+        self.assertIn("decoder code 2", rejected["rate_error"])
+        self.assertEqual(source["frame"], b"picture")
+        self.assertEqual(self.playback.get(second["id"])["rate"], 1)
+        self.playback.patch(first["id"], {"position":"2026-10-11T10:10:00Z"})
+        self.worker._event(dict(type="playback_rate", id=first["id"], generation=1, rate=4, requested_rate=4, error=0))
+        self.assertEqual(self.playback.get(first["id"])["requested_rate"], 1)
+
+    def test_rate_validation_happens_before_native_work(self):
+        for rate in (True, False, "2", None, 0, -1, 0.75, 1.5, 8, float("nan"), float("inf")):
+            with self.assertRaises(SessionError):
+                self.playback.create(dict(camera_id="camera-1", **{"from":BEGIN, "to":END}, rate=rate))
+        self.assertEqual(self.worker.commands, [])
+        session = self.create()
+        for rate in (True, "4", 8, 1.5):
+            with self.assertRaises(SessionError): self.playback.patch(session["id"], {"rate":rate})
+        self.assertEqual(len(self.worker.commands), 1)
 
     def test_independent_positions_controls_and_expiry(self):
         first, second = self.create(), self.create(position="2026-10-11T10:30:00Z")
@@ -130,7 +188,7 @@ class PlaybackTests(unittest.TestCase):
             with self.assertRaises(SessionError): self.playback.create(body)
         self.assertEqual(self.worker.commands, [])
         session = self.create()
-        for body in ({"rate":2}, {"position":END}, {"state":"invalid"}):
+        for body in ({"rate":8}, {"position":END}, {"state":"invalid"}):
             with self.assertRaises(SessionError): self.playback.patch(session["id"], body)
         self.assertEqual(len(self.worker.commands), 1)
 

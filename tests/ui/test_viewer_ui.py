@@ -453,6 +453,72 @@ class ViewerUITests(unittest.TestCase):
         self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "playing" and
             self.driver.execute_script("return document.getElementById('history-image').naturalWidth > 0 && !document.getElementById('history-image').hidden"))
 
+    def test_camera_history_shortcuts_select_clicked_camera_and_work_offline(self):
+        self.wait_live()
+        buttons = self.driver.find_elements(By.CSS_SELECTOR, ".camera-history")
+        self.assertEqual(len(buttons), 9)
+        self.element(self.tile(2) + " .camera-history").click(); self.history_ready(); self.wait_counts(0, 0)
+        self.assertEqual(self.element("#history-camera").get_attribute("value"), "camera-2")
+        self.assertEqual(self.fixture.worker.timeline_calls[-1][0], "camera-2")
+        self.assertEqual(self.element("#history-player").get_attribute("data-state"), "idle")
+        self.assertFalse(self.fixture.worker.playbacks)
+        self.element("#live-tab").click(); self.wait_live()
+        # A previous History selection must not override the next tile shortcut.
+        button = self.element(self.tile(9) + " .camera-history")
+        self.assertIn("Camera 9", button.get_attribute("aria-label"))
+        button.send_keys(Keys.ENTER); self.history_ready()
+        self.assertEqual(self.element("#history-camera").get_attribute("value"), "camera-9")
+        self.assertEqual(self.driver.switch_to.active_element.get_attribute("id"), "history-camera")
+        self.assertEqual(self.fixture.worker.timeline_calls[-1][0], "camera-9")
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-recordings button")[0].click(); self.history_playing()
+        self.assertIn("Camera 9", self.element("#history-image").get_attribute("alt"))
+
+    def test_history_speed_steps_change_clock_and_survive_seek_pause_resume(self):
+        self.wait_live(); self.open_history()
+        self.assertTrue(all(not b.is_enabled() for b in self.driver.find_elements(By.CSS_SELECTOR, "#history-speeds button")))
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-recordings button")[0].click(); self.history_playing()
+        source = next(iter(self.fixture.worker.playbacks.values()))
+        generation = source["generation"]
+        for rate in (0.5, 1, 2, 4):
+            button = self.element(f'#history-speeds button[data-rate="{rate}"]')
+            self.wait.until(lambda _:button.is_enabled()); button.click()
+            self.wait.until(lambda _:button.get_attribute("aria-pressed") == "true" and button.is_enabled())
+            self.assertEqual(source["rate"], rate)
+            self.assertEqual(source["generation"], generation)
+            before, clock = source["sequence"], source["play_time"]
+            self.wait.until(lambda _:source["sequence"] >= before + 5)
+            ticks = source["sequence"] - before
+            self.assertAlmostEqual((source["play_time"] - clock).total_seconds(), ticks * .2 * rate, delta=.01)
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-events button")[1].click(); self.history_playing()
+        self.wait.until(lambda _:next(iter(self.fixture.worker.playbacks.values()))["generation"] == generation + 1)
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["rate"], 4)
+        self.wait.until(lambda _:self.element("#history-pause").is_enabled()); self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state") == "paused")
+        picture = self.history_pixels()
+        self.element('#history-speeds button[data-rate="0.5"]').click()
+        self.wait.until(lambda _:self.element('#history-speeds button[data-rate="0.5"]').get_attribute("aria-pressed") == "true")
+        self.assertEqual(self.element("#history-player").get_attribute("data-state"), "paused")
+        self.assertEqual(self.history_pixels(), picture)
+        self.element("#history-pause").click(); self.history_playing()
+        self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["rate"], .5)
+        self.element("#history-stop").click()
+        self.wait.until(lambda _:not self.fixture.worker.playbacks)
+        self.assertTrue(all(not b.is_enabled() for b in self.driver.find_elements(By.CSS_SELECTOR, "#history-speeds button")))
+
+    def test_history_speed_failure_shows_error_and_retains_moving_picture(self):
+        self.wait_live(); self.open_history()
+        self.driver.find_elements(By.CSS_SELECTOR, "#history-recordings button")[0].click(); self.history_playing()
+        self.fixture.worker.rate_failure = True
+        self.element('#history-speeds button[data-rate="4"]').click()
+        self.wait.until(lambda _:"decoder code 2" in self.element("#history-speed-status").text)
+        self.assertEqual(self.element('#history-speeds button[data-rate="1"]').get_attribute("aria-pressed"), "true")
+        self.assertEqual(self.element("#history-player").get_attribute("data-state"), "playing")
+        before = self.history_pixels(); self.wait.until(lambda _:self.history_pixels() != before)
+        self.fixture.worker.rate_failure = False
+        self.element('#history-speeds button[data-rate="2"]').click()
+        self.wait.until(lambda _:self.element('#history-speeds button[data-rate="2"]').get_attribute("aria-pressed") == "true")
+        self.assertEqual(self.element("#history-speed-status").text, "")
+
     def history_pixels(self):
         return self.driver.execute_script("""
             const img=document.getElementById('history-image'), c=document.createElement('canvas');

@@ -28,7 +28,8 @@ def main():
     driver = webdriver.Chrome(options=options); wait = WebDriverWait(driver, 30)
     try:
         driver.set_window_size(1500, 1100); driver.get(args.url)
-        driver.find_element(By.ID, "history-tab").click()
+        shortcut = wait.until(lambda _:driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .camera-history'))
+        shortcut.click()
         wait.until(lambda _:driver.find_element(By.ID, "history-camera").is_enabled())
         Select(driver.find_element(By.ID, "history-camera")).select_by_value("camera-1")
         wait.until(lambda _:driver.find_element(By.ID, "history-recordings").get_attribute("data-state") == "ready")
@@ -43,6 +44,13 @@ def main():
             assert driver.find_element(By.ID, "history-player").get_attribute("data-state") == "playing"
             time.sleep(.5)
         assert hashlib.sha256(pixels().encode()).hexdigest() != before
+        rates = []
+        for rate in ("0.5", "1", "2", "4"):
+            button = driver.find_element(By.CSS_SELECTOR, f'#history-speeds button[data-rate="{rate}"]')
+            wait.until(lambda _:button.is_enabled()); button.click()
+            wait.until(lambda _:button.get_attribute("aria-pressed") == "true" and button.is_enabled())
+            picture = pixels(); wait.until(lambda _:pixels() != picture)
+            rates.append(float(rate))
         player = driver.find_element(By.ID, "history-pause"); wait.until(lambda _:player.is_enabled()); player.click()
         wait.until(lambda _:driver.find_element(By.ID, "history-player").get_attribute("data-state") == "paused")
         time.sleep(.3); paused = pixels(); time.sleep(.6); assert pixels() == paused
@@ -52,7 +60,8 @@ def main():
         driver.find_element(By.ID, "history-stop").click()
         wait.until(lambda _:driver.find_element(By.ID, "history-player").get_attribute("data-state") == "idle")
         with urlopen(args.url + "/api/status", timeout=5) as response: status = json.load(response)
-        report = dict(moving_picture=True, continuous_seconds=args.continuous_seconds,
+        report = dict(moving_picture=True, camera_history_shortcut=True, playback_rates=rates,
+                      continuous_seconds=args.continuous_seconds,
                       pause_holds_picture=True, sdk_login_calls=status["sdk_login_calls"],
                       playback_sessions_after_stop=status["playback_sessions"], **dimensions)
         file = output / "report.json"; file.write_text(json.dumps(report, indent=2)); file.chmod(0o600)

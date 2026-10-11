@@ -2,6 +2,11 @@
 
 Implemented after timeline checkpoint `bb40e0f`, 11 October 2026.
 
+Every live camera has a History button which opens its recent timeline with
+that camera selected, including offline cameras. The button supports keyboard
+activation and moves focus to the History camera selector. It releases only the
+current page's live subscription. The History tab retains its camera selector.
+
 Click a recording track, motion marker/event, or commit a time-slider selection
 to show moving footage in the History player. A recording-band pointer click
 uses its actual position on the time axis; a motion click starts at the returned
@@ -14,6 +19,15 @@ Selecting a new time while paused displays that time's first frame and remains
 paused. Previous/next motion selects and plays the corresponding footage.
 Stop playback and leaving History release only this viewer's playback. Another
 page's live or historical view keeps its own sources and position.
+
+Speed buttons offer 0.5×, 1×, 2× and 4×, highlighting the confirmed selection.
+Playing speed changes adjust the existing decoder without reopening playback or
+moving its recorded position. The selected speed survives seeking and resume.
+Changing speed while paused keeps its picture/time fixed and applies on the next
+resume or paused seek. Stop/new-camera playback defaults to 1×. Controls wait
+for confirmation; a rejected speed shows a separate message while playback
+continues at the confirmed rate. The JPEG publication cap remains ten per second,
+so faster playback advances the footage rather than sending more browser frames.
 
 The player uses the selected camera's remembered Settings aspect ratio. Camera
 settings remain available even when History is opened before live discovery
@@ -39,9 +53,12 @@ sends the whole visible range and the chosen timestamp. Responses normalize to
 UTC and report nullable `position`, `position_precision: "second"`, `generation`
 and verified controls. Positions come from PlayCtrl's recorded system time,
 converted using the owner's recorder timezone, rather than HTTP arrival time.
+Creation also accepts optional numeric `rate`, default 1. Responses provide
+`rate`, `requested_rate`, `supported_rates` and nullable `rate_error`. Accepted
+rates are exactly 0.5, 1, 2 and 4; booleans, strings and other numbers are rejected.
 
 PATCH accepts `{position: utc}`, `{state: "paused"}`, `{state: "playing"}` or
-`{}`. Invalid ranges/controls are rejected. Generation changes on seeking and
+`{rate: 0.5|1|2|4}` or `{}`. Invalid ranges/controls are rejected. Generation changes on seeking and
 resume; old metadata, packets and pending image loads are discarded. The player
 serializes requests and drops superseded selections. A slow creation finishing
 after navigation is released, with lease expiry covering abandoned pages.
@@ -88,9 +105,19 @@ Second-resolution resume can repeat a small amount of footage; it is not frame
 accurate. No login retries, alternate credentials or automatic API fallback
 were introduced.
 
+PlayCtrl `PlayM4_Fast`/`PlayM4_Slow` change the file-mode decoder rate by powers
+of two, as used by the vendor's bundled Qt playback demo. Native rate events
+confirm the actual setting; generation and requested rate guards discard old
+acknowledgements. The recorder already delivers compressed footage faster than
+real time, with the bounded queue providing flow control, so the worker leaves
+recorder transport speed unchanged. The
+[network SDK controls](https://open.hikvision.com/hardware/definitions/NET_DVR_PlayBackControl_V40.html)
+also document fast/slow playback, but the SDK-owned player differs from our
+separate decoder and is not used for these buttons.
+
 EOF is reported as ended; it does not switch to live. Missing footage or decoder
 failure is shown explicitly. A fifteen-second frame deadline bounds starts and
-stalls. Audio, speed controls, clip export, synchronized multi-camera history
+stalls. Audio, clip export, synchronized multi-camera history
 and H.264 browser transport remain future work.
 
 ## Verification
@@ -142,3 +169,13 @@ GitHub Actions continues to use synthetic footage without SDK/credentials.
 The Docker suite also compiles the production buffer directly and tests decoder
 refusal, fast-producer/slow-consumer ordering and capacity, and cancellation of a
 blocked callback, without linking or loading the SDK.
+
+The speed check measured the real recorded clock over roughly ten seconds at
+each step: 5 seconds at 0.5×, 10 at 1×, 20 at 2×, 40 at 4×, then 10 again at 1×.
+All five changes retained generation 1, with moving decoded frames and one SDK
+login. Changing speed while paused held the picture/time, and resume/seek
+preserved 4×. Repeat deliberately with `python3 tools/check_playback_rates.py`;
+it creates and deletes only its own session through the service API. Private
+reports are in `.local/browser-viewer/rates-check-*/report.json`. The default
+check takes roughly a minute. Achievable rates on other cameras depend on their
+resolution and decoder capacity.
