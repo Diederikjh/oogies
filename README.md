@@ -16,6 +16,16 @@ A simple server setup (read [GETTING_STARTED_AGENTS](GETTING_STARTED_AGENTS.md))
 
 The HKVision C++ SDK does most of the heavy lifting of talking to the NVR.  We then have a wrapper around that, that eventually speaks to a Python backend, that serves the JS/HTML front end.
 
+## Screenshots
+
+### History
+
+![Historical playback with recording and motion timelines, and clip selection controls](docs/img/history.png)
+
+### Clip exports
+
+![Clip export jobs showing progress and download controls](docs/img/clips.png)
+
 _______________________
 
 The viewer supports a live camera grid, historical playback with motion timelines,
