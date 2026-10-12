@@ -8,6 +8,8 @@ and historical use cases incrementally.
 
 ## Playback speed race in CI
 
+Committed as `bf46318`.
+
 GitHub Actions exposed a speed/seek race: the backend had applied 4× before the
 browser received its response, so a seek could still submit the cached 1× speed.
 A browser regression held the response and reproduced the same `1 != 4` failure.
@@ -49,7 +51,8 @@ motion, compact layout, timed/clear/navigation dismissal, delayed responses and
 the existing queue/download/delete flow.
 
 The compact layout and its browser coverage were committed as `95b85c1`.
-The main clip action now reads Save clip, with bold text and a filled highlight.
+The main clip action reads Save clip with a filled highlight. Its text uses the
+same normal weight as the other buttons.
 Picture proportions are shown/configured in Settings; the clip box shows its
 range and duration. Saving still uses the current camera's picture preference.
 Two focused browser cases passed for compact layout/Save clip and the complete
