@@ -10,13 +10,13 @@ I din't like the fact that the only way to officially view my camera system on a
 
 ## How
 
-A simple server setup (read [GETTING_STARTED_AGENTS](GETTING_STARTED_AGENTS.md)) contains the IP and username/password for the NVR on your local network. Then you are good to go.
+A simple server setup (read [GETTING_STARTED](GETTING_STARTED.md)) contains the IP and username/password for the NVR on your local network. Then you are good to go.
 
 ### How as in how is it put togetehr
 
 The HKVision C++ SDK does most of the heavy lifting of talking to the NVR.  We then have a wrapper around that, that eventually speaks to a Python backend, that serves the JS/HTML front end.
 
-## Screenshots
+## Pretty pictures
 
 ### History
 
@@ -26,6 +26,10 @@ The HKVision C++ SDK does most of the heavy lifting of talking to the NVR.  We t
 
 ![Clip export jobs showing progress and download controls](docs/img/clips.png)
 
+
+## Whats up with the name "Oogies"?
+
+It is an Afrikaans word meening eyes.  Sometimes used to refer to looking.
 _______________________
 
 The viewer supports a live camera grid, historical playback with motion timelines,
