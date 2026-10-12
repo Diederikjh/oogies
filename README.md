@@ -1,5 +1,24 @@
 # Oogies
 
+## What is this?
+
+A local only web compattible camera viewer for the HKVision NVR system.
+
+## Why
+
+I din't like the fact that the only way to officially view my camera system on a browser was via a [ActiveX](https://en.wikipedia.org/wiki/ActiveX) control.  Plugin for IE browsers? Yes, yes it is. (Final realase was in 2013).  So I decided to make a new one.
+
+## How
+
+A simple server setup (read [GETTING_STARTED_AGENTS](GETTING_STARTED_AGENTS.md)) contains the IP and username/password for the NVR on your local network. Then you are good to go.
+
+### How as in how is it put togetehr
+
+The HKVision C++ SDK does most of the heavy lifting of talking to the NVR.  We then have a wrapper around that, that eventually speaks to a Python backend, that serves the JS/HTML front end.
+
+_______________________
+
+
 For a fresh checkout, start with [GETTING_STARTED.md](GETTING_STARTED.md).
 It gives the setup overview and current limitations. Detailed installation and
 verification instructions for a setup agent are in
