@@ -49,6 +49,8 @@ page's live or historical view keeps its own sources and position.
 Speed buttons offer 0.5×, 1×, 2× and 4×, highlighting the confirmed selection.
 Playing speed changes adjust the existing decoder without reopening playback or
 moving its recorded position. The selected speed survives seeking and resume.
+An immediate seek also retains a speed change whose HTTP response is still in
+flight; a failed request restores the last confirmed rate.
 Changing speed while paused keeps its picture/time fixed and applies on the next
 resume or paused seek. Stop/new-camera playback defaults to 1×. Controls wait
 for confirmation; a rejected speed shows a separate message while playback

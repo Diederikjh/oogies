@@ -203,6 +203,8 @@ export class PlaybackControls {
   async changeRate(rate) {
     if (!this.session || this.loading || this.controlling || this.session.requested_rate !== this.session.rate || rate === this.session.rate) return;
     const id = this.session.id, epoch = this.epoch;
+    // A seek can arrive before this response. Carry the requested speed with it.
+    this.session = {...this.session, requested_rate:rate};
     ++this.controlVersion; this.controlling = true; this.paint(this.session);
     try {
       const status = await api(`/api/playback/sessions/${id}`, "PATCH", {rate});
@@ -210,7 +212,10 @@ export class PlaybackControls {
         this.session = status; this.controlling = false; this.paint(status);
       }
     } catch (error) {
-      if (epoch === this.epoch) { this.controlling = false; this.paint(this.session); this.speedMessage.textContent = error.message; }
+      if (epoch === this.epoch) {
+        this.session = {...this.session, requested_rate:this.session.rate};
+        this.controlling = false; this.paint(this.session); this.speedMessage.textContent = error.message;
+      }
     }
   }
 

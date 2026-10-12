@@ -848,22 +848,82 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual((session["begin"],session["end"]),bounds)
         self.assertEqual(self.fixture.worker.playbacks[identifier]["state"],"paused")
 
+    def test_history_seek_during_delayed_speed_response_keeps_requested_rate(self):
+        self.paused_history()
+        identifier=next(iter(self.fixture.worker.playbacks))
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
+        self.driver.execute_script("""
+            const original=window.fetch;
+            window.fetch=async (...args)=>{
+              const response=await original(...args);
+              const body=args[1]?.body && JSON.parse(args[1].body);
+              if(args[1]?.method==='PATCH' && body?.rate===4 && !('position' in body)){
+                const json=response.json.bind(response);
+                response.json=async ()=>{const data=await json();window.rateDelivered=true;return data;};
+                await new Promise(resolve=>window.releaseRate=resolve);
+              }
+              return response;
+            };
+        """)
+        self.element('#history-speeds button[data-rate="4"]').click()
+        self.wait.until(lambda _:self.driver.execute_script("return Boolean(window.releaseRate)"))
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["rate"],4)
+        # The timeline remains interactive while the rate response is in flight.
+        self.element("#history-position").send_keys(Keys.HOME)
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1 and
+            self.element("#history-player").get_attribute("data-state")=="paused" and self.element("#clip-start").is_enabled())
+        source=self.fixture.worker.playbacks[identifier]
+        self.assertEqual(source["rate"],4)
+        self.assertEqual(source["requested_rate"],4)
+        self.driver.execute_script("window.releaseRate()")
+        self.wait.until(lambda _:self.driver.execute_script("return Boolean(window.rateDelivered)"))
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"],generation+1)
+        self.assertEqual(self.element('#history-speeds button[data-rate="4"]').get_attribute("aria-pressed"),"true")
+        self.assertTrue(self.element('#history-speeds button[data-rate="4"]').is_enabled())
+
     def test_history_steps_clamp_to_window_and_preserve_speed(self):
         self.paused_history()
-        self.element('#history-speeds button[data-rate="4"]').click()
-        self.wait.until(lambda _:next(iter(self.fixture.worker.playbacks.values()))["rate"]==4)
+        identifier=next(iter(self.fixture.worker.playbacks))
+        speed=self.element('#history-speeds button[data-rate="4"]')
+        speed.click()
+        self.wait.until(lambda _:speed.get_attribute("aria-pressed")=="true" and speed.is_enabled())
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
         self.driver.execute_script("const s=document.getElementById('history-position');s.value=0;s.dispatchEvent(new Event('change',{bubbles:true}))")
-        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1 and self.element("#history-pause").is_enabled())
         self.assertFalse(self.element('#history-steps button[data-seconds="-10"]').is_enabled())
         self.assertFalse(self.element('#history-steps button[data-seconds="-30"]').is_enabled())
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
         self.element('#history-steps button[data-seconds="30"]').click()
-        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
-        source=next(iter(self.fixture.worker.playbacks.values()))
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1 and self.element("#history-pause").is_enabled())
+        source=self.fixture.worker.playbacks[identifier]
         self.assertEqual(source["state"],"paused"); self.assertEqual(source["rate"],4)
+        generation=source["generation"]
         self.driver.execute_script("const s=document.getElementById('history-position');s.value=s.max;s.dispatchEvent(new Event('change',{bubbles:true}))")
-        self.wait.until(lambda _:self.element("#clip-start").is_enabled())
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1 and self.element("#history-pause").is_enabled())
         self.assertFalse(self.element('#history-steps button[data-seconds="10"]').is_enabled())
         self.assertFalse(self.element('#history-steps button[data-seconds="30"]').is_enabled())
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["rate"],4)
+
+    def test_history_speed_request_failure_restores_rate_for_following_seek(self):
+        self.paused_history()
+        identifier=next(iter(self.fixture.worker.playbacks))
+        generation=self.fixture.worker.playbacks[identifier]["generation"]
+        self.driver.execute_script("""
+            const original=window.fetch;
+            window.fetch=(...args)=>{
+              const body=args[1]?.body && JSON.parse(args[1].body);
+              if(args[1]?.method==='PATCH' && body?.rate===4 && !('position' in body))
+                return Promise.reject(new Error('Simulated speed request failure'));
+              return original(...args);
+            };
+        """)
+        self.element('#history-speeds button[data-rate="4"]').click()
+        self.wait.until(lambda _:"Simulated speed request failure" in self.element("#history-speed-status").text)
+        self.assertEqual(self.element('#history-speeds button[data-rate="1"]').get_attribute("aria-pressed"),"true")
+        self.element("#history-position").send_keys(Keys.HOME)
+        self.wait.until(lambda _:self.fixture.worker.playbacks[identifier]["generation"]==generation+1 and self.element("#history-pause").is_enabled())
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["rate"],1)
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["requested_rate"],1)
 
     def test_history_exports_preserve_another_live_tab(self):
         self.wait_live(); first=self.driver.current_window_handle

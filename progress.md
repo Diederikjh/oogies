@@ -1,10 +1,24 @@
 # Camera viewing investigation progress
 
-Updated: 2026-10-11 (South Africa time).
+Updated: 2026-10-12 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
+
+## Playback speed race in CI
+
+GitHub Actions exposed a speed/seek race: the backend had applied 4× before the
+browser received its response, so a seek could still submit the cached 1× speed.
+A browser regression held the response and reproduced the same `1 != 4` failure.
+The player now retains requested speed immediately, carries it through seeks,
+discards superseded acknowledgements, and restores the confirmed rate on request
+failure. The boundary-step test waits for browser confirmation/readiness and each
+new playback generation. Six focused speed/date/error cases passed. Local host
+Python needed inherited library overrides cleared for the test command; no host
+configuration or dependencies were changed.
+The complete offline suite then passed all 71 cases (68 browser and three native
+buffer regressions), including the reported CI failure. Publication checks passed.
 
 ## Compact History workspace
 

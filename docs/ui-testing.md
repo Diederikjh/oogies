@@ -18,7 +18,7 @@ date cases also verify successful submission closes the picker and invalid
 dates keep the error visible without disturbing playback.
 Visibility inside native closed `<details>` uses Chromium's `checkVisibility()`;
 the installed Selenium version reports those unpainted descendants as visible.
-The complete local run with this layout passed 66 cases: 63 browser cases and
+The latest complete local run passed 71 cases: 68 browser cases and
 three native buffer regressions, using the same command as GitHub Actions.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
@@ -30,6 +30,12 @@ and metadata-refresh behavior without seeking playback.
 Collapsed Motion events coverage checks that the heading fits inside its panel
 without a scrollbar at desktop, narrow desktop and phone widths. Keyboard
 expansion/collapse preserves playback and reveals/hides the event list.
+Speed/seek concurrency coverage holds a rate-change response after the backend
+applies it, seeks through the still-interactive slider, and checks that the
+requested rate survives both seeking and the delayed acknowledgement. A failed
+speed request restores the confirmed rate for subsequent seeking. Boundary-step
+checks wait for browser readiness and a new playback generation, keeping the
+rate assertions and avoiding backend-only synchronization.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames
