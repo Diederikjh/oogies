@@ -18,6 +18,10 @@ The HKVision C++ SDK does most of the heavy lifting of talking to the NVR.  We t
 
 ## Pretty pictures
 
+### Live overview
+
+![Live overview showing the camera grid](docs/img/live_view.png)
+
 ### History
 
 ![Historical playback with recording and motion timelines, and clip selection controls](docs/img/history.png)
