@@ -1,10 +1,22 @@
 # Camera viewing investigation progress
 
-Updated: 2026-10-12 (South Africa time).
+Updated: 2026-10-13 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
+
+## Recent history range boundary in CI
+
+The offline-camera range test assumed Recent always restored the initial window.
+Crossing a minute correctly advances that window, causing the reported CI failure.
+Controlling the page wall clock reproduced the failure across recorder midnight
+and New Year. The test now checks both returning within the same minute and
+advancing into the next one, including exact recorder query bounds and the
+disabled Later button. Other timers and production behavior are unchanged.
+Four focused browser cases passed for ranges/offline inputs, fixed-range refresh,
+recorder timezone/date navigation and delayed camera responses. Publication
+checks passed; the complete suite was not rerun for this test-only change.
 
 ## Playback speed race in CI
 

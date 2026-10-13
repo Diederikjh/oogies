@@ -36,6 +36,10 @@ requested rate survives both seeking and the delayed acknowledgement. A failed
 speed request restores the confirmed rate for subsequent seeking. Boundary-step
 checks wait for browser readiness and a new playback generation, keeping the
 rate assertions and avoiding backend-only synchronization.
+The offline-camera range case controls only the browser's `Date.now()` and
+checks Recent both within a minute and across recorder midnight/New Year.
+It verifies the exact recorder query bounds; HTTP, cache, lease and animation
+timers remain real, so CI does not depend on when the case happens to run.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames

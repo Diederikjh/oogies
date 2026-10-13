@@ -392,6 +392,12 @@ class ViewerUITests(unittest.TestCase):
                         self.element("#history-motion").get_attribute("data-state") != "pending")
 
     def test_history_camera_ranges_include_offline_inputs(self):
+        # Only the page's wall clock is controlled; HTTP, animation, cache and
+        # lease timers keep running normally. Start just before recorder New Year.
+        self.driver.execute_script("""
+            window.historyTestNow = Date.parse('2024-12-31T21:59:59Z');
+            Date.now = () => window.historyTestNow;
+        """)
         self.wait_live(); self.open_history()
         Select(self.element("#history-camera")).select_by_value("camera-9"); self.history_ready()
         self.assertEqual(self.fixture.worker.timeline_calls[-1][0], "camera-9")
@@ -399,12 +405,25 @@ class ViewerUITests(unittest.TestCase):
         Select(self.element("#history-hours")).select_by_value("1"); self.history_ready()
         self.assertEqual(self.element("#history-position").get_attribute("max"), "3599")
         initial = self.element("#history-range").text
-        self.element("#history-earlier").click(); self.history_ready()
-        self.assertNotEqual(self.element("#history-range").text, initial)
-        self.assertTrue(self.element("#history-later").is_enabled())
-        self.element("#history-recent").click(); self.history_ready()
-        self.assertEqual(self.element("#history-range").text, initial)
-        self.assertFalse(self.element("#history-later").is_enabled())
+        self.assertEqual(self.fixture.worker.timeline_calls[-1],
+                         ("camera-9", "2024-12-31T22:59:00", "2024-12-31T23:59:00"))
+        for elapsed in (0, 1000):
+            with self.subTest(elapsed_ms=elapsed):
+                self.element("#history-earlier").click(); self.history_ready()
+                earlier = self.element("#history-range").text
+                self.assertNotEqual(earlier, initial)
+                self.assertTrue(self.element("#history-later").is_enabled())
+                self.driver.execute_script("window.historyTestNow += arguments[0];", elapsed)
+                self.assertEqual(self.element("#history-range").text, earlier)
+                self.element("#history-recent").click(); self.history_ready()
+                if elapsed == 0:
+                    self.assertEqual(self.element("#history-range").text, initial)
+                else:
+                    self.assertNotEqual(self.element("#history-range").text, initial)
+                    self.assertEqual(self.fixture.worker.timeline_calls[-1],
+                                     ("camera-9", "2024-12-31T23:00:00", "2025-01-01T00:00:00"))
+                self.assertEqual(self.element("#history-position").get_attribute("max"), "3599")
+                self.assertFalse(self.element("#history-later").is_enabled())
 
     def test_history_empty_unsupported_and_error_motion_are_distinct(self):
         self.wait_live()
