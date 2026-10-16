@@ -17,6 +17,10 @@ playback/control checks now coexist through one login. A fully fresh remote/LFS
 installation and full-grid historical coexistence remain unverified. Milestone 2's initial
 grid, sharing, cleanup and expansion pass; expansion currently keeps overview
 quality. Main-stream switching and sustained recovery are later work.
+The proposed [high-quality live viewing plan](live-quality-plan.md) separates
+backend stream identity, admission and measurements from frontend expansion
+switching. Its initial recommendation is one shared high-quality source, with
+overview fallback when either capacity budget is exhausted; it is not implemented.
 
 ## Primary use cases
 
