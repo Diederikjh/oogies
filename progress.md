@@ -1,10 +1,48 @@
 # Camera viewing investigation progress
 
-Updated: 2026-10-13 (South Africa time).
+Updated: 2026-10-16 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
+
+## High-quality live backend: milestone 1 review
+
+The approved plan was committed as `efc4007` before implementation. Backend live
+selections now accept overview and high quality, sharing separate native sources
+per camera/quality through one login. High requests retain overview fallback and
+promote only when a fresh main-stream frame arrives. Configured high-quality
+capacity defaults to one shared source; zero disables it. Total capacity includes
+overview, high quality, history/export reservations and native live stops awaiting
+acknowledgement. Failed/refused upgrades require explicit retry and do not queue.
+
+Worker protocol 2 identifies quality and generation throughout commands, events,
+cache paths and media headers. Selection revisions separate explicit updates from
+lease renewal. Limits, fallback reasons and per-source FPS/bytes/freshness/latency
+are available through the existing API and `/api/status`. Decoded YV12 buffers
+are bounded at 16 MiB with dimension validation; JPEG limits remain 4 MiB.
+
+All 94 backend tests and the complete 73-case offline browser/native suite passed.
+Coverage includes concurrent admission, sharing, fallback, stale events/files,
+closing-source reservations, history/export contention, actual high-quality media
+decoding in Chromium and preservation of the ordinary grid. The native bridge
+compiled and initialized SDK/decoder offline with zero login calls. Publication
+checks passed. Both setup guides and API/test/grid documentation were updated.
+
+One bounded Docker device check used one SDK login and at most one high-quality
+live source. The recorder reported four online inputs at this check; all four
+decoded alongside high quality and one historical playback. Camera 1 overview
+was 352×288; main stream was 960×1088, with existing browser aspect correction
+still applicable. Four overview streams plus high quality sampled about 43.5%
+of one CPU core and 121.1 MiB; adding history sampled 60.8% and 149.4 MiB.
+Each resource sample lasted eight seconds and excluded browser media delivery;
+these are short operating samples, not a maximum-capacity or sustained-use claim.
+Independent high-view release and final zero-source cleanup passed. Private
+evidence is in `.local/live-quality-check/quality-check/quality-check.json`.
+
+The service was relaunched with the updated backend. Frontend expansion still
+uses overview; automatic switching is milestone 2. Implementation is left
+uncommitted for the requested milestone review. Keep the high-quality cap at one.
 
 ## Recent history range boundary in CI
 

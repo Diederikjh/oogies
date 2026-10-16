@@ -23,7 +23,8 @@ scrolling while the size transition finishes. Rapid toggles continue from the
 current rectangle, and reduced-motion preferences use an immediate transition.
 Aspect selectors are under
 Settings → Picture proportions, with one saved browser preference per camera
-shared by its live and recorded views. Main-stream quality switching is not implemented yet. Camera 1's
+shared by its live and recorded views. Backend main-stream support is implemented;
+automatic frontend switching remains the next milestone. Camera 1's
 16:9 setting matches the owner's Hik-Connect screenshot; other cameras can use
 4:3 or Original. Browsers scale the original JPEGs without backend upscaling.
 
@@ -40,7 +41,7 @@ remain later milestones.
 ## Backend and SDK boundaries
 
 - [live_grid.cpp](../docker/hikvision-sdk/live_grid.cpp) owns one synchronous SDK
-  login, discovery, independent per-channel PlayCtrl contexts and bounded latest
+  login, discovery, independent per-source PlayCtrl contexts and bounded latest
   frame/JPEG buffers. Decoder callbacks identify their own context; no shared
   single-player globals are used. The existing bounded diagnostic is preserved.
 - [grid_worker.py](../docker/hikvision-sdk/grid_worker.py) manages its process,
@@ -94,7 +95,14 @@ that recovery problem. Hikvision documents the signal/hardware flags in
 | GET | `/media/live/{id}/frames` | One bounded, multiplexed JPEG feed for all cameras in this view |
 | GET | `/recording.mp4` | Previously extracted clip with HTTP byte-range support |
 
-Only `quality: "overview"` is supported. Requests beyond the configured source
+`quality: "overview"` and `quality: "high"` are supported by the backend. High
+requests retain an overview fallback, share a separate source with other high
+viewers of that camera, and promote only after a fresh main-stream frame.
+The configurable high-quality limit defaults to one; zero disables it. Limits,
+unsupported streams, failed decoding or stale high frames preserve overview
+with an explicit quality reason. Refused/failed requests require an explicit
+selection PATCH to retry; they do not wait in an upgrade queue.
+Requests beyond the configured source
 budget retain working tiles and label excess cameras capacity-limited. There
 are at most eight viewer leases and one feed per lease. The configured source
 limit defaults to eight and can be 1–16; it is an application budget, not the
@@ -110,10 +118,24 @@ JPEGs are multiplexed without re-encoding into one fetch connection. API media
 descriptors identify the transport as `jpeg-frames-v1`.
 
 Each packet has a 4-byte big-endian body length, then a 2-byte JSON-header length,
-the UTF-8 JSON header (`camera_id`, `sequence`), then the JPEG. Native frame sizes,
+the UTF-8 JSON header (`camera_id`, `quality`, `generation`, `sequence`,
+`selection_revision`), then the JPEG. Each viewer receives one effective rendition
+per camera. The frame version includes quality and generation, so sequence reuse
+cannot hide the first upgraded frame. Native frame sizes,
 packet/header lengths and outstanding buffers are bounded. Slow feed consumers
 receive the newest cache state, and slow tiles skip frames rather than queuing.
 Browser Blob URLs are revoked as frames are replaced.
+
+Logical source identity is `(camera_id, quality)`. Overview cache/directory keys
+remain `camera-N` for existing diagnostics, with `camera-N-high` for main streams.
+Worker protocol 2 requires quality and Python-issued generation on live start/stop
+commands and lifecycle events. Old generations cannot stop or promote a restarted
+source. Each rendition has independent preview, decoder and bounded frame buffers.
+Decoded YV12 frames accept even dimensions up to 4096 per axis and 16 MiB total;
+JPEGs and feed packets retain their existing 4 MiB JPEG limit. Compressed decoder
+buffers remain 4 MiB and publication stays at most ten JPEGs/second per source.
+These bounds permit common 4K rasters without unbounded allocation, but are not
+a claim that every configured main stream is supported or affordable.
 
 Frontend code is separated into shared API/feed/media helpers, live overview,
 camera tiles and saved-clip viewing. No host/frontend packages or build system
@@ -134,6 +156,7 @@ Example schema:
   "timezone": "Africa/Johannesburg",
   "sdk_profile": "hcnet-6.1.9.48-linux64",
   "max_live_sources": 8,
+  "max_high_quality_sources": 1,
   "lease_seconds": 90,
   "camera_overrides": {
     "1": {"name": "Driveway", "aspect_ratio": "16:9"},
@@ -150,7 +173,7 @@ RTSP/web diagnostics now also read the private recorder configuration.
 
 ## Verification and limits
 
-The new native worker compiled, initialized and configured the decoder in Docker
+The original native worker compiled, initialized and configured the decoder in Docker
 with networking disabled and zero login calls. Eighteen unit tests passed,
 including independent viewer deletion, expiry while another view survives,
 idempotency, capacity/failure states, feed selection, configuration validation,
@@ -181,6 +204,58 @@ A real unrenewed lease expired after 90 seconds while a separate lease, renewed
 every 25 seconds, kept its camera live. Only the abandoned source stopped; the
 remaining view retained the same recorder login. Evidence: private
 `.local/grid-check/lease-expiry.json`.
+
+## High-quality backend verification — 16 October 2026
+
+The approved plan is committed as `efc4007`; milestone 1 is implemented and paused
+for review. Frontend expansion continues to request overview. All 94 backend
+tests and 73 offline browser/native tests passed; C++ compilation and SDK/decoder
+initialization passed without network access or credentials. The current SDK's
+bundled `incEn/HCNetSDK.h` documents `NET_DVR_PREVIEWINFO.dwStreamType` as zero
+for main stream and one for substream; the native helper uses that mapping.
+
+One bounded real check used one SDK login and at most one high-quality live source,
+with the existing viewer stopped to avoid duplicating its connections. Four
+inputs were reported online, and all four decoded in the measured grid. Camera 1
+changed from 352×288 overview to 960×1088 main-stream JPEGs. These are native
+rasters; browser picture proportions still apply. Two high viewers shared one
+source; downgrading one preserved the other, and releasing the last high viewer
+left overview moving. All source slots were released at final cleanup.
+
+| Measured workload | Mean CPU (% of one core) | Peak container memory |
+| --- | ---: | ---: |
+| One overview | 9.3% | 50.9 MiB |
+| One overview + one high | 34.3% | 78.9 MiB |
+| Four overviews | 37.8% | 94.8 MiB |
+| Four overviews + one high | 43.5% | 121.1 MiB |
+| Four overviews + one high + historical playback | 60.8% | 149.4 MiB |
+
+Each sample lasted eight seconds in the existing 2-CPU/2-GiB/512-PID runtime
+limits. The four-overview/high sample received about 139 KiB/s of container
+network traffic; high-quality JPEG cache publication was about 519 KiB/s at
+8.9 FPS, with the SDK decoding around 15 FPS. First high frame arrived in about
+0.25 seconds. Rates vary with scene, stream settings and workload. These samples
+exercise the worker/source path, with no browser feed consumers; per-viewer
+JPEG delivery adds bandwidth and browser work. Other recorder clients remain
+outside these counters. The earlier seven-camera workload was not recreated
+because only four inputs were reported online during this check.
+
+Keep the high-quality cap at one. Additional concurrent main streams and sustained
+load remain unverified. The existing source budget of eight accommodated the
+measured six-source live/history workload. A separate export/high-quality
+contention check uses the actual export job manager offline; this device check
+used historical playback for coexistence rather than exporting another clip.
+
+[check_live_quality.py](../tools/check_live_quality.py) reproduces the bounded
+worker check inside the SDK Docker runtime. It expects read-only `/sdk`, `/probe`
+and `/support` mounts, private configuration at `/configuration/nvr.json`, private
+credentials at `/credentials/nvr.json`, and a writable private `/output` mount.
+Use the viewer's standard resource limits and `PYTHONPATH=/support:/probe`.
+Run `python3 /support/check_live_quality.py` explicitly; it is never part of CI.
+No settings or credentials are modified. Outputs include private camera frames
+and logs, so bind `/output` beneath ignored `.local/` and keep it private.
+Evidence for this run is under
+`.local/live-quality-check/quality-check/quality-check.json`.
 
 ## Offline display-control check
 

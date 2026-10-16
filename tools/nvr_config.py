@@ -32,17 +32,17 @@ def load_config(path=None):
         value = json.loads(source.read_text())
     except json.JSONDecodeError:
         raise ValueError("recorder configuration must contain valid JSON") from None
-    allowed = {"host", "sdk_port", "timezone", "sdk_profile", "max_live_sources", "lease_seconds", "camera_overrides", "exports"}
+    allowed = {"host", "sdk_port", "timezone", "sdk_profile", "max_live_sources", "max_high_quality_sources", "lease_seconds", "camera_overrides", "exports"}
     if not isinstance(value, dict) or set(value) - allowed:
         raise ValueError("invalid or unknown recorder configuration fields")
     config = dict(sdk_port=8000, timezone="Africa/Johannesburg", sdk_profile=DEFAULT_SDK_ID,
-                  max_live_sources=8, lease_seconds=90, camera_overrides={})
+                  max_live_sources=8, max_high_quality_sources=1, lease_seconds=90, camera_overrides={})
     config.update(value)
     config["exports"] = export_limits(config.get("exports"))
     if not isinstance(config.get("host"), str):
         raise ValueError("recorder IP is required")
     ipaddress.ip_address(config["host"])
-    for name, lower, upper in (("sdk_port", 1, 65535), ("max_live_sources", 1, 16), ("lease_seconds", 10, 300)):
+    for name, lower, upper in (("sdk_port", 1, 65535), ("max_live_sources", 1, 16), ("max_high_quality_sources", 0, 16), ("lease_seconds", 10, 300)):
         if type(config[name]) is not int or not lower <= config[name] <= upper:
             raise ValueError(f"invalid {name}")
     if not isinstance(config["timezone"], str) or not config["timezone"] or any(ord(c) < 32 for c in config["timezone"]):

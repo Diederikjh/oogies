@@ -319,6 +319,7 @@ Create `.local/nvr-config.json` using the owner's actual IP address and SDK port
   "timezone": "Africa/Johannesburg",
   "sdk_profile": "hcnet-6.1.9.48-linux64",
   "max_live_sources": 8,
+  "max_high_quality_sources": 1,
   "lease_seconds": 90,
   "camera_overrides": {}
 }
@@ -343,6 +344,18 @@ concurrent previews have been verified on the original recorder. `lease_seconds`
 can be 10–300; default 90 with frontend renewal every 30 seconds. The timezone
 sets the recorder's clock context for historical range conversion;
 live OSD timestamps are unchanged.
+
+`max_high_quality_sources` is an optional integer from 0–16, default one; zero
+disables high-quality live sources. It limits distinct camera main streams,
+shared across viewers, within the existing total `max_live_sources` budget.
+An upgrade retains its overview fallback, so it consumes one additional slot.
+Historical playback and exports also use the total budget; closing native live
+sources count until their stop acknowledgement arrives. If there is no room,
+the API returns overview quality with an explicit refusal reason. Refused/failed
+upgrades are not queued or automatically retried. Restart after changing limits.
+Current frontend expansion still uses overview. Verify the backend through the
+API and `/api/status`; do not claim high quality from tile size alone. See
+[live quality](docs/live-quality-plan.md) for the staged checks and measurements.
 
 Optional `exports` settings are a nested object in that same private JSON:
 

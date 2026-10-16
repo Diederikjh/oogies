@@ -9,6 +9,7 @@ import time
 import uuid
 from zoneinfo import ZoneInfo
 from history_timeline import recorder_utc, utc_text
+from live_sources import source_key, source_identity
 
 
 class GridWorker:
@@ -31,6 +32,7 @@ class GridWorker:
         self.playbacks = {}
         self.exports = {}
         self.zone = ZoneInfo(config.get("timezone", "Africa/Johannesburg"))
+        self.source_generations = {}
 
     def ensure_ready(self):
         with self.condition:
@@ -122,7 +124,7 @@ class GridWorker:
                 self.condition.notify_all()
                 return
             if kind == "ready":
-                if event.get("protocol") != 1:
+                if event.get("protocol") != 2:
                     self.state, self.error = "error", "Unsupported worker protocol."
                     self.process.terminate()
                 else:
@@ -135,7 +137,7 @@ class GridWorker:
                         identifier = f"camera-{channel}"
                         self.cameras[identifier] = dict(camera, id=identifier,
                             name=override.get("name", camera["name"]),
-                            aspect_ratio=override.get("aspect_ratio", "16:9"), live_qualities=["overview"],
+                            aspect_ratio=override.get("aspect_ratio", "16:9"), live_qualities=["overview", "high"],
                             capabilities={"time_playback": "unknown", "motion_timeline": "unknown"})
                     self.state = "ready"
                     self.next_availability_refresh = self.clock() + self.availability_cache_seconds
@@ -144,18 +146,21 @@ class GridWorker:
                     identifier = f"camera-{camera['channel']}"
                     if identifier not in self.cameras or type(camera.get("online")) is not bool:
                         continue
-                    source = self.sources.get(identifier, {})
                     # Fresh decoded video is stronger evidence than a status hint.
-                    fresh = source.get("frame") is not None and time.monotonic() - source.get("last_frame", 0) <= 5
+                    fresh = any(source.get("frame") is not None and source.get("state") == "live" and
+                        time.monotonic() - source.get("last_frame", 0) <= 5
+                        for key in (source_key(identifier), source_key(identifier, "high"))
+                        for source in (self.sources.get(key, {}),))
                     self.cameras[identifier]["online"] = camera["online"] or fresh
                 self.next_availability_refresh = self.clock() + self.availability_cache_seconds
             elif kind == "fatal":
                 self.login_calls = event.get("login_calls", 0)
                 self.state, self.error = "error", f"Recorder connection failed (SDK code {event.get('error')}); no automatic retry."
             elif kind in ("started", "source_error", "stopped"):
-                identifier = f"camera-{event['channel']}"
+                identifier = source_key(f"camera-{event['channel']}", event["quality"])
                 source = self.sources.get(identifier)
-                if source:
+                if source and source["generation"] == event["generation"]:
+                    if kind == "started" and source["state"] != "starting": return
                     if kind == "stopped" and source["state"] == "stopping":
                         source["state"], source["frame"] = "stopped", None
                     elif kind == "stopped":
@@ -164,7 +169,6 @@ class GridWorker:
                         source["state"] = "capacity_limited" if event["error"] == 5 else "error"
                         source["error"] = f"Camera stream failed (SDK/decoder code {event['error']})."
                     else:
-                        source["generation"] = event["generation"]
                         source["state"] = "starting"
             self.condition.notify_all()
 
@@ -205,13 +209,17 @@ class GridWorker:
                     source["state"], source["frame"] = "error", None
                 self.condition.notify_all()
 
-    def send(self, operation, camera_id):
-        self._command(f"{operation} {self.cameras[camera_id]['channel']}")
+    def send(self, operation, key):
+        camera_id, quality = source_identity(key)
+        self._command(f"{operation} {self.cameras[camera_id]['channel']} {quality} {self.sources[key]['generation']}")
 
     def start_source(self, camera_id):
         with self.condition:
+            generation = self.source_generations.get(camera_id, 0) + 1
+            self.source_generations[camera_id] = generation
             self.sources[camera_id] = dict(state="starting", frame=None, sequence=0,
-                generation=None, width=0, height=0, received=0, last_frame=0,
+                generation=generation, width=0, height=0, received=0, last_frame=0,
+                jpeg_bytes=0, stats_at=time.monotonic(), stats_decoded=0, stats_received=0, stats_jpeg_bytes=0, stats_stream_bytes=0,
                 requested_at=time.monotonic(), error=None)
             self.send("start", camera_id)
 
@@ -310,44 +318,57 @@ class GridWorker:
                     source.update(state="error", error="Historical playback stopped delivering frames.", frame=None)
                     self._command(f"playback-stop 0 {identifier} {source['generation']}")
 
+    def _live_frame(self, identifier):
+        """Read one atomic native publication and reject replacements in flight."""
+        directory = self.directory / identifier
+        try:
+            metadata = json.loads((directory / "frame.json").read_text())
+            frame = (directory / "frame.jpg").read_bytes()
+            if metadata != json.loads((directory / "frame.json").read_text()): return
+            if len(frame) > 4 * 1024 * 1024 or not frame.startswith(b"\xff\xd8") or not frame.endswith(b"\xff\xd9"): return
+            with self.condition:
+                source = self.sources.get(identifier)
+                if not source or source["state"] not in ("starting", "live", "stale") or metadata["generation"] != source["generation"] or metadata["sequence"] == source["sequence"]: return
+                now = time.monotonic()
+                if not source["received"]: source["first_frame_seconds"] = round(now - source["requested_at"], 3)
+                source.update(state="live", frame=frame, sequence=metadata["sequence"],
+                    width=metadata["width"], height=metadata["height"], last_frame=now,
+                    last_frame_received_at=datetime.now(timezone.utc).isoformat(),
+                    decoded_frames=metadata["decoded_frames"], jpeg_frames=metadata["jpeg_frames"])
+                source["received"] += 1; source["jpeg_bytes"] += len(frame)
+                elapsed = now - source["stats_at"]
+                if elapsed >= 1:
+                    source.update(decoded_fps=round((metadata["decoded_frames"]-source["stats_decoded"])/elapsed, 2),
+                        delivered_fps=round((source["received"]-source["stats_received"])/elapsed, 2),
+                        jpeg_bytes_per_second=round((source["jpeg_bytes"]-source["stats_jpeg_bytes"])/elapsed),
+                        stream_bytes_per_second=round((metadata["stream_bytes"]-source["stats_stream_bytes"])/elapsed),
+                        stats_at=now, stats_decoded=metadata["decoded_frames"], stats_received=source["received"],
+                        stats_jpeg_bytes=source["jpeg_bytes"], stats_stream_bytes=metadata["stream_bytes"])
+                self.cameras[source_identity(identifier)[0]]["online"] = True
+                self.condition.notify_all()
+        except (OSError, ValueError, KeyError):
+            pass
+
     def _frames(self):
         while not self.shutdown and self.process.poll() is None:
             with self.condition:
                 identifiers = [key for key, source in self.sources.items() if source["state"] in ("starting", "live", "stale")]
             for identifier in identifiers:
-                directory = self.directory / identifier
-                try:
-                    metadata = json.loads((directory / "frame.json").read_text())
-                    with self.condition:
-                        source = self.sources[identifier]
-                        if metadata["generation"] != source["generation"] or metadata["sequence"] == source["sequence"]:
-                            continue
-                    frame = (directory / "frame.jpg").read_bytes()
-                    if len(frame) > 4 * 1024 * 1024 or not frame.startswith(b"\xff\xd8") or not frame.endswith(b"\xff\xd9"):
-                        continue
-                    with self.condition:
-                        if source["state"] not in ("starting", "live", "stale"):
-                            continue
-                        source.update(state="live", frame=frame, sequence=metadata["sequence"],
-                            width=metadata["width"], height=metadata["height"], last_frame=time.monotonic(),
-                            last_frame_received_at=datetime.now(timezone.utc).isoformat(),
-                            decoded_frames=metadata["decoded_frames"], jpeg_frames=metadata["jpeg_frames"])
-                        source["received"] += 1
-                        self.cameras[identifier]["online"] = True
-                        self.condition.notify_all()
-                except (OSError, ValueError, KeyError):
-                    pass
-            with self.condition:
-                for identifier, source in self.sources.items():
-                    if source["state"] == "starting" and time.monotonic() - source["requested_at"] > 15:
-                        self.send("stop", identifier)
-                        source["state"], source["error"] = "error", "No decoded frames arrived within 15 seconds."
-                    elif source["state"] in ("live", "stale"):
-                        source["state"] = "stale" if time.monotonic() - source["last_frame"] > 5 else "live"
-                fresh = sum(source["state"] == "live" for source in self.sources.values())
-                self.tested_capacity = max(self.tested_capacity, fresh)
+                self._live_frame(identifier)
+            self._check_live_sources()
             self._playback_frames()
             time.sleep(0.05)
+
+    def _check_live_sources(self):
+        with self.condition:
+            for identifier, source in self.sources.items():
+                if source["state"] == "starting" and time.monotonic() - source["requested_at"] > 15:
+                    source["state"], source["error"] = "error", "No decoded frames arrived within 15 seconds."
+                    self.send("stop", identifier)
+                elif source["state"] in ("live", "stale"):
+                    source["state"] = "stale" if time.monotonic() - source["last_frame"] > 5 else "live"
+            fresh = sum(source["state"] == "live" for source in self.sources.values())
+            self.tested_capacity = max(self.tested_capacity, fresh)
 
     def close(self):
         with self.condition:

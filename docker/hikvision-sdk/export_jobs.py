@@ -187,7 +187,7 @@ class ExportJobs:
                 if self.closed: return
                 job = next((job for job in self.jobs.values() if job["state"] == "queued"), None)
                 if job is None: self.lock.wait(timeout=1); continue
-                if len(self.live.wanted) + self.live.reserved_sources >= self.live.limit:
+                if self.live.used_sources() >= self.live.limit:
                     job["waiting_reason"] = "Waiting for a recorder stream slot. Pause an unused live view."; self.lock.wait(timeout=1); continue
                 if self._used_bytes() + 2 * self.limits["max_file_bytes"] > self.limits["storage_bytes"]:
                     job["waiting_reason"] = "Waiting for export storage. Delete a completed clip."; self.lock.wait(timeout=1); continue

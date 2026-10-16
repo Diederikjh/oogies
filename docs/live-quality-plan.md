@@ -1,6 +1,9 @@
 # High-quality live viewing plan
 
-Proposed: 16 October 2026. Planning only; no implementation or recorder probes.
+Proposed: 16 October 2026; approved plan committed as `efc4007`.
+Milestone 1's backend implementation is under review. The complete offline suite
+passed 94 backend and 73 browser/native cases. Device evidence is recorded in
+[live grid](live-grid.md); frontend switching remains milestone 2.
 
 ## Intended behavior
 
@@ -17,8 +20,8 @@ multiple tiles; an expanded tile can remain at overview quality.
 
 ## Current constraints and design choice
 
-Today sources are keyed only by camera, native preview selects the substream,
-and the session API accepts only `quality: "overview"`. The existing configured
+Before milestone 1, sources were keyed only by camera, native preview selected
+the substream, and the session API accepted only `quality: "overview"`. The configured
 `max_live_sources` budget also accounts for historical playback and exports.
 Its default of eight is an application limit; the recorder's maximum is unknown.
 

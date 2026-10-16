@@ -116,13 +116,13 @@ class RecorderConfigTests(unittest.TestCase):
 class GridWorkerLifecycleTests(unittest.TestCase):
     def test_delayed_stop_does_not_erase_restarted_source_or_watchdog_error(self):
         worker = GridWorker(None, None, {}, "/tmp")
-        worker.sources["camera-1"] = {"state":"starting", "frame":None}
-        worker._event({"type":"started", "channel":1, "generation":2})
-        worker._event({"type":"stopped", "channel":1})
+        worker.sources["camera-1"] = {"state":"starting", "frame":None, "generation":2}
+        worker._event({"type":"started", "channel":1, "quality":"overview", "generation":2})
+        worker._event({"type":"stopped", "channel":1, "quality":"overview", "generation":1})
         self.assertEqual(worker.sources["camera-1"]["state"], "starting")
         self.assertEqual(worker.sources["camera-1"]["generation"], 2)
         worker.sources["camera-1"].update(state="error", error="No decoded frames")
-        worker._event({"type":"stopped", "channel":1})
+        worker._event({"type":"stopped", "channel":1, "quality":"overview", "generation":1})
         self.assertEqual(worker.sources["camera-1"]["state"], "error")
 
     def test_broken_command_pipe_invalidates_all_cached_live_frames(self):
@@ -132,7 +132,7 @@ class GridWorkerLifecycleTests(unittest.TestCase):
         worker = GridWorker(None, None, {}, "/tmp")
         worker.process = SimpleNamespace(stdin=BrokenPipe())
         worker.cameras["camera-1"] = {"channel":1}
-        worker.sources = {key: {"state":"live", "frame":b"old frame"}
+        worker.sources = {key: {"state":"live", "frame":b"old frame", "generation":1}
                           for key in ("camera-1", "camera-2")}
         worker.send("start", "camera-1")
         self.assertEqual(worker.state, "error")
@@ -147,7 +147,7 @@ class CameraAvailabilityCacheTests(unittest.TestCase):
         self.worker = GridWorker(None, None, {"camera_overrides": {}}, "/tmp",
                                  spawn=self.spawn, clock=lambda: self.now)
         self.worker.process = SimpleNamespace(stdin=io.BytesIO())
-        self.worker._event({"type":"ready", "protocol":1, "login_calls":1,
+        self.worker._event({"type":"ready", "protocol":2, "login_calls":1,
             "cameras":[{"channel":1,"name":"Driveway","online":True},
                        {"channel":3,"name":"Storage","online":False}]})
 
@@ -171,22 +171,22 @@ class CameraAvailabilityCacheTests(unittest.TestCase):
         sessions = LiveSessions(self.worker, clock=lambda:self.now)
         first = sessions.create(selection(1,3))
         second = sessions.create(selection(1,3))
-        self.assertEqual(self.commands(), ["start 1"])
+        self.assertEqual(self.commands(), ["start 1 overview 1"])
         self.now = 59.999
         sessions.maintain()
-        self.assertEqual(self.commands(), ["start 1"])
+        self.assertEqual(self.commands(), ["start 1 overview 1"])
         self.now = 60
         sessions.maintain()
-        self.assertEqual(self.commands(), ["start 1", "refresh"])
+        self.assertEqual(self.commands(), ["start 1 overview 1", "refresh"])
         self.worker._event({"type":"availability", "cameras":[{"channel":3,"online":True}]})
         sessions.maintain()
-        self.worker._event({"type":"started","channel":3,"generation":1})
+        self.worker._event({"type":"started","channel":3,"quality":"overview","generation":1})
         self.worker.sources["camera-3"].update(state="live", frame=b"\xff\xd8fixture\xff\xd9",
                                                received=1, sequence=1, last_frame=time.monotonic())
         for view in (first, second):
             self.assertEqual(sessions.get(view["id"])["cameras"][1]["state"], "live")
             self.assertEqual(len(sessions.next_frames(view["id"], {})), 1)
-        self.assertEqual(self.commands(), ["start 1", "refresh", "start 3"])
+        self.assertEqual(self.commands(), ["start 1 overview 1", "refresh", "start 3 overview 1"])
         self.assertEqual(self.worker.cameras["camera-3"]["name"], "Storage")
         self.assertEqual(self.worker.login_calls, 1)
         self.spawn.assert_not_called()
@@ -218,7 +218,7 @@ class CameraAvailabilityCacheTests(unittest.TestCase):
         sessions.maintain()
         self.assertTrue(self.worker.cameras["camera-1"]["online"])
         self.assertEqual([c["state"] for c in sessions.get(view["id"])["cameras"]], ["live","offline"])
-        self.assertEqual(self.commands(), ["start 1","start 3","stop 3"])
+        self.assertEqual(self.commands(), ["start 1 overview 1","start 3 overview 1","stop 3 overview 1"])
 
     def test_no_active_view_does_not_refresh_or_retry_a_rejected_login(self):
         sessions = LiveSessions(self.worker, clock=lambda:self.now)

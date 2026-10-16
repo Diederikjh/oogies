@@ -53,13 +53,15 @@ Example inventory entry:
   "name": "Driveway",
   "online": true,
   "aspect_ratio": "16:9",
-  "live_qualities": ["overview"],
+  "live_qualities": ["overview", "high"],
   "capabilities": {"time_playback":"unknown", "motion_timeline":"unknown"}
 }
 ```
 
 Camera IDs map to SDK channels and remain stable when display names change.
-Only overview/substream quality is supported. Historical capabilities remain
+The current worker implements overview/substream and high/main-stream requests;
+device compatibility is established by bounded checks, not by this list alone.
+Historical capabilities remain
 unknown per camera; one successful extraction is not blanket support.
 Status reports `device_stream_limit: null`, configured `source_limit`, observed
 `tested_concurrent_streams`, `sdk_login_calls`, `viewer_sessions` and
@@ -118,8 +120,37 @@ The same idempotency key and selection reuses an active view; conflicting select
 returns 409. A refreshed or copied tab creates its own document lease and shares
 existing sources. Eight viewer leases and one feed per lease are allowed.
 
-Expand currently changes layout only and keeps overview quality. Main-stream
-quality switching remains future work and would require separate capacity admission.
+Expand currently changes layout only and keeps overview quality. The backend
+now accepts `quality: "high"` in POST/PATCH selections. Sources are shared per
+camera and quality; a high request retains an overview fallback and uses an
+extra slot under both the high-quality and total source budgets.
+
+Session responses add `selection_revision`, incremented for each explicit
+selection PATCH (including an explicit retry), but unchanged by `{}` renewal.
+Camera entries include `requested_quality`, effective `quality`, `upgrade_state`
+and nullable `quality_reason: {code, message}`. Upgrade states are `overview`,
+`pending`, `active`, `capacity_limited`, `unsupported`, `offline` or `error`.
+Effective quality becomes high only after a fresh decoded main-stream frame.
+Valid but unavailable upgrades return a successful session with overview fallback;
+unknown qualities return 422 before changing selection. Selection PATCH replaces
+the full selection, so retain other cameras in the request.
+
+Denied upgrades are not queued. After failure/refusal, an explicit selection
+PATCH requesting high retries admission; polling and renewal do not. Existing
+admissions retain their slots and upgrades do not evict overview/history/export
+work. A stalled high stream falls back rather than repeatedly opening previews.
+`max_high_quality_sources` defaults to one; zero disables admission. The total
+`max_live_sources` budget also includes history/export reservations and live stops
+awaiting native acknowledgement.
+
+`/api/status` adds `high_quality_limit`, requested/starting/active counts,
+`sources_by_quality` (including stopping sources), `reserved_sources`,
+`occupied_source_slots`, refusal/failure totals and the last 20 upgrade events.
+`live_source_metrics` reports per-source dimensions, freshness, first-frame
+latency and sampled decoded/delivered FPS, JPEG bytes/sec and incoming SDK bytes/sec.
+Requested counts count viewer requests, including refused ones; active counts
+count distinct sources. Metrics are null until measured. Delivered FPS/bytes
+describe publication into the shared Python cache, not each viewer's bandwidth.
 The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
 ## Recording and motion timeline data — milestones 3–4

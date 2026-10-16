@@ -63,6 +63,12 @@ respected. Expansion uses the same overview stream. Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
 choice, including that camera's History playback.
 
+The backend also accepts high-quality live requests through the API; automatic
+upgrading on expansion is the next milestone. Optional
+`max_high_quality_sources` in `.local/nvr-config.json` defaults to one shared
+high-quality source; zero disables it. Each high source needs an extra slot in
+the total `max_live_sources` budget. See the [quality plan](docs/live-quality-plan.md).
+
 Use a camera's **History** button to open its timeline, or open the **History**
 tab to select a camera and browse the last three hours. You can choose
 1/6 hours and earlier ranges. Recording coverage and motion are separate tracks.

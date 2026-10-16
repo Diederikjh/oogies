@@ -16,6 +16,7 @@ from grid_worker import GridWorker
 from live_sessions import LiveSessions
 from playback_sessions import PlaybackSessions
 from history_timeline import recorder_utc, utc_text
+from live_sources import source_identity
 
 
 COLORS = [(190, 35, 45), (35, 140, 65), (40, 70, 195), (185, 135, 30),
@@ -40,6 +41,10 @@ class SyntheticMedia:
                      "-frames:v", "16", "-threads", "1", str(self.directory / "frame-%02d.jpg"))
         self.frames = {f"camera-{channel}": [(self.directory / f"frame-{(channel-1)*2+phase+1:02d}.jpg").read_bytes()
                         for phase in range(2)] for channel in range(1, 9)}
+        self._ffmpeg("-framerate", "5", "-i", str(self.directory / "source-%02d.ppm"),
+                     "-vf", "scale=704:576,negate", "-frames:v", "16", "-threads", "1", str(self.directory / "high-%02d.jpg"))
+        self.high_frames = {f"camera-{channel}": [(self.directory / f"high-{(channel-1)*2+phase+1:02d}.jpg").read_bytes()
+                             for phase in range(2)] for channel in range(1,9)}
         raw = self.directory / "frames.yv12"
         self._ffmpeg("-framerate", "5", "-i", str(self.directory / "source-%02d.ppm"), "-frames:v", "16",
                      "-vf", "swapuv", "-pix_fmt", "yuv420p", "-threads", "1", "-f", "rawvideo", str(raw))
@@ -98,7 +103,7 @@ class FakeRecorderWorker(GridWorker):
                 else:
                     self.cameras = {f"camera-{channel}": dict(id=f"camera-{channel}", channel=channel,
                         name="Driveway" if channel == 1 else ("Front <porch> & gate" if channel == 2 else f"Camera {channel}"),
-                        online=channel != 9, aspect_ratio="16:9", live_qualities=["overview"],
+                        online=channel != 9, aspect_ratio="16:9", live_qualities=["overview", "high"],
                         capabilities={"time_playback":"unknown", "motion_timeline":"unknown"})
                         for channel in range(1, 10)}
                     self.state = "ready"
@@ -214,8 +219,11 @@ class FakeRecorderWorker(GridWorker):
                     if source["state"] not in ("starting", "live") or time.monotonic() < source["ready_at"]:
                         continue
                     source["sequence"] += 1
-                    source.update(state="live", frame=self.media.frames[key][source["sequence"] % 2],
-                        width=352, height=288, received=source["sequence"], last_frame=time.monotonic(),
+                    camera, quality = source_identity(key)
+                    frames = self.media.high_frames if quality == "high" else self.media.frames
+                    source.update(state="live", frame=frames[camera][source["sequence"] % 2],
+                        width=704 if quality == "high" else 352, height=576 if quality == "high" else 288,
+                        received=source["sequence"], last_frame=time.monotonic(),
                         last_frame_received_at=datetime.now(timezone.utc).isoformat())
                 self.tested_capacity = max(self.tested_capacity, sum(s["state"] == "live" for s in self.sources.values()))
                 for identifier, source in self.playbacks.items():

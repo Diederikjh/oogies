@@ -55,6 +55,8 @@ static bool initialize() {
         NET_DVR_SetSDKInitCfg(NET_SDK_INIT_CFG_SSLEAY_PATH, tls) && NET_DVR_Init();
 }
 
+#include "live_source_limits.h"
+
 struct Source {
     int channel, generation = 0, port = -1;
     LONG preview = -1;
@@ -62,21 +64,23 @@ struct Source {
     std::atomic<bool> active{false};
     std::atomic<unsigned> error{0};
     std::atomic<unsigned long long> decoded{0};
+    std::atomic<unsigned long long> stream_bytes{0};
     std::mutex input, frames;
     std::vector<char> latest;
     int width = 0, height = 0;
     unsigned long long sequence = 0, published = 0, jpegs = 0;
     std::string directory;
+    std::string quality = "overview";
     std::string playback_id, position;
     std::function<void(char *, int, FRAME_INFO *)> capture;
-    explicit Source(int ch, const std::string &root) : channel(ch), directory(root + "/camera-" + std::to_string(ch)) {}
+    explicit Source(int ch, const std::string &root, const std::string &q = "overview") :
+        channel(ch), directory(root + "/camera-" + std::to_string(ch) + (q == "high" ? "-high" : "")), quality(q) {}
 };
 
 static void CALLBACK decoded(int, char *data, int size, FRAME_INFO *info, void *user, int) {
     auto *source = static_cast<Source *>(user);
     if (!source || !source->active || !info || info->nType != T_YV12 || info->nWidth <= 0 || info->nHeight <= 0) return;
-    const auto expected = 3ull * info->nWidth * info->nHeight / 2;
-    if (expected != static_cast<unsigned>(size) || expected > 4ull * 1024 * 1024) { source->error = 17; return; }
+    if (!valid_live_frame(info->nWidth, info->nHeight, size)) { source->error = 17; return; }
     if (source->capture) { source->capture(data, size, info); ++source->decoded; return; }
     std::lock_guard<std::mutex> guard(source->frames);
     source->latest.assign(data, data + size);
@@ -88,6 +92,7 @@ static void CALLBACK stream(LONG, DWORD type, BYTE *data, DWORD size, void *user
     if (!source || !source->active || source->error) return;
     std::lock_guard<std::mutex> guard(source->input);
     if (!source->active || source->error) return;
+    source->stream_bytes += size;
     if (type == NET_DVR_SYSHEAD && !source->opened) {
         source->opened = PlayM4_OpenStream(source->port, data, size, 4 * 1024 * 1024);
         if (!source->opened || !PlayM4_SetDecCallBackExMend(source->port, decoded, nullptr, 0, source)) {
@@ -111,11 +116,12 @@ static void stop(Source &source) {
     std::lock_guard<std::mutex> frame_guard(source.frames);
     source.latest.clear();
 }
-static void start(Source &source, LONG user, const std::string &key) {
+static void start(Source &source, LONG user, const std::string &key, int generation) {
     if (source.active) return;
     stop(source);
-    ++source.generation; source.error = 0;
+    source.generation = generation; source.error = 0;
     source.decoded = 0; source.jpegs = source.sequence = source.published = 0;
+    source.stream_bytes = 0;
     mkdir(source.directory.c_str(), 0700);
     if (!PlayM4_GetPort(&source.port) || !PlayM4_SetStreamOpenMode(source.port, STREAME_REALTIME) ||
         !PlayM4_SetSecretKey(source.port, 1, const_cast<char *>(key.c_str()), 128)) {
@@ -123,13 +129,13 @@ static void start(Source &source, LONG user, const std::string &key) {
     } else {
         source.active = true;
         NET_DVR_PREVIEWINFO info{};
-        info.lChannel = source.channel; info.dwStreamType = 1;
+        info.lChannel = source.channel; info.dwStreamType = live_stream_type(source.quality);
         info.dwLinkMode = 0; info.bBlocked = FALSE; info.byProtoType = 0;
         source.preview = NET_DVR_RealPlay_V40(user, &info, stream, &source);
         if (source.preview < 0) source.error = NET_DVR_GetLastError();
     }
     std::ostringstream out;
-    out << "{\"type\":\"started\",\"channel\":" << source.channel << ",\"generation\":" << source.generation
+    out << "{\"type\":\"started\",\"channel\":" << source.channel << ",\"quality\":" << quote(source.quality) << ",\"generation\":" << source.generation
         << ",\"error\":" << source.error.load() << "}";
     event(out.str());
     if (source.error) stop(source);
@@ -138,7 +144,8 @@ static void publish(Source &source) {
     if (!source.active) return;
     if (source.error) {
         if (source.playback_id.empty())
-            event("{\"type\":\"source_error\",\"channel\":" + std::to_string(source.channel) + ",\"error\":" + std::to_string(source.error.load()) + "}");
+            event("{\"type\":\"source_error\",\"channel\":" + std::to_string(source.channel) + ",\"quality\":" + quote(source.quality) +
+                ",\"generation\":" + std::to_string(source.generation) + ",\"error\":" + std::to_string(source.error.load()) + "}");
         stop(source); return;
     }
     std::vector<char> frame; int width, height; unsigned long long sequence;
@@ -163,7 +170,7 @@ static void publish(Source &source) {
     std::ofstream metadata(source.directory + "/frame.tmp.json");
     metadata << "{\"generation\":" << source.generation << ",\"sequence\":" << sequence
         << ",\"width\":" << width << ",\"height\":" << height << ",\"decoded_frames\":" << source.decoded.load()
-        << ",\"jpeg_frames\":" << source.jpegs << ",\"position\":"
+        << ",\"jpeg_frames\":" << source.jpegs << ",\"stream_bytes\":" << source.stream_bytes.load() << ",\"position\":"
         << (source.position.empty() ? "null" : quote(source.position)) << "}";
     metadata.close();
     std::rename((source.directory + "/frame.tmp.json").c_str(), (source.directory + "/frame.json").c_str());
@@ -243,7 +250,7 @@ int main(int argc, char **argv) {
     if (user < 0) { event("{\"type\":\"fatal\",\"login_calls\":1,\"error\":" + std::to_string(NET_DVR_GetLastError()) + "}"); NET_DVR_Cleanup(); return 2; }
     const auto cameras = discover(user, device.struDeviceV30);
     std::ostringstream ready;
-    ready << "{\"type\":\"ready\",\"protocol\":1,\"login_calls\":1,\"sdk_build\":" << NET_DVR_GetSDKBuildVersion() << ",\"cameras\":[";
+    ready << "{\"type\":\"ready\",\"protocol\":2,\"login_calls\":1,\"sdk_build\":" << NET_DVR_GetSDKBuildVersion() << ",\"cameras\":[";
     for (unsigned i = 0; i < cameras.size(); ++i) {
         if (i) ready << ',';
         ready << "{\"channel\":" << cameras[i].channel << ",\"name\":" << quote(cameras[i].name) << ",\"online\":" << cameras[i].online << "}";
@@ -252,9 +259,13 @@ int main(int argc, char **argv) {
     const char *root = std::getenv("CAM_SDK_CAPTURE_DIR");
     if (!root) { NET_DVR_Logout(user); NET_DVR_Cleanup(); return 2; }
     std::map<int, std::unique_ptr<Source>> sources;
+    std::map<int, std::unique_ptr<Source>> high_sources;
     std::map<std::string, std::unique_ptr<Playback>> playbacks;
     std::map<std::string, std::unique_ptr<ExportCapture>> exports;
-    for (const auto &camera : cameras) sources[camera.channel] = std::make_unique<Source>(camera.channel, root);
+    for (const auto &camera : cameras) {
+        sources[camera.channel] = std::make_unique<Source>(camera.channel, root);
+        high_sources[camera.channel] = std::make_unique<Source>(camera.channel, root, "high");
+    }
     std::string buffer;
     std::thread history_job;
     std::atomic<bool> history_busy{false};
@@ -341,23 +352,35 @@ int main(int argc, char **argv) {
                     continue;
                 }
                 if (!sources.count(channel)) continue;
+                std::string quality; int generation = 0;
+                if (!(command >> quality >> generation) || live_stream_type(quality) < 0 || generation < 1) continue;
+                auto &source = *(quality == "high" ? high_sources[channel] : sources[channel]);
                 if (operation == "start") {
                     unsigned active = 0; for (auto &item : sources) active += item.second->active ? 1 : 0;
-                    if (active < 16) start(*sources[channel], user, key);
-                } else if (operation == "stop") {
-                    stop(*sources[channel]);
-                    event("{\"type\":\"stopped\",\"channel\":" + std::to_string(channel) + "}");
+                    for (auto &item : high_sources) active += item.second->active ? 1 : 0;
+                    if (active < 16) start(source, user, key, generation);
+                    else {
+                        source.generation = generation;
+                        event("{\"type\":\"started\",\"channel\":" + std::to_string(channel) + ",\"quality\":" + quote(quality) +
+                            ",\"generation\":" + std::to_string(generation) + ",\"error\":5}");
+                    }
+                } else if (operation == "stop" && source.generation == generation) {
+                    stop(source);
+                    event("{\"type\":\"stopped\",\"channel\":" + std::to_string(channel) + ",\"quality\":" + quote(quality) +
+                        ",\"generation\":" + std::to_string(generation) + "}");
                 }
             }
         }
         if (std::chrono::steady_clock::now() - last_publish >= std::chrono::milliseconds(100)) {
             for (auto &item : sources) publish(*item.second);
+            for (auto &item : high_sources) publish(*item.second);
             for (auto &item : playbacks) item.second->publish_frame();
             last_publish = std::chrono::steady_clock::now();
         }
         for (auto &item : playbacks) item.second->pump();
     }
     for (auto &item : sources) stop(*item.second);
+    for (auto &item : high_sources) stop(*item.second);
     playbacks.clear();
     exports.clear();
     if (history_job.joinable()) history_job.join();

@@ -130,6 +130,7 @@ class Handler(BaseHandler):
                     self.json_response({"cameras": list(worker.cameras.values())})
             elif path == "/api/status":
                 with worker.condition:
+                    quality_status = sessions.quality_status()
                     self.json_response(dict(state=worker.state, error=worker.error,
                         active_live_sources=len(sessions.wanted), viewer_sessions=len(sessions.sessions),
                         playback_sessions=len(self.server.playback.sessions),
@@ -137,6 +138,7 @@ class Handler(BaseHandler):
                         device_stream_limit=None, source_limit=sessions.limit,
                         tested_concurrent_streams=worker.tested_capacity, sdk_login_calls=worker.login_calls,
                         sdk_adapter=worker.adapter.sdk_id, recording_available=self.server.recording.is_file(),
+                        **quality_status,
                         **self.server.recording_info))
             elif (match := re.fullmatch(r"/api/cameras/(camera-[0-9]+)/timeline", path)):
                 query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
@@ -256,7 +258,7 @@ def main():
     adapter = get_sdk_adapter(config["sdk_profile"])
     binary = adapter.compile_live_bridge()
     worker = GridWorker(binary, adapter, config, "/output")
-    sessions = LiveSessions(worker, config["max_live_sources"], config["lease_seconds"])
+    sessions = LiveSessions(worker, config["max_live_sources"], config["lease_seconds"], high_limit=config["max_high_quality_sources"])
     recording_info = {"recording_begin": os.environ.get("CAM_RECORDING_BEGIN"),
         "recording_end": os.environ.get("CAM_RECORDING_END"), "recording_seconds": os.environ.get("CAM_RECORDING_SECONDS")}
     server = create_server(worker, sessions, address=("0.0.0.0", args.port),

@@ -22,6 +22,7 @@ from fixture import COLORS, SyntheticMedia, ViewerFixture
 class ViewerUITests(unittest.TestCase):
     WINDOW_SIZES = {"test_history_mobile_collapsed_events_can_play_seek_and_mark":(390,844)}
     OPTIONS = {
+        "test_live_quality_api_shares_main_stream_without_changing_overview": {"limit":9},
         "test_capacity_limit_keeps_admitted_cameras_live": {"limit": 2},
         "test_camera_start_failure_is_local_to_its_tile": {"failed_camera": "camera-2"},
         "test_recorder_rejection_has_no_automatic_retries": {"failure": True},
@@ -159,6 +160,58 @@ class ViewerUITests(unittest.TestCase):
         self.element(view).send_keys(Keys.SPACE)
         self.assertEqual(self.element(view).get_attribute("aria-expanded"), "false")
         self.assertTrue(all(count == 1 for count in self.fixture.worker.started.values()))
+
+    def test_live_quality_api_shares_main_stream_without_changing_overview(self):
+        self.wait_live()
+        def api(path, method="GET", body=None):
+            return self.driver.execute_async_script("""
+                const [path,method,body,done]=arguments;
+                fetch(path,{method,headers:{'Content-Type':'application/json'},
+                  ...(body===null?{}:{body:JSON.stringify(body)})})
+                  .then(async response=>done({status:response.status,body:response.status===204?null:await response.json()}))
+                  .catch(error=>done({error:error.message}));
+            """,path,method,body)
+        def selection(camera): return {"cameras":[{"id":camera,"quality":"high"}]}
+        views = []
+        try:
+            first = api("/api/live/sessions","POST",selection("camera-1"))
+            self.assertEqual(first["status"],201); views.append(first["body"]["id"])
+            second = api("/api/live/sessions","POST",selection("camera-1"))
+            self.assertEqual(second["status"],201); views.append(second["body"]["id"])
+            refused = api("/api/live/sessions","POST",selection("camera-2"))
+            self.assertEqual(refused["status"],201); views.append(refused["body"]["id"])
+            self.assertEqual(refused["body"]["cameras"][0]["upgrade_state"],"capacity_limited")
+            self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+            self.driver.execute_async_script("""
+                const [url,done]=arguments;
+                import('/shared/frame-feed.js').then(({FrameFeed})=>{
+                  window.testQualityFrames=[];
+                  window.testQualityFeed=new FrameFeed(url,async (id,jpeg,header)=>{
+                    const bitmap=await createImageBitmap(new Blob([jpeg],{type:'image/jpeg'}));
+                    const canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;
+                    const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);
+                    testQualityFrames.push({header,width:bitmap.width,height:bitmap.height,
+                      color:[...ctx.getImageData(20,20,1,1).data].slice(0,3)});bitmap.close();
+                  });
+                  testQualityFeed.run().catch(error=>{if(error.name!=='AbortError')window.testQualityError=error.message});
+                  done();
+                }).catch(error=>done(error.message));
+            """,first["body"]["media"]["url"])
+            self.wait.until(lambda _:self.driver.execute_script("return testQualityFrames.filter(f=>f.header.quality==='high').length>=2"))
+            actual = self.driver.execute_script("return testQualityFrames.filter(f=>f.header.quality==='high').at(-1)")
+            self.assertEqual((actual["width"],actual["height"]),(704,576))
+            self.assertEqual(actual["header"]["camera_id"],"camera-1")
+            self.assertTrue(all(abs(value-(255-color))<15 for value,color in zip(actual["color"],COLORS[0])))
+            self.assertEqual(self.driver.execute_script("return document.querySelector(arguments[0]+' img').naturalWidth",self.tile()),352)
+            self.assertEqual(self.fixture.snapshot()["sources"],9)
+            api("/api/live/sessions/"+views[0],"DELETE"); self.assertEqual(self.fixture.snapshot()["sources"],9)
+            api("/api/live/sessions/"+views[1],"DELETE"); self.wait_counts(2,8)
+            self.assertNotIn("camera-2-high",self.fixture.sessions.wanted)
+            self.wait_live()
+            self.assertIsNone(self.driver.execute_script("return window.testQualityError||null"))
+        finally:
+            self.driver.execute_script("window.testQualityFeed?.close()")
+            for identifier in views: api("/api/live/sessions/"+identifier,"DELETE")
 
     def test_expansion_and_collapse_animate_and_keep_picture_in_focus(self):
         self.wait_live()

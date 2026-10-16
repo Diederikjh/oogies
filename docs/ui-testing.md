@@ -18,8 +18,9 @@ date cases also verify successful submission closes the picker and invalid
 dates keep the error visible without disturbing playback.
 Visibility inside native closed `<details>` uses Chromium's `checkVisibility()`;
 the installed Selenium version reports those unpainted descendants as visible.
-The latest complete local run passed 71 cases: 68 browser cases and
-three native buffer regressions, using the same command as GitHub Actions.
+The latest complete local run passed 73 cases: 69 browser cases, three native
+buffer regressions and one live-quality/frame-bounds native case, using the same
+command as GitHub Actions. The separate backend suite passed 94 cases.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
 Clear marks, reduced motion and keyboard navigation to export jobs.
@@ -40,6 +41,18 @@ The offline-camera range case controls only the browser's `Date.now()` and
 checks Recent both within a minute and across recorder midnight/New Year.
 It verifies the exact recorder query bounds; HTTP, cache, lease and animation
 timers remain real, so CI does not depend on when the case happens to run.
+
+Live-quality API coverage opens two high-quality viewer leases for one camera
+while the ordinary grid remains at overview quality. The browser decodes the
+actual multiplexed JPEG feed and checks its larger raster and inverted fixture
+colors, one shared high source, capacity fallback for a different camera and
+independent release. This does not implement expansion switching. Host tests use
+the real worker/session logic with a substituted native command transport to
+cover admission races, delayed native stops, failed/stalled upgrades, generations,
+lease expiry, bounded diagnostics, and contention with history/export reservations.
+The native bounds case checks SDK main/substream selection and supported YV12
+sizes, including accepting a common 4K raster and rejecting oversized/malformed
+frames. Real SDK/device compatibility is verified separately.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames
@@ -138,6 +151,8 @@ producer, and waking a blocked producer on stop. These run before the browser
 cases in the same local/CI command, using the compiler already in the image.
 Run just these regressions with `python3 tools/run_ui_tests.py test_native_playback`.
 The Python fixture cannot reproduce native compressed-stream overflows.
+A fourth native case compiles the production live-quality/frame-size helper and
+checks main/substream mapping, valid larger rasters and invalid/oversized frames.
 
 The [first History slice](history-timeline.md) extends the same worker seam with
 synthetic recording and motion intervals. It replaces the saved-clip case and

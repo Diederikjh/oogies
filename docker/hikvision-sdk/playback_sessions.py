@@ -51,7 +51,7 @@ class PlaybackSessions:
                 raise SessionError("Unknown camera.", 404)
             if self.closed or self.worker.shutdown:
                 raise SessionError("Playback service stopped.", 503)
-            if len(self.sessions) >= self.limit or len(self.live.wanted) + self.live.reserved_sources >= self.live.limit:
+            if len(self.sessions) >= self.limit or self.live.used_sources() >= self.live.limit:
                 raise SessionError("No historical playback slot is available. Pause an unused live view first.", 409)
             identifier = uuid.uuid4().hex
             session = dict(id=identifier, camera_id=camera, begin=begin, end=end, generation=1,
