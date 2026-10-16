@@ -5,6 +5,10 @@ Milestone 1's backend was reviewed and committed as `482aa8d` after passing
 94 backend and 73 browser/native cases. Milestone 2's frontend switching is now
 implemented; verification and device evidence are recorded in
 [live grid](live-grid.md) and [progress](../progress.md).
+Milestone 2 was committed as `6312fca`. The subsequently approved milestone 3
+is implemented with offline recovery checks and a successful 302.6-second
+real-browser workload check; the owner approved committing it before testing
+two concurrent high-quality sources.
 
 ## Intended behavior
 
@@ -82,8 +86,9 @@ Consider those alternatives only if measurements justify their complexity.
    network throughput during bounded checks. Keep measured capacity separate from
    configured limits; other clients such as Hik-Connect are outside our counters.
 
-The native decoded-frame limit is currently 4 MiB, separate from JPEG/feed and
-compressed decoder buffers. Review resolution-dependent allocation, dimensions,
+Before milestone 1, the native decoded-frame limit was 4 MiB, separate from JPEG/feed and
+compressed decoder buffers; milestone 1 raised the validated YV12 limit to 16 MiB.
+Review resolution-dependent allocation, dimensions,
 frame-size validation and all transport caps before assuming larger main streams
 fit. Keep buffers bounded, publish only the latest live frame and retain the
 current publication cadence initially. High quality means the recorder's main
@@ -122,6 +127,32 @@ and release resources correctly, and report enough evidence to choose a safe cap
 
 Completion: expansion visibly upgrades where admitted, collapse returns to
 overview, and refused upgrades preserve a working enlarged view.
+
+## Milestone 3: reliability and resource checks
+
+Approved after milestone 2 was committed as `6312fca`. Keep the shared
+high-quality cap at one throughout this stage.
+
+- Reproduce browser media disconnections, including a clean end of the feed.
+  Reconnect only the existing media URL, with bounded retries and cancellation
+  on Pause/navigation. Preserve lease, selections and native source sharing;
+  do not retry SDK authentication or create a new viewer automatically.
+- Show interrupted/delayed delivery accurately even if backend frames continue.
+  Verify terminal failures release resources, and paused History is not mistaken
+  for a stalled live feed. Exercise recovery alongside high-quality live video.
+- Add deterministic offline browser regressions for disconnects, retry exhaustion,
+  cancellation, freshness, and independent live/history lifetimes.
+- Run a bounded longer real-browser check across multiple lease renewals with
+  the full reported online grid, one shared main stream and historical playback.
+  Sample service CPU, memory, processes and traffic; verify moving pixels,
+  source sharing, repeated switch/release and final cleanup. Stop on stale frames,
+  unexpected sources/login calls or resource pressure. Keep evidence private.
+
+Completion: the tested workload remains usable over the recorded duration,
+interrupted pictures are labeled honestly, browser recovery does not duplicate
+native sources, and all resources owned by the check are released. Report the
+duration and resource observations explicitly; this does not establish a hardware
+maximum or justify raising the high-quality cap. H.264 transport remains separate.
 
 ## Tests and documentation
 

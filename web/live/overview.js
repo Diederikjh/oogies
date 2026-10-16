@@ -46,9 +46,19 @@ export class Overview {
       const context = {id:session.id, generation};
       this.feed = new FrameFeed(session.media.url, (id, jpeg, header) => {
         if (this.session?.id === context.id && this.generation === context.generation) this.quality.frame(id, jpeg, header);
+      }, {
+        expectFrames: () => this.session?.cameras.some(camera => camera.state === "live"),
+        onInterrupt: () => {
+          if (this.session?.id !== context.id || this.generation !== context.generation) return;
+          for (const tile of this.tiles.values()) tile.interruptFeed();
+          this.emitStatus();
+        }
       });
-      this.feed.run().catch(error => {
-        if (this.session?.id === context.id && this.generation === context.generation && error.name !== "AbortError") this.onError(error.message);
+      this.feed.run().catch(async error => {
+        if (this.session?.id === context.id && this.generation === context.generation) {
+          this.onError(`${error.message} Press Resume view to reconnect.`);
+          await this.stop();
+        }
       });
       this.pollTimer = setInterval(() => this.poll(), 1000);
       this.renewTimer = setInterval(() => this.renew(), Math.max(3000, session.lease_seconds * 1000 / 3));
@@ -68,8 +78,9 @@ export class Overview {
   }
 
   emitStatus() {
-    const high = this.session?.cameras.filter(camera => camera.state === "live" && this.tiles.get(camera.id)?.rendered?.quality === "high").length || 0;
-    this.onStatus(this.session, {high});
+    const cameras = this.session?.cameras.map(camera => ({...camera, state:this.tiles.get(camera.id)?.element.dataset.state || camera.state}));
+    const high = cameras?.filter(camera => camera.state === "live" && this.tiles.get(camera.id)?.rendered?.quality === "high").length || 0;
+    this.onStatus(this.session ? {...this.session, cameras} : null, {high});
   }
 
   async poll() {

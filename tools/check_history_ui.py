@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--output", default="/output")
     parser.add_argument("--continuous-seconds", type=int, default=30)
     args = parser.parse_args()
-    if not 15 <= args.continuous_seconds <= 120: parser.error("choose 15–120 continuous seconds")
+    if not 15 <= args.continuous_seconds <= 120: parser.error("choose 15-120 continuous seconds")
     output = Path(args.output); output.mkdir(mode=0o700, parents=True, exist_ok=True)
     options = webdriver.ChromeOptions()
     for flag in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",

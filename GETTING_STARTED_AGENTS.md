@@ -339,13 +339,13 @@ PYCONFIG
 This is now implemented for the viewer and authenticated SDK diagnostic.
 Passwords remain in the separate credential file. Normalization belongs to the
 selected SDK adapter; `login_password_max_chars` is not a configuration field.
-`max_live_sources` is an application budget (1–16), not a hardware limit; seven
+`max_live_sources` is an application budget (1-16), not a hardware limit; seven
 concurrent previews have been verified on the original recorder. `lease_seconds`
-can be 10–300; default 90 with frontend renewal every 30 seconds. The timezone
+can be 10-300; default 90 with frontend renewal every 30 seconds. The timezone
 sets the recorder's clock context for historical range conversion;
 live OSD timestamps are unchanged.
 
-`max_high_quality_sources` is an optional integer from 0–16, default one; zero
+`max_high_quality_sources` is an optional integer from 0-16, default one; zero
 disables high-quality live sources. It limits distinct camera main streams,
 shared across viewers, within the existing total `max_live_sources` budget.
 An upgrade retains its overview fallback, so it consumes one additional slot.
@@ -375,8 +375,8 @@ Optional `exports` settings are a nested object in that same private JSON:
 ```
 
 Omitting `exports` keeps these defaults; there is one active worker. Duration
-may be 1–600 seconds, waiting jobs 1–20, retention 1–168 hours, file cap 1 MiB–1 GiB,
-and storage 1 MiB–16 GiB. Storage must allow at least twice the file cap for
+may be 1-600 seconds, waiting jobs 1-20, retention 1-168 hours, file cap 1 MiB-1 GiB,
+and storage 1 MiB-16 GiB. Storage must allow at least twice the file cap for
 finalization headroom. Unknown fields and noninteger values are rejected.
 Retain the owner's existing settings when adding this optional object.
 The launcher creates private `.local/exports/` and mounts it writable at `/exports`;
@@ -387,11 +387,44 @@ FFmpeg and FFprobe are already in the runtime; no host codec installation is nee
 Optional `camera_overrides` keys are SDK channel numbers, for example:
 `"1": {"name":"Driveway", "aspect_ratio":"16:9"}` or
 `"4": {"enabled":false}`. Names and online state otherwise come from discovery.
-Only overview quality is implemented; clicking a picture toggles expansion
-without starting a main stream. Aspect controls live under Settings → Picture
+Clicking a picture expands it and requests a main stream within the configured
+limits; collapsing releases that viewer's high-quality request. Aspect controls live under Settings → Picture
 proportions, with per-camera browser preferences applied to live and History video.
 Restart the service after editing settings or credentials. See
 [the grid notes](docs/live-grid.md) for the implemented API and limits.
+
+The browser retries an interrupted media connection after 1, 2 and 4 seconds,
+keeping its existing viewer/playback lease and source selection. HTTP 4xx
+(except a transient 409 while the old feed closes) stop recovery immediately.
+A stable connection of at least 30 seconds resets the consecutive-failure budget.
+Each attempt has a ten-second response-header deadline. Expected video with no complete media packet for 10 seconds triggers the same
+bounded recovery. Paused/ended History and a grid with no live sources do not
+trigger that watchdog. Live tiles use the time of the last successfully painted
+JPEG: after five seconds, they are dimmed/labeled delayed even if the backend is
+still receiving video. After recovery fails, live resources are released and
+**Resume view** starts a new viewer; History releases its playback and asks the
+user to select a time. Live status/renewal failures still stop the view; these retries never
+repeat recorder login or re-create a lease automatically.
+
+For an explicit device reliability check, first close viewer tabs and leave the
+verified service running, idle, with `max_high_quality_sources: 1` and room for
+the online grid plus high quality and one History playback. Run:
+
+```sh
+python3 tools/run_live_reliability_check.py --seconds 300
+```
+
+This uses the existing browser image in a separate restricted Docker container;
+it mounts tools and private output, without credentials or the SDK. It requires
+the normal service/container name and localhost port 8088. It runs 180-900 seconds
+of concurrent grid/high/History viewing, controlled browser-feed disconnects,
+paused History, upgrade/release cycles and cleanup. It samples service Docker
+CPU/memory/PIDs and network counters, plus actual browser media bytes. It stops
+on resource pressure, unexpected login/source counts or frozen pictures. This
+is an explicit real-device operation, never part of CI. Evidence/logs/screenshots
+stay in ignored `.local/live-reliability-check/`; do not publish footage or reports.
+The check's CPU snapshots are samples, and Docker network counters exclude
+loopback browser delivery. See [the reliability notes](docs/live-grid.md#reliability-and-resource-checks).
 
 ### Check Docker-to-recorder connectivity without authentication
 

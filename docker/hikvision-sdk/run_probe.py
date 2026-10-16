@@ -61,7 +61,7 @@ def main():
     if args.mode == "probe" and args.decrypt and not args.capture_seconds:
         parser.error("decryption requires a positive capture duration")
     if args.historical and (not args.decrypt or (args.mode == "probe" and not 1 <= args.capture_seconds <= 10)):
-        parser.error("historical extraction requires --decrypt and 1–10 capture seconds")
+        parser.error("historical extraction requires --decrypt and 1-10 capture seconds")
     if args.skip_search and not args.historical:
         parser.error("--skip-search requires --historical")
     config = load_config("/configuration/nvr.json") if args.mode == "probe" else None

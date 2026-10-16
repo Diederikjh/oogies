@@ -18,9 +18,16 @@ date cases also verify successful submission closes the picker and invalid
 dates keep the error visible without disturbing playback.
 Visibility inside native closed `<details>` uses Chromium's `checkVisibility()`;
 the installed Selenium version reports those unpainted descendants as visible.
-The latest complete local run passed 84 cases: 80 browser cases, three native
+Milestone 2's complete local run passed 84 cases: 80 browser cases, three native
 buffer regressions and one live-quality/frame-bounds native case, using the same
-command as GitHub Actions. The separate backend suite passed 96 cases.
+command as GitHub Actions. Milestone 3 expands this to 90 cases (86 browser/four
+native). The latest complete run passed all 90 in 849.6 seconds after the owner's
+repository-wide en-dash-to-hyphen replacement. Its initial run passed 89; a capacity test clicked while another tile was
+still animating and timed out awaiting a collapse that never occurred. That test
+now waits for settled geometry and verifies its click; three consecutive reruns
+passed. All six final reliability cases passed targeted runs, including paused
+reconnection, a response-header timeout and terminal History cleanup; all also
+passed the subsequent full rerun. The separate backend suite passed all 97 cases.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
 Clear marks, reduced motion and keyboard navigation to export jobs.
@@ -62,6 +69,26 @@ Scoped retry validation and a failure between browser polls exercise the optiona
 The native bounds case checks SDK main/substream selection and supported YV12
 sizes, including accepting a common 4K raster and rejecting oversized/malformed
 frames. Real SDK/device compatibility is verified separately.
+
+Reliability cases inject a wrapper at the browser fetch boundary while retaining
+the actual HTTP server, session manager and synthetic worker. Clean EOF and a
+read error recover the same high-quality source without another lease or native
+start. A feed that silently discards received bytes makes the tile/summary stale
+before the watchdog reconnects it. Repeated EOF exhausts the three retries,
+releases sources and allows manual Resume; a forbidden media response stops
+without authentication retries. Pause and navigation cancel backoff. History
+recovers independently while another tab stays at high quality, retains its
+playback generation, and can remain paused beyond the media watchdog timeout.
+Paused-media recovery also survives a ten-second response-header timeout; terminal
+failure releases its reservation while the other high-quality view keeps moving.
+The helper lives in [browser_feed_fault.js](../tools/browser_feed_fault.js) and is
+installed explicitly by the Docker browser; it is not a production test endpoint.
+An HTTP unit regression closes a quiet feed, verifies the handler counter returns
+to zero while the lease remains active, and reconnects that lease without another
+native source start. This models paused/offline delivery without adding protocol
+heartbeats or relying on a recorder.
+Real SDK/resource measurements remain in the separate explicit
+[reliability check](live-grid.md#reliability-and-resource-checks), never CI.
 
 The export cases use the production job manager, HTTP routes, persistence and
 FFmpeg encoder. The fake SDK boundary supplies ordered, timestamped YV12 frames

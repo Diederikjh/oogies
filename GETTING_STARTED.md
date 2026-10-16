@@ -63,6 +63,9 @@ respected. Expansion requests high quality and keeps overview video moving until
 the upgraded picture is ready. Collapsing returns to overview. If high quality is
 unavailable, the enlarged picture keeps overview quality and shows a short reason
 in its quality label, with details in a tooltip; collapse and expand again to retry.
+An interrupted video feed reconnects up to three times using the same session.
+Delayed live pictures are dimmed and labeled; if recovery fails, use **Resume
+view**. For History, select a time again. Recorder login is never retried automatically.
 Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
 choice, including that camera's History playback.

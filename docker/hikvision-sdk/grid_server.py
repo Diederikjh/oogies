@@ -7,7 +7,9 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import signal
+import socket
 import threading
 import tempfile
 from urllib.parse import parse_qs, urlsplit
@@ -134,6 +136,7 @@ class Handler(BaseHandler):
                     quality_status = sessions.quality_status()
                     self.json_response(dict(state=worker.state, error=worker.error,
                         active_live_sources=len(sessions.wanted), viewer_sessions=len(sessions.sessions),
+                        active_media_feeds=len(self.server.feeds),
                         playback_sessions=len(self.server.playback.sessions),
                         active_exports=int(self.server.exports.active is not None),
                         device_stream_limit=None, source_limit=sessions.limit,
@@ -192,6 +195,10 @@ class Handler(BaseHandler):
         seen = {}
         try:
             while not sessions.closed:
+                # Paused History/offline inputs can be quiet indefinitely. A
+                # disconnected peer must free its feed slot without a write.
+                if select.select([self.connection], [], [], 0)[0] and not self.connection.recv(1, socket.MSG_PEEK):
+                    break
                 for packet in sessions.next_frames(identifier, seen):
                     self.wfile.write(packet)
                 self.wfile.flush()

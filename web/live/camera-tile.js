@@ -97,9 +97,12 @@ export class CameraTile {
       this.sources.set(header.quality, {generation:header.generation, sequence:header.sequence, revision:header.selection_revision});
       this.image.src = url;
       this.image.hidden = false; this.placeholder.hidden = true; this.hasFrame = true;
+      this.lastPaintedAt = performance.now();
+      this.feedInterrupted = false;
       this.element.dataset.quality = header.quality;
       this.element.dataset.sourceGeneration = String(header.generation);
       this.paintQuality();
+      if (this.status && this.element.dataset.state === "stale") this.paint(this.status);
       if (qualityChanged) this.onFrame();
       if (old) URL.revokeObjectURL(old);
     } catch (_) {
@@ -124,15 +127,24 @@ export class CameraTile {
     this.metrics.title = this.qualityReason?.message || "";
   }
 
+  interruptFeed() {
+    this.feedInterrupted = true;
+    this.cancelDecode();
+    if (this.status) this.paint(this.status);
+  }
+
   paint(status) {
-    this.element.dataset.state = status.state;
-    this.badge.textContent = LABELS[status.state] || status.state;
+    this.status = status;
+    const delayed = status.state === "live" && (this.feedInterrupted || this.lastPaintedAt === undefined || performance.now() - this.lastPaintedAt > 5000);
+    const state = delayed ? "stale" : status.state;
+    this.element.dataset.state = state;
+    this.badge.textContent = delayed && this.feedInterrupted ? "Reconnecting…" : LABELS[state] || state;
     this.paintQuality();
-    this.placeholder.textContent = status.error || LABELS[status.state] || "Connecting…";
+    this.placeholder.textContent = status.error || LABELS[state] || "Connecting…";
     this.element.title = status.error || "";
   }
 
-  pause() { this.cancelDecode(); this.sources.clear(); this.generations.clear(); this.paint({state:"stopped"}); }
+  pause() { this.cancelDecode(); this.sources.clear(); this.generations.clear(); this.feedInterrupted = false; this.lastPaintedAt = undefined; this.paint({state:"stopped"}); }
 
   dispose() {
     this.disposed = true;

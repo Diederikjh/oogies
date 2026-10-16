@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import signal
 from pathlib import Path
 import time
 from urllib.request import urlopen
@@ -17,7 +18,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://localhost:8088")
     parser.add_argument("--output", default="/output")
+    parser.add_argument("--sustain-seconds", type=int, default=0,
+                        help="Explicitly add a 180-900 second reliability check (requires high-quality headroom)")
     args = parser.parse_args()
+    if args.sustain_seconds and not 180 <= args.sustain_seconds <= 900:
+        parser.error("sustained duration must be 180-900 seconds")
+    if args.sustain_seconds:
+        # Give the scoped cleanup below a chance to run on a resource stop.
+        def interrupted(*_): raise KeyboardInterrupt("Reliability check interrupted")
+        signal.signal(signal.SIGTERM, interrupted)
     output = Path(args.output); output.mkdir(mode=0o700, parents=True, exist_ok=True)
     def backend():
         with urlopen(args.url + "/api/status", timeout=5) as response: return json.load(response)
@@ -33,6 +42,9 @@ def main():
     results = {}
     try:
         driver.set_window_size(1600, 1100)
+        if args.sustain_seconds:
+            driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument",
+                {"source":Path(__file__).with_name("browser_feed_fault.js").read_text()})
         driver.get(args.url)
         first_tab = driver.current_window_handle
         def pictures():
@@ -109,10 +121,18 @@ def main():
             wait.until(lambda _:quality("high"))
             before = hashlib.sha256(pixels().encode()).hexdigest(); time.sleep(1)
             assert hashlib.sha256(pixels().encode()).hexdigest()!=before
+            if args.sustain_seconds:
+                from live_reliability import sustain
+                results["reliability"] = sustain(driver, wait, backend, online,
+                    args.url, output, args.sustain_seconds)
             driver.find_element(By.CSS_SELECTOR,'.camera-tile[data-camera-id="camera-1"] .camera-view').click()
             wait.until(lambda _:quality("overview") and backend()["sources_by_quality"]["high"]==0)
+        elif args.sustain_seconds:
+            raise RuntimeError("Sustained quality check needs an available high-quality slot")
         driver.find_element(By.ID, "history-tab").click()
         wait.until(lambda _: backend()["active_live_sources"] == 0)
+        if args.sustain_seconds:
+            wait.until(lambda _:backend()["active_media_feeds"]==0)
         wait.until(lambda _: all(driver.find_element(By.ID, "history-" + name).get_attribute("data-state")
             in ("ready", "unsupported", "error") for name in ("recordings", "motion")))
         results["history_timeline"] = {name:dict(
@@ -121,7 +141,8 @@ def main():
             for name in ("recordings", "motion")}
         assert backend()["sdk_login_calls"] == 1
         driver.save_screenshot(str(output / "history-timeline.png"))
-        errors = [entry for entry in driver.get_log("browser") if entry["level"] == "SEVERE" and "favicon.ico" not in entry["message"]]
+        errors = [entry for entry in driver.get_log("browser") if entry["level"] == "SEVERE" and "favicon.ico" not in entry["message"] and
+            not (args.sustain_seconds and entry.get("source")=="network" and "/media/" in entry["message"] and "409" in entry["message"])]
         assert not errors, str(errors)
         results["browser_errors"] = errors
         results["final_backend"] = backend()
@@ -129,7 +150,34 @@ def main():
         for path in output.iterdir():
             if path.is_file(): path.chmod(0o600)
         print(json.dumps(results, indent=2))
+    except BaseException as error:
+        if args.sustain_seconds:
+            failure=dict(error=str(error),tabs=[])
+            for index,tab in enumerate(driver.window_handles):
+                try:
+                    driver.switch_to.window(tab)
+                    failure["tabs"].append(driver.execute_script("""
+                        const player=document.getElementById('history-player'),img=document.getElementById('history-image');
+                        return {history_state:player?.dataset.state,history_message:document.getElementById('history-playback-status')?.textContent,
+                          image:{width:img?.naturalWidth,complete:img?.complete,hidden:img?.hidden},
+                          tiles:[...document.querySelectorAll('.camera-tile')].map(tile=>({id:tile.dataset.cameraId,state:tile.dataset.state,quality:tile.dataset.quality})),
+                          media:window.mediaFault?{attempts:mediaFault.attempts,bytes:mediaFault.bytes}:null};
+                    """))
+                    driver.save_screenshot(str(output/f"failure-tab-{index}.png"))
+                except Exception: pass
+            (output/"failure.json").write_text(json.dumps(failure,indent=2)+"\n")
+        raise
     finally:
+        if args.sustain_seconds:
+            for tab in driver.window_handles:
+                try:
+                    driver.switch_to.window(tab)
+                    driver.execute_async_script("""
+                        const done=arguments[0];Promise.all((window.checkOwnedSessions||[]).map(path=>
+                          fetch(path,{method:'DELETE'}).catch(()=>{}))).then(()=>done());
+                    """)
+                except Exception:
+                    pass  # Closing the browser leaves leases as the fallback.
         driver.quit()
 
 

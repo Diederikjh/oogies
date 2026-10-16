@@ -54,7 +54,7 @@ Each enumeration has a ten-second polling deadline and a 256-result cap; the
 Python worker waits at most 25 seconds for a result. Native API call duration
 also depends on SDK network timeouts. Reaching the enumeration limit returns
 incomplete coverage, displayed as unknown rather than a confirmed gap. The
-base motion selector supports channels 1–64; other channel numbers currently
+base motion selector supports channels 1-64; other channel numbers currently
 report that query as unsupported. There is no API-generation fallback loop or
 authentication retry. Late/unrequested results are discarded.
 

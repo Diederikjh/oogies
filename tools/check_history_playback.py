@@ -17,10 +17,10 @@ def main():
     parser.add_argument("--url", default="http://localhost:8088")
     parser.add_argument("--camera", default="camera-1")
     parser.add_argument("--continuous-seconds", type=int, default=60,
-                        help="Continuous playback before control checks (15–180 seconds)")
+                        help="Continuous playback before control checks (15-180 seconds)")
     parser.add_argument("--with-live", action="store_true", help="Also verify one live preview keeps advancing")
     args = parser.parse_args()
-    if not 15 <= args.continuous_seconds <= 180: parser.error("choose 15–180 continuous seconds")
+    if not 15 <= args.continuous_seconds <= 180: parser.error("choose 15-180 continuous seconds")
     output = Path(__file__).resolve().parents[1] / ".local/browser-viewer" / ("playback-check-" + uuid.uuid4().hex)
     output.mkdir(parents=True, mode=0o700)
     def api(path, method="GET", body=None):

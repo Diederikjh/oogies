@@ -33,12 +33,12 @@ V6.1.7.X, 20230606** at:
 
 Useful sections and printed page numbers:
 
-- Live view and decoder examples: chapter 5, including pages 64–69.
+- Live view and decoder examples: chapter 5, including pages 64-69.
 - Initialization: section 12.1.21, page 191.
-- SDK initialization configuration: section 12.1.40, pages 206–207.
-- Client stream-decryption key: section 12.1.42, pages 208–209.
-- SDK logs: section 12.7.7, pages 308–309.
-- Login structure, including private-protocol TLS: appendix A.263, pages 597–598.
+- SDK initialization configuration: section 12.1.40, pages 206-207.
+- Client stream-decryption key: section 12.1.42, pages 208-209.
+- SDK logs: section 12.7.7, pages 308-309.
+- Login structure, including private-protocol TLS: appendix A.263, pages 597-598.
 
 The PDF's physical page numbering includes front matter and differs from the
 printed page numbering.

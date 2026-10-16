@@ -64,7 +64,7 @@ export class Timeline {
     this.slider.max = String(Math.max(0, (this.seekEnd - this.seekBegin) / 1000 - 1));
     this.slider.disabled = this.seekEnd - this.seekBegin < 1000;
     const unknown = this.viewBegin < this.begin || this.viewEnd > this.end ? " · Coverage outside the loaded range is unknown" : "";
-    this.panel.querySelector("#history-range").textContent = `${this.time(this.viewBegin, true)} – ${this.time(this.viewEnd, true)} · ${this.zone}${this.isZoomed() ? " · Zoomed" : ""}${unknown}`;
+    this.panel.querySelector("#history-range").textContent = `${this.time(this.viewBegin, true)} - ${this.time(this.viewEnd, true)} · ${this.zone}${this.isZoomed() ? " · Zoomed" : ""}${unknown}`;
     this.panel.querySelector("#history-axis").replaceChildren(...Array.from({length:5}, (_, index) => {
       const tick = document.createElement("span"); tick.textContent = this.time(this.viewBegin + (this.viewEnd - this.viewBegin) * index / 4); return tick;
     }));
@@ -88,7 +88,7 @@ export class Timeline {
       }
       for (const interval of dataset.intervals || []) {
         const start = Date.parse(interval.start), end = Date.parse(interval.end);
-        const label = `${name === "motion" ? "Motion" : "Recording"} · ${this.time(start)}${end !== start ? ` – ${this.time(end)}` : ""}`;
+        const label = `${name === "motion" ? "Motion" : "Recording"} · ${this.time(start)}${end !== start ? ` - ${this.time(end)}` : ""}`;
         const button = document.createElement("button"); button.className = "timeline-interval";
         button.dataset.intervalId = interval.id; button.setAttribute("aria-label", label); button.title = label;
         button.style.left = `${(Math.max(start, this.viewBegin) - this.viewBegin) / (this.viewEnd - this.viewBegin) * 100}%`;

@@ -85,7 +85,7 @@ from the stream-encryption switch alone.
 
 ## RTSP digest compatibility is another lead, with weaker local evidence
 
-Hikvision's hardening guide, sections 2.14–2.15, documents MD5, SHA256 and
+Hikvision's hardening guide, sections 2.14-2.15, documents MD5, SHA256 and
 mixed digest choices and notes possible client compatibility issues. This is
 consistent with the [RTSP digest configuration reference](https://enpinfo.hikvision.com/hkwsen/unzip/20230410194813_20373_doc/GUID-14923E9F-4DA3-4FA7-AB20-9EBD72031C68.html).
 

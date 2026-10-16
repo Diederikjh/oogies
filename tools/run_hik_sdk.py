@@ -25,11 +25,11 @@ def main():
     config = load_config() if args.mode == "probe" else None
     adapter = get_sdk_adapter(config["sdk_profile"]) if config else get_sdk_adapter()
     if not 0 <= args.capture_seconds <= 60:
-        parser.error("capture must be 0–60 seconds")
+        parser.error("capture must be 0-60 seconds")
     if args.mode == "probe" and args.decrypt and args.capture_seconds == 0:
         parser.error("--decrypt requires a positive --capture-seconds for a live probe")
     if args.historical and (not args.decrypt or (args.mode == "probe" and not 1 <= args.capture_seconds <= 10)):
-        parser.error("historical extraction requires --decrypt and 1–10 capture seconds")
+        parser.error("historical extraction requires --decrypt and 1-10 capture seconds")
     if args.skip_search and not args.historical:
         parser.error("--skip-search requires --historical")
     sdk = ROOT / ".local/hik-sdk/sdk"

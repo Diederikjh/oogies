@@ -3,7 +3,7 @@
 Status: recorded before implementation in `ccee147`, 11 October 2026.
 The [History timeline](history-timeline.md) and
 [interactive playback](history-playback.md) are now implemented: metadata,
-selected-time video, pause/resume, seeking and 0.5×–4× speed controls. Wider capacity, audio and
+selected-time video, pause/resume, seeking and 0.5×-4× speed controls. Wider capacity, audio and
 export remain later work. This plan expands milestones 3 and 4 in
 [implementation-plan.md](implementation-plan.md); endpoint contracts remain in
 [backend-api-plan.md](backend-api-plan.md).
@@ -145,7 +145,7 @@ query, and a timeline range never requires pre-encoding hours of footage.
 
 Generalize the existing time-playback pipeline to arbitrary discovered cameras
 and requested times. Its current diagnostic is limited to the first configured
-camera, one hour ago, and a 1–10-second extraction; it is not the history backend.
+camera, one hour ago, and a 1-10-second extraction; it is not the history backend.
 Use per-playback decoder contexts, the full configured verification code and
 bounded queues. Start with the existing browser JPEG frame approach; measure
 main-stream decode/encode costs before changing transport. Pace displayed frames

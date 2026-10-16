@@ -36,6 +36,12 @@ class ViewerUITests(unittest.TestCase):
         "test_live_quality_lost_reply_releases_unconfirmed_high_source": {"limit":9},
         "test_live_quality_lost_reply_preserves_acknowledged_other_camera": {"limit":9},
         "test_live_quality_mobile_keyboard_and_reduced_motion": {"limit":9},
+        "test_live_media_disconnect_recovers_without_restarting_high_source": {"limit":9},
+        "test_live_media_stall_is_delayed_and_recovers": {"limit":9},
+        "test_live_media_retry_exhaustion_and_manual_resume": {"limit":9},
+        "test_live_media_pause_cancels_reconnect": {"limit":9},
+        "test_live_media_forbidden_response_stops_without_retrying_auth": {"limit":9},
+        "test_history_media_reconnect_preserves_high_live_view_and_pause": {"limit":10},
         "test_live_quality_api_shares_main_stream_without_changing_overview": {"limit":9},
         "test_capacity_limit_keeps_admitted_cameras_live": {"limit": 2},
         "test_camera_start_failure_is_local_to_its_tile": {"failed_camera": "camera-2"},
@@ -82,6 +88,9 @@ class ViewerUITests(unittest.TestCase):
         self.addCleanup(self.driver.quit)
         self.wait = WebDriverWait(self.driver, 12)
         self.driver.set_window_size(*self.WINDOW_SIZES.get(self._testMethodName,(1600,1100)))
+        if "media_" in self._testMethodName:
+            self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument",
+                {"source":Path("/support/browser_feed_fault.js").read_text()})
         self.driver.get(self.fixture.url)
 
     def tearDown(self):
@@ -93,7 +102,8 @@ class ViewerUITests(unittest.TestCase):
         expected = ("503",) if "rejection" in self._testMethodName else (("404",) if "expiry" in self._testMethodName else
             (("422",) if "date_rejected" in self._testMethodName else ()))
         unexpected = [entry for entry in errors if not (entry.get("source") == "network" and
-                       any(code in entry["message"] for code in expected))]
+                       (any(code in entry["message"] for code in expected) or
+                        ("media_" in self._testMethodName and "/media/" in entry["message"] and "409" in entry["message"])))]
         self.assertEqual(unexpected, [], "Unexpected browser console errors")
         self.assertEqual(self.fixture.worker.login_calls, 0, "UI tests must never log into an SDK")
 
@@ -281,17 +291,25 @@ class ViewerUITests(unittest.TestCase):
         self.assertTrue(all(count==1 for key,count in self.fixture.worker.started.items() if not key.endswith('-high')))
 
     def test_live_quality_refused_camera_is_not_retried_by_other_expansions(self):
-        self.wait_live(); self.picture_click(); self.wait_quality()
-        self.picture_click(2)
+        def click(channel=1):
+            # Admission is under test here. A prior tile's focus animation can
+            # move the target between Selenium's scroll/press/release steps.
+            self.wait.until(lambda _:not self.driver.execute_script("return Boolean(document.querySelector('.camera-tile.is-animating'))"))
+            view=self.tile(channel)+" .camera-view"
+            before=self.element(view).get_attribute("aria-expanded")
+            self.picture_click(channel)
+            self.assertEqual(self.element(view).get_attribute("aria-expanded"),"false" if before=="true" else "true")
+        self.wait_live(); click(); self.wait_quality()
+        click(2)
         self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile(2)+" .tile-metrics").text)
         self.assertEqual(self.element(self.tile(2)+" .tile-metrics").get_attribute("role"),"status")
         self.assertIn("capacity",self.element(self.tile(2)+" .tile-metrics").get_attribute("title"))
-        self.wait_quality(2,"overview"); self.picture_click(); self.wait_counts(1,8)
-        self.picture_click(3); self.wait_quality(3)
+        self.wait_quality(2,"overview"); click(); self.wait_counts(1,8)
+        click(3); self.wait_quality(3)
         self.assertNotIn("camera-2-high",self.fixture.worker.started)
         self.assertIn("High quality unavailable",self.element(self.tile(2)+" .tile-metrics").text)
-        self.picture_click(3); self.wait_counts(1,8)
-        self.picture_click(2); self.picture_click(2); self.wait_quality(2)
+        click(3); self.wait_counts(1,8)
+        click(2); click(2); self.wait_quality(2)
         self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
 
     def test_live_quality_decoder_failure_and_stall_keep_overview_moving(self):
@@ -413,6 +431,106 @@ class ViewerUITests(unittest.TestCase):
         self.driver.switch_to.window(first); self.wait_counts(1,9); self.wait_quality()
         before=self.pixels(); self.wait.until(lambda _:self.pixels()!=before)
         self.picture_click(); self.wait_quality(quality="overview"); self.wait_counts(1,8)
+
+    def test_live_media_disconnect_recovers_without_restarting_high_source(self):
+        self.wait_live(); self.picture_click(); self.wait_quality()
+        identifier = next(iter(self.fixture.sessions.sessions))
+        for kind in ("eof", "error"):
+            with self.subTest(kind=kind):
+                attempts = self.driver.execute_script("return mediaFault.attempts")
+                self.driver.execute_script("mediaFault.active(arguments[0])",kind)
+                self.wait.until(lambda _:self.state(1)=="stale")
+                self.assertIn("Reconnecting",self.element(self.tile()+" .tile-badge").text)
+                self.wait.until(lambda _:self.driver.execute_script("return mediaFault.attempts")>attempts)
+                self.wait_live(); self.wait_quality(); self.wait_counts(1,9)
+                before=self.pixels(); self.wait.until(lambda _:self.pixels()!=before)
+                self.assertEqual(next(iter(self.fixture.sessions.sessions)),identifier)
+                self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+                self.assertTrue(all(count==1 for count in self.fixture.worker.started.values()))
+
+    def test_live_media_stall_is_delayed_and_recovers(self):
+        self.wait_live(); self.picture_click(); self.wait_quality()
+        self.driver.execute_script("mediaFault.active('stall')")
+        self.wait.until(lambda _:self.state(1)=="stale")
+        self.assertIn("Video delayed",self.element(self.tile()+" .tile-badge").text)
+        self.assertNotIn("8 live",self.element("#grid-summary").text)
+        WebDriverWait(self.driver,18).until(lambda _:self.driver.execute_script("return mediaFault.attempts")>=2)
+        self.wait_live(); self.wait_quality(); self.wait_counts(1,9)
+        self.assertTrue(all(count==1 for count in self.fixture.worker.started.values()))
+
+    def test_live_media_retry_exhaustion_and_manual_resume(self):
+        self.wait_live(); self.picture_click(); self.wait_quality()
+        self.driver.execute_script("mediaFault.next='empty';mediaFault.active('eof')")
+        self.wait_counts(0,0)
+        self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),4)
+        self.assertIn("Resume",self.element("#message").text)
+        self.assertEqual(self.state(1),"stopped")
+        self.driver.execute_async_script("const done=arguments[0];setTimeout(done,1100)")
+        self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),4)
+        self.driver.execute_script("mediaFault.next=null")
+        self.element("#start").click(); self.wait_live(); self.wait_quality(); self.wait_counts(1,9)
+        self.assertEqual(self.fixture.worker.connection_attempts,1)
+
+    def test_live_media_pause_cancels_reconnect(self):
+        self.wait_live(); self.picture_click(); self.wait_quality()
+        self.driver.execute_script("mediaFault.next='empty';mediaFault.active('eof')")
+        self.wait.until(lambda _:self.state(1)=="stale")
+        self.element("#stop").click(); self.wait_counts(0,0)
+        attempts=self.driver.execute_script("return mediaFault.attempts")
+        self.driver.execute_async_script("const done=arguments[0];setTimeout(done,1400)")
+        self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),attempts)
+        self.assertEqual(self.state(1),"stopped")
+        self.driver.execute_script("mediaFault.next=null")
+        self.element("#start").click(); self.wait_live(); self.wait_quality()
+        self.driver.execute_script("mediaFault.next='empty';mediaFault.active('eof')")
+        self.wait.until(lambda _:self.state(1)=="stale")
+        self.open_history(); self.wait_counts(0,0)
+        attempts=self.driver.execute_script("return mediaFault.attempts")
+        self.driver.execute_async_script("const done=arguments[0];setTimeout(done,1400)")
+        self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),attempts)
+
+    def test_live_media_forbidden_response_stops_without_retrying_auth(self):
+        self.wait_live(); self.picture_click(); self.wait_quality()
+        self.driver.execute_script("mediaFault.next='forbidden';mediaFault.active('eof')")
+        self.wait_counts(0,0)
+        self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),2)
+        self.assertEqual(self.fixture.worker.connection_attempts,1)
+        self.assertIn("Resume",self.element("#message").text)
+
+    def test_history_media_reconnect_preserves_high_live_view_and_pause(self):
+        self.wait_live(); self.picture_click(); self.wait_quality(); first=self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab")
+        self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument",
+            {"source":Path("/support/browser_feed_fault.js").read_text()})
+        self.driver.get(self.fixture.url); self.wait_live()
+        self.open_history(); self.wait_counts(1,9)
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click(); self.history_playing()
+        identifier=next(iter(self.fixture.worker.playbacks)); generation=self.fixture.worker.playbacks[identifier]["generation"]
+        self.driver.execute_script("mediaFault.active('eof')")
+        self.wait.until(lambda _:"Reconnecting" in self.element("#history-playback-status").text)
+        self.wait.until(lambda _:self.driver.execute_script("return mediaFault.attempts")>=2)
+        self.history_playing(); before=self.history_pixels(); self.wait.until(lambda _:self.history_pixels()!=before)
+        self.assertEqual(next(iter(self.fixture.worker.playbacks)),identifier)
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"],generation)
+        self.element("#history-pause").click()
+        self.wait.until(lambda _:self.element("#history-player").get_attribute("data-state")=="paused")
+        attempts=self.driver.execute_script("return mediaFault.attempts")
+        self.driver.execute_async_script("const done=arguments[0];setTimeout(done,11000)")
+        self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),attempts)
+        self.driver.execute_script("mediaFault.next='hang-once';mediaFault.active('eof')")
+        WebDriverWait(self.driver,22).until(lambda _:self.driver.execute_script("return mediaFault.attempts")>=attempts+2 and
+            self.element("#history-pause").is_enabled())
+        self.assertEqual(self.element("#history-player").get_attribute("data-state"),"paused")
+        self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"],generation)
+        self.driver.switch_to.window(first); self.wait_live(); self.wait_quality(); self.wait_counts(1,9)
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+        self.driver.switch_to.window(self.driver.window_handles[1])
+        self.driver.execute_script("mediaFault.next='empty';mediaFault.active('eof')")
+        self.wait.until(lambda _:not self.fixture.worker.playbacks)
+        self.wait.until(lambda _:"Select a time" in self.element("#history-playback-status").text)
+        self.driver.execute_script("mediaFault.next=null")
+        self.element("#live-tab").click(); self.wait_live()
+        self.wait.until(lambda _:not self.fixture.worker.playbacks)
 
     def test_expansion_and_collapse_animate_and_keep_picture_in_focus(self):
         self.wait_live()

@@ -65,7 +65,10 @@ Historical capabilities remain
 unknown per camera; one successful extraction is not blanket support.
 Status reports `device_stream_limit: null`, configured `source_limit`, observed
 `tested_concurrent_streams`, `sdk_login_calls`, `viewer_sessions` and
-`active_live_sources` (admitted source slots, including a failed slot). These
+`active_live_sources` (admitted source slots, including a failed slot).
+`active_media_feeds` counts open live and History media handlers, including
+quiet paused feeds, so browser reconnection/cleanup can be checked separately
+from native source occupancy. These
 counts describe this backend, not other recorder clients or a hardware maximum.
 
 ## Implemented live viewer sessions — milestone 2
@@ -163,7 +166,7 @@ count distinct sources. Metrics are null until measured. Delivered FPS/bytes
 describe publication into the shared Python cache, not each viewer's bandwidth.
 The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
-## Recording and motion timeline data — milestones 3–4
+## Recording and motion timeline data — milestones 3-4
 
 Implemented in the [first History slice](history-timeline.md), now connected to
 [playback](history-playback.md). Queries return bounded results from V30 recording and base motion
@@ -368,6 +371,14 @@ ready result points only to its clip, never a workspace path or directory.
   abandoned sessions; expose no global Stop action that disconnects other views.
 - Start/seek/export actions are explicit requests. Status polling and media
   delivery do not produce repeated SDK logins or authentication retries.
+- Browser media recovery reuses the existing lease/media URL, with at most three
+  consecutive retries (1/2/4-second backoff). A fresh packet does not reset this
+  budget; a connection must remain stable for 30 seconds. Pause/navigation aborts
+  pending recovery. Ordinary 4xx responses stop recovery; a temporary 409 can be
+  retried while the previous feed closes. Exhaustion releases only that view's
+  session and requires an explicit user action to start again. Live status/renewal
+  failures still stop the view. Backend source availability and browser delivery
+  freshness are separate; neither changes the requested quality automatically.
 
 ## Frontend files along functional boundaries
 

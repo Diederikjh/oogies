@@ -6,6 +6,79 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Character replacement validation
+
+After the owner's repository-wide replacement of en dashes with ASCII hyphens,
+all 97 backend tests passed and the complete offline browser/native suite passed
+all 90 cases (86 browser and four native) in 849.6 seconds. This includes the
+previously timing-sensitive capacity case and all six reliability cases. Python
+syntax checks passed for all 50 source files; publication/history and whitespace
+checks passed. Results are in `.local/replacement-backend-tests.log`,
+`.local/replacement-ui-tests.log` and `.local/ui-test-results/`. No application
+or test changes were needed for this rerun.
+
+## Reliability and resource checks: milestone 3
+
+Milestone 2 was reviewed and committed as `6312fca` before this work. The owner
+approved longer sessions, browser reconnection/cleanup and historical playback
+alongside high-quality live video, retaining the high-quality cap at one. The
+scope is recorded in [the quality plan](docs/live-quality-plan.md).
+
+A browser regression reproduced clean media EOF leaving a frozen picture labeled
+Live. The shared feed now recovers the same media URL with bounded 1/2/4-second
+backoff, without recreating sessions or retrying SDK authentication. Live tiles
+measure successfully painted frames independently of backend health; delayed
+pictures are dimmed/labeled and excluded from the live summary. A ten-second
+watchdog applies only when video is expected; paused/ended History is excluded.
+Terminal media failure releases that viewer/playback and asks for manual resume
+or time selection. Six final reliability cases passed targeted runs for EOF/read
+errors, silent stalls, exhaustion/manual resume, forbidden responses, Pause and
+navigation, and independent live/History recovery. Extended History coverage
+includes paused reconnection, a ten-second response-header timeout and terminal
+playback cleanup while the other high-quality view remains live.
+
+The full 90-case browser/native run passed 89. One capacity case clicked while a
+previous tile's focus animation was still moving its target, then timed out
+waiting for a collapse that had not happened. Its interaction now waits for
+settled geometry and asserts the expanded state changed; three consecutive
+reruns passed. Existing dedicated animation/rapid-toggle cases passed unchanged.
+The subsequent full rerun after the character replacement passed all 90 cases,
+including this synchronized test and the six reliability cases. Initial private logs are
+`.local/m3-ui-tests.log`, `.local/m3-final-focused.log` and
+`.local/m3-history-final.log`.
+
+A separate quiet-feed HTTP regression reproduced a closed peer retaining its
+media slot when no frames were being sent. The handler now detects peer closure
+without a write or protocol heartbeat; the same viewer can reconnect without
+another native start/login. All 97 backend tests passed after that fix.
+
+The explicit [reliability runner](tools/run_live_reliability_check.py) requires
+an idle, verified service and uses a restricted browser container without SDK or
+credentials. It retains the existing SDK login, enforces resource/source limits,
+samples service load and browser media bytes, and keeps footage/reports private.
+
+The real-browser check passed 302.6 seconds with all four reported online
+overview streams, one shared high source and a historical viewer. Both browser
+feeds recovered controlled interruptions while keeping their source/playback
+generations and the existing SDK login. Paused History stayed paused without
+false recovery, then recovered an explicit disconnect. Three upgrade/release
+cycles passed. Final viewer/playback/source-slot/media-feed counts were zero,
+SDK login calls stayed one and no unexpected browser errors were reported.
+Mean sampled service CPU across the complete diagnostic was 55.0% of one core,
+peak memory 247.1 MiB and peak PIDs 168. Idle PIDs returned to 142; idle memory
+was 109.5 MiB before and 155.1 MiB after. Browser delivery averaged 1.12 MiB/s
+for Live and 0.44 MiB/s for History. Keep the high-quality cap at one; this is a
+five-minute workload check, not an overnight soak or a hardware-capacity maximum.
+
+The first diagnostic hit a one-shot History image-readiness assertion around
+115 seconds although native frames kept advancing without an SDK error. The
+probe now waits for decoding and checks actual pixel changes plus SDK frame
+progress, with failure-state capture; its repeat passed. Final private evidence
+is `.local/live-reliability-check/20261016-212301/`; full details are in
+[live grid](docs/live-grid.md#device-evidence--16-october-2026).
+The updated service is running at `http://localhost:8088/`. Milestone 3 was
+reviewed and approved for commit before the two-high-stream capacity experiment.
+
 ## Expansion-driven quality: milestone 2
 
 Milestone 1 was committed as `482aa8d` before frontend work. Expanding now requests
@@ -42,7 +115,7 @@ other. Final live/view/occupied-slot counts were zero, with no browser errors.
 The expanded screenshot was visually reviewed. Private evidence is under
 `.local/grid-quality-ui-check/`, including `grid-check.json` and screenshots.
 The service remains running at `http://localhost:8088/`; refresh an existing tab
-to load the new frontend. Milestone 2 was reviewed and approved for commit.
+to load the new frontend. Milestone 2 was reviewed and committed as `6312fca`.
 
 ## High-quality live backend: milestone 1
 
@@ -196,7 +269,7 @@ The timer check invokes the scheduled callback without waiting a real minute.
 The owner increased the default maximum to ten minutes (600 seconds). Setting
 both marks zooms the visible timeline around them, including an invalid draft.
 Mouse/touch dragging and keyboard arrows edit either handle, clamping to an
-ordered 1–600-second range (or a configured lower limit). The viewport stays
+ordered 1-600-second range (or a configured lower limit). The viewport stays
 fixed during a drag and metadata redraws wait until release. Zoom changes only
 the visible window; editing marks does not seek, pause or create SDK requests.
 Zoom to clip, Zoom out and Full range provide explicit viewport controls.
@@ -238,7 +311,7 @@ reserve one stream slot without evicting views.
 Real SDK exports of 1/10/60/300 seconds produced 0.934/9.867/59.934/299.867-second
 H.264 MP4s, at 960 × 1088 with correct 16:9 display metadata. The 1/60/300 ladder
 kept one live preview and one historical viewer running, with one SDK login.
-Sampled memory stayed about 280–300 MiB. The initial frame can lack OSD time;
+Sampled memory stayed about 280-300 MiB. The initial frame can lack OSD time;
 capture waits for a usable clock and validates subsequent stamps and coverage.
 Clip bounds have second precision, not frame-exact guarantees. Full-grid plus
 history plus export capacity remains unverified. Details, reproduction commands
@@ -417,7 +490,7 @@ query, resolving the need for a usable recording-discovery path after the earlie
 V40 error 11. Base motion search succeeded with zero intervals in that range.
 A one-hour query while camera 1 streamed returned one recording interval and
 zero motion intervals; 20 live packets were read, source sequences advanced
-1–34, no feed errors occurred, and one SDK login was retained. Only the temporary
+1-34, no feed errors occurred, and one SDK login was retained. Only the temporary
 test viewer was released. Live plus historical video capacity remains unverified.
 
 The native worker compiled and passed its offline decoder check without
@@ -720,7 +793,7 @@ can feed PlayCtrl, and the APK's playback branch uses the same full encryption
 string.
 
 At 14:51:50 on 2026-10-10, direct SDK time playback retrieved camera 1's main
-recording for **13:51:50–13:51:55**, exactly an hour earlier by the DVR clock.
+recording for **13:51:50-13:51:55**, exactly an hour earlier by the DVR clock.
 PlayCtrl decoded 75 frames at 960 × 1088 and 15 fps; offline FFmpeg produced
 a verified 5-second H.264 MP4. Its first frame visibly confirms the requested
 historical timestamp. The full verification code was configured, but this

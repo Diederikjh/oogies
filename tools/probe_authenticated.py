@@ -168,7 +168,7 @@ def main():
                         help="Compatibility flag: the shared loader now always limits the login password to 16 characters")
     args = parser.parse_args()
     if not 1 <= args.seconds <= 120 or not 101 <= args.channel <= 9999 or not 1 <= args.port <= 65535:
-        parser.error("seconds must be 1–120, channel 101–9999 and port 1–65535")
+        parser.error("seconds must be 1-120, channel 101-9999 and port 1-65535")
     try:
         config = load_config()
         HOST = config["host"]

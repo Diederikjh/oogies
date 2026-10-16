@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--camera", default="camera-1")
     parser.add_argument("--seconds-per-rate", type=int, default=10)
     args = parser.parse_args()
-    if not 8 <= args.seconds_per_rate <= 30: parser.error("choose 8–30 seconds per rate")
+    if not 8 <= args.seconds_per_rate <= 30: parser.error("choose 8-30 seconds per rate")
     def api(path, method="GET", body=None):
         request = Request(args.url + path, method=method,
             data=None if body is None else json.dumps(body).encode(),

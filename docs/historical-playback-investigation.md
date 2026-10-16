@@ -43,8 +43,8 @@ support in the recorder firmware or the current account's permissions.
 | Stop downloading | `NET_DVR_StopGetFile` | Release a download handle |
 
 The bundled English General Developer Guide covers playback in section 5.5
-(printed pages 80–83), downloading in section 8.4 (129–133), search in section
-8.6.1 (139–143), and playback APIs in section 12.3 (233–243). Its examples and
+(printed pages 80-83), downloading in section 8.4 (129-133), search in section
+8.6.1 (139-143), and playback APIs in section 12.3 (233-243). Its examples and
 prose sometimes use different API generations; implementation should use the
 actual package headers for structure layout and pair each search API with its
 matching result API.
@@ -176,7 +176,7 @@ functions needed by a historical viewer.
    day in recorder time, with all recording types/streams and capped results.
    Report filenames, intervals and stream types; close the search handle.
 3. Select a returned interval. On a subsequent bounded playback test, use one
-   login, the available recorded stream, and a 30–60-second historic range.
+   login, the available recorded stream, and a 30-60-second historic range.
    Register the callback before starting and run for at most 20 seconds.
 4. Apply the full verification code in file mode. Count decoded frames, confirm
    dimensions, save one frame privately, and verify that its timestamp and

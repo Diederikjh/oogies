@@ -83,9 +83,17 @@ export class PlaybackControls {
           const id = status.id;
           this.feed = new FrameFeed(status.media.url, (_, jpeg, header) => {
             if (this.session?.id === id) this.frame(jpeg, header);
+          }, {
+            onInterrupt: () => {
+              if (this.session?.id === id) { this.mediaInterrupted = true; this.paint(this.session); }
+            },
+            expectFrames: () => this.session?.id === id && this.session.state === "playing" && !this.loading
           });
-          this.feed.run().catch(error => {
-            if (this.session?.id === id && error.name !== "AbortError") this.paint({state:"error", error:error.message});
+          this.feed.run().catch(async error => {
+            if (this.session?.id !== id) return;
+            const epoch = this.epoch;
+            await this.release();
+            if (epoch === this.epoch && !this.session) this.paint({state:"error", error:`${error.message} Select a time to reconnect.`});
           });
         }
         if (this.bufferedFrame) {
@@ -117,6 +125,7 @@ export class PlaybackControls {
       if (previous) URL.revokeObjectURL(previous);
       if (epoch !== this.renderEpoch || this.image.currentSrc !== next) return;
       this.drawing = false; this.image.hidden = false; this.placeholder.hidden = true;
+      if (this.mediaInterrupted) { this.mediaInterrupted = false; this.paint(this.session); }
       this.snapshot = header.position ? Object.freeze({blob, cameraId:this.camera.id, cameraName:this.camera.name,
         generation:header.generation, sequence:header.sequence, position:Date.parse(header.position),
         width:this.image.naturalWidth, height:this.image.naturalHeight}) : null;
@@ -130,12 +139,12 @@ export class PlaybackControls {
   paint(status) {
     const state = status?.state;
     this.panel.querySelector("#history-player").dataset.state = state || "idle";
-    this.message.textContent = status?.error || LABELS[state] || "Select a time or motion interval to play its recording.";
+    this.message.textContent = status?.error || (this.mediaInterrupted && ["playing", "paused"].includes(state) ? "Reconnecting video…" : LABELS[state]) || "Select a time or motion interval to play its recording.";
     this.placeholder.textContent = this.message.textContent;
     this.pauseButton.textContent = state === "paused" ? "Resume" : "Pause";
     const rate = status?.rate ?? this.session?.rate ?? 1;
     const pendingRate = this.session && this.session.requested_rate !== this.session.rate;
-    const controlsEnabled = this.session && ["playing", "paused"].includes(state) && !this.loading && !this.controlling && !pendingRate;
+    const controlsEnabled = this.session && ["playing", "paused"].includes(state) && !this.mediaInterrupted && !this.loading && !this.controlling && !pendingRate;
     this.pauseButton.disabled = !controlsEnabled;
     for (const button of this.speedButtons) {
       button.setAttribute("aria-pressed", String(Number(button.dataset.rate) === rate));
@@ -238,6 +247,7 @@ export class PlaybackControls {
   async release() {
     clearInterval(this.pollTimer); clearInterval(this.renewTimer);
     this.feed?.close(); this.feed = null;
+    this.mediaInterrupted = false;
     const session = this.session; this.session = null;
     if (session) await api(`/api/playback/sessions/${session.id}`, "DELETE").catch(() => {});
   }

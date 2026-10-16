@@ -31,7 +31,7 @@ Setting both marks automatically zooms around them, including an overlong or
 reversed draft. Drag either Start/End handle horizontally to adjust it, using
 mouse or touch. A drag keeps a fixed time-to-pixel scale and holds metadata redraws
 until release. Handle edits stay in the browser, preserve playback and clamp to
-an ordered range of 1–600 seconds (or the owner's lower configured limit).
+an ordered range of 1-600 seconds (or the owner's lower configured limit).
 An invalid initial draft becomes valid on the first handle movement. Keyboard
 arrows move one second, Shift+arrows ten seconds, and Home/End reach each handle's
 allowed bounds. **Zoom to clip**, **Zoom out** and **Full range** control the
@@ -139,7 +139,7 @@ unverified and is not used as an automatic fallback.
 
 The 1/60/300-second ladder and later 600-second check ran with one live preview and one historical viewer.
 Historical viewing continued throughout; SDK login count stayed at one.
-Sampled runtime memory was about 280–300 MiB, within the existing two-CPU/2-GiB
+Sampled runtime memory was about 280-300 MiB, within the existing two-CPU/2-GiB
 container limits. This establishes three concurrent contexts for that check,
 not a general hardware maximum or full-grid-plus-history-plus-export guarantee.
 The later ten-minute repeat sampled about 356 MiB, still within those limits.

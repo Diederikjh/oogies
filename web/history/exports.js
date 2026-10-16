@@ -51,7 +51,7 @@ export class ExportsView {
         const [title, range, status, actions] = row.children;
         title.textContent = job.camera_name;
         const time = new Intl.DateTimeFormat(undefined, {timeZone:job.timezone, dateStyle:"medium", timeStyle:"medium"});
-        range.textContent = `${time.format(new Date(job.from))} – ${time.format(new Date(job.to))} · ${job.timezone} · ${job.duration_seconds} seconds · ${job.aspect_ratio}`;
+        range.textContent = `${time.format(new Date(job.from))} - ${time.format(new Date(job.to))} · ${job.timezone} · ${job.duration_seconds} seconds · ${job.aspect_ratio}`;
         const [ring, label] = status.children;
         ring.hidden = job.state !== "running";
         if (!ring.hidden) {

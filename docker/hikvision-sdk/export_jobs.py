@@ -87,7 +87,7 @@ class ExportJobs:
             raise SessionError("Clip marks must use whole seconds.", 422)
         seconds = (end - begin).total_seconds()
         if begin.microsecond or end.microsecond or not 1 <= seconds <= self.limits["max_duration_seconds"]:
-            raise SessionError(f"Choose whole seconds and a clip of 1–{self.limits['max_duration_seconds']} seconds.", 422)
+            raise SessionError(f"Choose whole seconds and a clip of 1-{self.limits['max_duration_seconds']} seconds.", 422)
         if end > datetime.fromtimestamp(self.clock(), timezone.utc):
             raise SessionError("Choose a recorded range in the past.", 422)
         cursor = begin

@@ -34,7 +34,7 @@ def main():
     parser.add_argument("--seconds",type=int,default=8)
     parser.add_argument("--output",default="/output/quality-check")
     args = parser.parse_args()
-    if not 5 <= args.seconds <= 20: parser.error("sample duration must be 5–20 seconds")
+    if not 5 <= args.seconds <= 20: parser.error("sample duration must be 5-20 seconds")
     os.umask(0o077)
     output = Path(args.output); output.mkdir(parents=True,exist_ok=True,mode=0o700)
     config = load_config("/configuration/nvr.json")

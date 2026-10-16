@@ -109,7 +109,7 @@ selection PATCH to retry; they do not wait in an upgrade queue.
 Requests beyond the configured source
 budget retain working tiles and label excess cameras capacity-limited. There
 are at most eight viewer leases and one feed per lease. The configured source
-limit defaults to eight and can be 1–16; it is an application budget, not the
+limit defaults to eight and can be 1-16; it is an application budget, not the
 recorder's hardware limit. Hardware limits remain unknown. Individual source
 errors do not stop other cameras. Refresh acquires a new document lease while
 reusing existing sources; copied browser tabs do not share mutable lease IDs.
@@ -300,6 +300,91 @@ one kept the other moving, and collapse returned to overview. Final live/view/
 occupied-slot counts were zero with no browser errors. Evidence is private under
 `.local/grid-quality-ui-check/`. The complete offline suite passed 84 cases
 (80 browser and four native), and the backend suite passed 96.
+
+## Reliability and resource checks
+
+Milestone 3 follows the approved reliability/resource scope in
+[the live-quality plan](live-quality-plan.md#milestone-3-reliability-and-resource-checks).
+The shared browser feed now treats clean EOF as a disconnect. It reconnects the
+existing media URL after 1, 2 and 4 seconds; 30 seconds of stable delivery resets
+that consecutive-failure budget. Missing complete packets for ten seconds while
+video is expected triggers recovery, including silent media stalls. Paused/ended
+History and a grid with no live sources are excluded from that watchdog.
+Each connection attempt still has a ten-second response-header deadline,
+including while paused or offline.
+HTTP 4xx ends recovery except 409, which can briefly occur while the old server
+feed releases its slot. Readers, timers and backoff cancel on navigation/Pause.
+Neither SDK login nor viewer/playback creation is retried automatically.
+The HTTP server checks for a closed peer even when paused/offline sources send
+no frames, releasing its feed slot without waiting for a write or lease expiry.
+`/api/status` reports `active_media_feeds` separately from viewer leases and
+native source occupancy; a live grid and History tab should have two media feeds.
+
+Live tiles distinguish backend health from browser delivery: after five seconds
+without a painted JPEG they display Video delayed and dim the retained picture;
+a known disconnection shows Reconnecting. Status polling cannot turn that stale
+picture back into Live. The summary counts locally fresh tiles. A new decoded
+frame restores the badge. Quality preference, generation and revision guards
+continue to apply through reconnection. Exhausting retries releases that viewer
+and offers Resume view. History retains its independent position/rate through
+media recovery; a terminal failure releases playback and asks for a time selection.
+
+The explicit host runner
+[run_live_reliability_check.py](../tools/run_live_reliability_check.py) invokes
+[check_live_grid.py](../tools/check_live_grid.py) with a 180-900 second sustained
+stage, using [live_reliability.py](../tools/live_reliability.py). It requires an
+idle, already verified running service, one high-quality slot and sufficient
+total capacity. It does not stop/restart the service or change owner settings.
+It shares the service's network namespace and existing login. The restricted
+browser container gets only tools and private output, without SDK/credentials.
+
+The workload keeps the full reported online grid plus one main stream moving
+while a second tab plays History. It spans multiple lease renewals, disconnects
+each browser media feed independently, checks paused History, repeats three
+upgrade/release cycles and checks final zero occupancy. Browser-injected
+[feed faults](../tools/browser_feed_fault.js) preserve the real HTTP/SDK backend;
+they do not disconnect the recorder itself or test SDK reauthentication.
+This helper is not served as a frontend asset. Only check-owned session IDs are
+deleted in cleanup, with lease expiry as the fallback if the browser is lost.
+
+The host samples Docker service CPU, memory, PIDs and cumulative network counters.
+It stops on >75% of the 2 GiB memory cap, >450 PIDs, >180% of one CPU core for
+30 seconds, an unexpected SDK login/main source, or excess source occupancy.
+Both runtime and browser retain their existing 2-CPU/2-GiB/512-PID container caps.
+CPU figures are sampled snapshots; Docker network counters exclude loopback
+browser traffic. The browser separately counts delivered media bytes and verifies
+changing pixel hashes from the images actually painted at native dimensions. Private reports, logs and
+screenshots go under `.local/live-reliability-check/`. This is a bounded workload
+check, not a hardware maximum, overnight soak, or reason to increase the high cap.
+
+### Device evidence — 16 October 2026
+
+The final check passed 302.6 seconds of concurrent moving video: four reported
+online overview sources, one shared main stream and one independent historical
+playback. It recorded 58 samples across multiple 90-second lease periods. Live
+and History feed interruptions recovered without another source generation,
+playback generation or SDK login. Paused History remained quiet for 12 seconds,
+then recovered a deliberately closed media feed. Three upgrade/release cycles
+passed. Final viewer, playback, occupied-source and media-feed counts were zero;
+the SDK login count stayed one, and no unexpected browser errors were reported.
+
+The whole diagnostic took 346.5 seconds. Mean sampled service CPU was 55.0% of
+one core, peak memory was 247.1 MiB and peak PIDs were 168. Idle PIDs returned
+from 142 to 142; idle memory was 109.5 MiB before and 155.1 MiB after the check.
+This verifies bounded source/feed cleanup; it does not assert that every SDK
+allocation returns immediately or establish long-term memory behavior. Actual
+browser media averaged about 1.12 MiB/s for Live and 0.44 MiB/s for History;
+these are delivery rates for this footage/workload, separate from recorder traffic.
+Keep the high-quality cap at one.
+
+An initial diagnostic stopped around 115 seconds on a one-shot History-image
+readiness assertion while native frames continued to be decoded/published with
+no SDK error. The diagnostic now waits briefly for a decoded image, checks
+pixel hashes and SDK playback frame counts independently, and captures UI state
+on failure. The repeat passed without changing SDK playback or raising capacity.
+Private final evidence is under
+`.local/live-reliability-check/20261016-212301/`: `resource-check.json`,
+`reliability-check.json`, `grid-check.json`, `browser.log` and screenshots.
 
 ## Offline display-control check
 

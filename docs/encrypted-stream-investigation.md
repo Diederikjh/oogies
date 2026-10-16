@@ -21,9 +21,9 @@ from the username/password used for device login.
 
 The bundled HCNetSDK General Developer Guide provides two relevant pieces:
 
-- Chapter 5 (printed pages 63–69): acquire data using a live-view callback,
+- Chapter 5 (printed pages 63-69): acquire data using a live-view callback,
   open the system header in PlayCtrl, and feed stream data for decoding.
-- Section 12.1.42 (printed pages 208–209): `NET_DVR_SetSDKSecretKey` takes a
+- Section 12.1.42 (printed pages 208-209): `NET_DVR_SetSDKSecretKey` takes a
   16-byte client decryption key before live view. This API description alone
   does not establish how a variable-length verification code should be passed.
 

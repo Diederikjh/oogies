@@ -348,7 +348,7 @@ def main():
     parser.add_argument("--session-seconds", type=int, default=600)
     args = parser.parse_args()
     if not 1 <= args.session_seconds <= 900 or not 1024 <= args.port <= 65535:
-        parser.error("session must be 1–900 seconds and port 1024–65535")
+        parser.error("session must be 1-900 seconds and port 1024-65535")
     os.umask(0o077)
     adapter = get_sdk_adapter()
     binary = compile_probe(adapter)  # No initialization/login or device request at startup.

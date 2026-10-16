@@ -1,5 +1,6 @@
 """Quality admission and frame routing through real worker/session boundaries."""
 import io
+import http.client
 import json
 from pathlib import Path
 import sys
@@ -83,6 +84,39 @@ class QualityTests(unittest.TestCase):
         self.live.delete(first["id"]); self.live.delete(first["id"])
         self.assertEqual(self.live.used_sources(), 0)
         self.assertEqual(self.worker.login_calls, 1)
+
+    def test_disconnected_quiet_feed_releases_slot_without_expiring_viewer(self):
+        view = self.create(quality="overview")
+        with tempfile.TemporaryDirectory() as directory:
+            server = create_server(self.worker,self.live,address=("127.0.0.1",0),web=ROOT/"web",
+                                   recording=Path(directory)/"missing.mp4")
+            thread=threading.Thread(target=server.serve_forever,daemon=True); thread.start()
+            def connect():
+                connection=http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=3)
+                connection.request("GET",f'/media/live/{view["id"]}/frames')
+                response=connection.getresponse()
+                return connection,response
+            try:
+                connection,response=connect()
+                self.assertEqual(response.status,200)
+                self.assertIn(view["id"],server.feeds)
+                with urlopen(f"http://127.0.0.1:{server.server_port}/api/status",timeout=3) as status:
+                    self.assertEqual(json.load(status)["active_media_feeds"],1)
+                response.close(); connection.close()
+                deadline=time.monotonic()+3
+                while view["id"] in server.feeds and time.monotonic()<deadline: time.sleep(.02)
+                self.assertNotIn(view["id"],server.feeds,"A quiet feed must notice client FIN without another video frame")
+                with urlopen(f"http://127.0.0.1:{server.server_port}/api/status",timeout=3) as status:
+                    self.assertEqual(json.load(status)["active_media_feeds"],0)
+                self.assertIn(view["id"],self.live.sessions)
+                connection,response=connect()
+                self.assertEqual(response.status,200,"The same viewer can reconnect its media feed")
+                response.close(); connection.close()
+                self.assertEqual(self.worker.login_calls,1)
+                self.assertEqual(len([cmd for cmd in self.worker.commands if cmd.startswith("start ")]),1)
+            finally:
+                self.live.close(); server.shutdown(); thread.join(timeout=2)
+                server.playback.close(); server.timeline.close(); server.server_close()
 
     def test_feed_switches_after_first_frame_and_equal_sequence_is_not_suppressed(self):
         view = self.create(); other = self.create(quality="overview")

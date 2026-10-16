@@ -95,7 +95,7 @@ and RTSP session description where possible.
 
 Start with the substream, then repeat with the main stream. Use RTSP over TCP
 initially to reduce UDP routing variables. Obtain codec metadata with ffprobe,
-then decode 30–60 seconds with FFmpeg to a null output and extract one local
+then decode 30-60 seconds with FFmpeg to a null output and extract one local
 frame for visual verification. Inspect frame counts and decode errors.
 A successful metadata probe or `-c copy` recording alone does not prove decoding.
 

@@ -5,16 +5,17 @@ and verified on the current recorder. The first History timeline slice is now
 implemented, with selected-time historical playback and pause/resume/seek. The
 [API document](backend-api-plan.md) distinguishes implemented viewing endpoints
 and export endpoints; [live-grid.md](live-grid.md) records observed live capacity.
-The [History view plan](history-view-plan.md) expands milestones 3–4 into SDK
+The [History view plan](history-view-plan.md) expands milestones 3-4 into SDK
 feasibility, fixture-tested UI, real metadata and interactive playback stages.
 Date/time navigation is committed as `bd0b069`; the export plan was approved and
 committed as `06c077d` before work. Clip selection, queued MP4 exports, direct
 frame PNG downloads and ±10/30-second seeking are now implemented. See
 [clip exports](clip-exports.md) for limits, precision and verification.
 
-Milestone 1's seven-camera live checks pass; one live preview plus historical
-playback/control checks now coexist through one login. A fully fresh remote/LFS
-installation and full-grid historical coexistence remain unverified. Milestone 2's initial
+Milestone 1's original seven-camera live checks passed. The later bounded
+quality check used all four inputs currently reported online, one main stream
+and historical playback through one login. Broader device capacity and a fully
+fresh remote/LFS installation remain unverified. Milestone 2's initial
 grid, sharing, cleanup and expansion pass. Expansion now requests a shared main
 stream with overview fallback; collapse releases that viewer's high request.
 The [high-quality live viewing plan](live-quality-plan.md) separates backend stream
@@ -24,7 +25,17 @@ overview fallback when either capacity budget is exhausted. Milestone 1 passed
 the backend/browser/native suites and a bounded device check with four overview
 streams, one high-quality stream and historical playback. Milestone 1 was
 committed as `482aa8d` before frontend switching. Milestone 2 now connects expansion
-to quality selection while retaining animation, scrolling and per-view cleanup.
+to quality selection while retaining animation, scrolling and per-view cleanup;
+it was reviewed and committed as `6312fca`. The owner approved a third stage of
+the high-quality work: sustained reliability/resource checks, browser media
+recovery and live/history coexistence. See that plan for its bounded completion
+criteria. This overlaps the original platform milestone 5 below; the original
+motion/history milestones 3-4 have already been implemented.
+The quality reliability stage now has bounded media recovery, honest browser
+freshness, quiet-feed cleanup and a successful 302.6-second grid/high/History
+device check. Source/feed/view occupancy returned to zero through one SDK login.
+Sustained use beyond that duration and recorder-wide outage recovery remain
+unverified. Keep the shared high-quality cap at one.
 
 ## Primary use cases
 
@@ -97,8 +108,10 @@ timestamps.
 Seven encrypted previews now play simultaneously in the automatic grid, shared
 across two browser views using one login. Independent Pause and 90-second orphan
 lease expiry were verified. Historical time extraction and saved MP4 playback
-also work. Hardware maximum and historical playback alongside the grid remain
-unknown; short seven-camera samples used about 154 MiB and half one CPU core.
+also work. Hardware maximum remains unknown; the original short seven-camera
+samples used about 154 MiB and half one CPU core. The later reliability check
+passed 302.6 seconds with the current four reported online inputs, one main
+stream and History, peaking at 247.1 MiB through one login.
 
 The earlier V40 recording search returned SDK error 11; direct playback by time
 worked without search. V30 recording search now returns coverage. Base motion
@@ -106,8 +119,10 @@ event search completed successfully with no intervals in two bounded camera-1
 queries. The [implemented timeline](history-timeline.md) presents returned SDK
 data without requiring Android equivalence. Live video continued during metadata
 search through the same login; interactive historical playback coexistence and
-controls are now verified on camera 1, including a real-browser player. Full-grid
-plus historical video and broader device capacity still need measurement.
+controls are now verified on camera 1, including a real-browser player. The
+currently reported four-camera grid plus high quality and History passed the
+bounded reliability check; larger workloads and broader device capacity remain
+unverified.
 
 If richer motion data is needed later, compare alternative
 SDK/event-log and supported ISAPI paths. Recording intervals labeled as motion
@@ -126,8 +141,8 @@ recorder is unnecessary.
 Use Python for the HTTP API, configuration, viewer-session management and job
 coordination. Keep native SDK calls, decoder callbacks and video buffers in a
 C++ bridge. The live grid now uses a persistent worker accepting per-source commands and
-lifecycle events, reusing one recorder connection. Historical operations currently
-remain separate bounded probes.
+lifecycle events, reusing one recorder connection. Historical viewing and exports
+now use that worker too; the earlier bounded probes remain diagnostic tools.
 
 Owner settings, including NVR IP/SDK port/timezone, belong in ignored
 `.local/nvr-config.json`; credentials remain separate. Support other Hikvision

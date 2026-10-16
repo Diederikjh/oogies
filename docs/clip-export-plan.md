@@ -257,7 +257,7 @@ Relevant constraints for the selected implementation:
 For scale, a five-minute encoded clip at 2/4/8 Mbps is approximately
 72/143/286 MiB. The last exceeds the proposed per-file cap; these are sizing
 examples, not measured output bitrate guarantees. As a first validation ladder,
-prove 10–30 seconds, then one minute, then five minutes with bounded storage and
+prove 10-30 seconds, then one minute, then five minutes with bounded storage and
 viewing coexistence. Raising the configurable duration later must also review
 file quota, execution deadlines and queue latency. It does not require a longer
 browser playback session or retaining the whole raw clip in RAM.

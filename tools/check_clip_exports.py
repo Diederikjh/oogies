@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--port", type=int, default=8088)
     parser.add_argument("--from", dest="begin", help="Optional timezone-aware start time for reproducing a specific range")
     args = parser.parse_args()
-    if any(not 1 <= value <= 600 for value in args.seconds): parser.error("use 1–600 seconds")
+    if any(not 1 <= value <= 600 for value in args.seconds): parser.error("use 1-600 seconds")
     base = f"http://localhost:{args.port}"
     def api(path, method="GET", body=None):
         request = Request(base+path, method=method,

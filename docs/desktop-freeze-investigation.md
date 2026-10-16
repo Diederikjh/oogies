@@ -12,12 +12,12 @@ The exact cause of the reported desktop/audio freeze remains unproven.
 
 | Time | Recorded event |
 | --- | --- |
-| 19:23:57–58 | Kernel page fault in `should_skip_vma`, process `kswapd0`; kernel oops on `6.8.0-146-generic` |
+| 19:23:57-58 | Kernel page fault in `should_skip_vma`, process `kswapd0`; kernel oops on `6.8.0-146-generic` |
 | 19:23:58 | Kernel reports `kswapd0` exited with interrupts disabled and `preempt_count 1` |
-| 19:27:13–16 | Four further kernel oops events involving `fuser` and `show_map_vma` |
+| 19:27:13-16 | Four further kernel oops events involving `fuser` and `show_map_vma` |
 | 20:58:14 | Debian base image pull logged by Docker |
-| 21:00:19–21 | Docker build networking starts |
-| 21:06:26–27 | Browser dependency build stage starts |
+| 21:00:19-21 | Docker build networking starts |
+| 21:06:26-27 | Browser dependency build stage starts |
 | 21:08:26 | That stage's build network interface is removed |
 | 21:09:01 | Last retained previous-boot journal record |
 | 21:30:29 | Current boot begins |
@@ -43,7 +43,7 @@ Sources for interpretation: [Linux memory-reclaim documentation](https://docs.ke
 - The build installed compiler, media and browser dependencies, downloaded
   approximately 340 MB of packages and accumulated multiple GB of build cache.
   Its many filesystem operations and final image export plausibly added I/O load.
-- Initial post-reboot sampling showed substantial I/O pressure and 10–15% I/O
+- Initial post-reboot sampling showed substantial I/O pressure and 10-15% I/O
   wait in two one-second intervals. Later sampling was substantially quieter.
   These measurements describe the rebooted system, not conditions at the freeze.
 - Memory after reboot was approximately 3.4 GiB used out of 15 GiB, with 12 GiB
