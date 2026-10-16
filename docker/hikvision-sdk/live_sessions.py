@@ -65,9 +65,10 @@ class LiveSessions:
                                                    at=datetime.now(timezone.utc).isoformat()))
             del self.recent_upgrade_events[:-20]
 
-    def _request_upgrades(self, session):
+    def _request_upgrades(self, session, retry=None):
         old = session.get("upgrades", {})
-        session["upgrades"] = {camera:old[camera] if old.get(camera, {}).get("state") in ("pending", "active")
+        session["upgrades"] = {camera:old[camera] if camera in old and
+                                (old[camera]["state"] in ("pending", "active") or (retry is not None and camera not in retry))
                                 else dict(state="requested", reason=None)
                                 for camera, quality in session["cameras"] if quality == "high"}
 
@@ -171,14 +172,19 @@ class LiveSessions:
 
     def patch(self, identifier, body):
         with self.lock:
-            if not isinstance(body, dict) or set(body) - {"cameras"}:
+            if not isinstance(body, dict) or set(body) - {"cameras", "retry_high"} or ("retry_high" in body and "cameras" not in body):
                 raise SessionError("Invalid session update.")
             self.get(identifier)
             session = self.sessions[identifier]
             if "cameras" in body:
-                session["cameras"] = self.selection(body)
+                cameras = self.selection({"cameras":body["cameras"]})
+                retry = body.get("retry_high")
+                if "retry_high" in body and (not isinstance(retry, list) or any(not isinstance(camera, str) for camera in retry) or
+                    len(set(retry)) != len(retry) or set(retry) - {camera for camera, quality in cameras if quality == "high"}):
+                    raise SessionError("retry_high must list distinct cameras selected at high quality.")
+                session["cameras"] = cameras
                 session["revision"] += 1
-                self._request_upgrades(session)
+                self._request_upgrades(session, retry)
             session["expires"] = self.clock() + self.lease_seconds
             self._reconcile()
             return self.get(identifier)

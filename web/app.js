@@ -7,13 +7,14 @@ const byId = id => document.getElementById(id);
 const historyEvents = document.querySelector(".history-events-panel");
 historyEvents.open = !window.matchMedia("(max-width: 900px)").matches;
 let mode = "live";
-const overview = new Overview(byId("camera-grid"), session => {
+const overview = new Overview(byId("camera-grid"), (session, quality = {high:0}) => {
   const live = session?.cameras.filter(camera => camera.state === "live").length || 0;
   const total = session?.cameras.length || overview.tiles.size;
   byId("grid-summary").textContent = mode === "history" ? "Timeline" : mode === "exports" ? "Downloads" : session ? `${live} live · ${total} cameras` : "View paused";
   byId("stop").disabled = !session;
   byId("start").disabled = Boolean(session);
   if (session) byId("message").textContent = "";
+  if (mode === "live") byId("view-note").textContent = quality.high ? `Video only · ${quality.high} high quality` : "Video only · Overview quality";
 }, message => { byId("message").textContent = message; byId("start").disabled = false; },
   () => settings.camerasReady(), cameraId => showMode("history", cameraId));
 const history = new HistoryView(byId("history-panel"), () => settings.camerasReady(), () => showMode("exports"));

@@ -353,8 +353,13 @@ Historical playback and exports also use the total budget; closing native live
 sources count until their stop acknowledgement arrives. If there is no room,
 the API returns overview quality with an explicit refusal reason. Refused/failed
 upgrades are not queued or automatically retried. Restart after changing limits.
-Current frontend expansion still uses overview. Verify the backend through the
-API and `/api/status`; do not claim high quality from tile size alone. See
+Frontend expansion requests high quality and collapsing releases that viewer's
+high request. The picture stays at overview until a decoded high frame is ready.
+Per-tile quality text and the footer reflect painted frames; “High quality
+unavailable” preserves overview and gives a short reason plus tooltip details. Collapse and
+expand to retry. Other viewers of the same camera share the high source.
+Verify natural image dimensions/quality metadata plus the API and `/api/status`;
+tile size alone does not establish an upgrade. See
 [live quality](docs/live-quality-plan.md) for the staged checks and measurements.
 
 Optional `exports` settings are a nested object in that same private JSON:

@@ -4,9 +4,11 @@ import {TileExpansion} from "/live/tile-expansion.js";
 
 const LABELS = {starting:"Connecting", live:"Live", stale:"Video delayed", offline:"Offline",
   error:"Unavailable", capacity_limited:"Stream limit", stopping:"Stopping", stopped:"Stopped"};
+const QUALITY_REASONS = {high_quality_limit:"stream limit", source_limit:"stream limit", unsupported:"unsupported",
+  offline:"camera offline", stream_failed:"stream failed", quality_request_failed:"request failed"};
 
 export class CameraTile {
-  constructor(camera, grid, onHistory = () => {}) {
+  constructor(camera, grid, onHistory = () => {}, onExpansion = () => {}, onFrame = () => {}) {
     this.camera = camera;
     this.element = document.createElement("article");
     this.element.className = "camera-tile";
@@ -14,7 +16,7 @@ export class CameraTile {
     this.element.innerHTML = `<div class="tile-heading"><h2></h2><span class="tile-badge">Connecting</span></div>
       <button type="button" class="viewer camera-view" aria-expanded="false"><img hidden><span class="tile-placeholder">Connecting to camera…</span>
         <span class="expand-hint" aria-hidden="true">Expand</span></button>
-      <div class="tile-controls"><span class="tile-metrics">Overview</span><button type="button" class="camera-history">History</button></div>`;
+      <div class="tile-controls"><span class="tile-metrics" role="status" aria-live="polite">Overview</span><button type="button" class="camera-history">History</button></div>`;
     this.element.querySelector("h2").textContent = camera.name;
     const history = this.element.querySelector(".camera-history");
     history.setAttribute("aria-label", `View history for ${camera.name}`);
@@ -36,9 +38,12 @@ export class CameraTile {
       this.view.setAttribute("aria-expanded", String(expanded));
       this.view.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} ${camera.name}`);
       this.element.querySelector(".expand-hint").textContent = expanded ? "Collapse" : "Expand";
+      onExpansion(camera.id, expanded);
     }));
     this.url = null;
-    this.decoding = false;
+    this.onFrame = onFrame;
+    this.sources = new Map();
+    this.generations = new Map();
     this.hasFrame = false;
     this.disposed = false;
   }
@@ -48,37 +53,90 @@ export class CameraTile {
     this.display.setAspect(this.aspect);
   }
 
-  frame(jpeg) {
-    if (this.decoding || this.disposed) return; // Slow tiles skip frames instead of buffering.
-    this.decoding = true;
-    const previous = this.url;
-    const next = URL.createObjectURL(new Blob([jpeg], {type:"image/jpeg"}));
-    this.url = next;
-    this.image.onload = () => {
-      if (previous) URL.revokeObjectURL(previous);
-      this.decoding = false;
-      if (!this.disposed && !this.hasFrame) {
-        this.hasFrame = true;
-        this.image.hidden = false;
-        this.placeholder.hidden = true;
-      }
-    };
-    this.image.onerror = () => { if (previous) URL.revokeObjectURL(previous); this.decoding = false; };
-    this.image.src = next;
+  setQualityIntent(high) {
+    this.wantsHigh = high;
+    this.qualityReason = null;
+    this.cancelDecode();
+    this.paintQuality();
+  }
+
+  qualityUnavailable(reason) {
+    this.qualityReason = reason;
+    this.cancelDecode();
+    this.paintQuality();
+  }
+
+  cancelDecode() {
+    const pending = this.pending;
+    this.pending = null;
+    if (pending) { pending.image.removeAttribute("src"); URL.revokeObjectURL(pending.url); }
+  }
+
+  async frame(jpeg, header, isCurrent = () => true) {
+    if (this.disposed || !isCurrent() || (header.quality === "high" && (!this.wantsHigh || this.qualityReason))) return;
+    if (header.generation < (this.generations.get(header.quality) || 0)) return;
+    this.generations.set(header.quality, header.generation);
+    const previous = this.sources.get(header.quality);
+    if (previous && (header.generation < previous.generation ||
+        (header.generation === previous.generation && header.sequence <= previous.sequence && header.selection_revision <= previous.revision))) return;
+    const pending = this.pending;
+    if (pending && (pending.header.quality !== header.quality || pending.header.generation !== header.generation ||
+        pending.header.selection_revision !== header.selection_revision)) this.cancelDecode();
+    if (this.pending) return; // Slow tiles skip frames rather than queue them.
+    const image = new Image(), url = URL.createObjectURL(new Blob([jpeg], {type:"image/jpeg"}));
+    const job = {image, url, header}; this.pending = job;
+    image.src = url;
+    try {
+      await image.decode();
+      if (this.pending !== job || this.disposed || !isCurrent() ||
+          (header.quality === "high" && (!this.wantsHigh || this.qualityReason))) return;
+      const old = this.url;
+      const qualityChanged = this.rendered?.quality !== header.quality;
+      this.url = url;
+      this.rendered = {quality:header.quality, width:image.naturalWidth, height:image.naturalHeight};
+      this.sources.set(header.quality, {generation:header.generation, sequence:header.sequence, revision:header.selection_revision});
+      this.image.src = url;
+      this.image.hidden = false; this.placeholder.hidden = true; this.hasFrame = true;
+      this.element.dataset.quality = header.quality;
+      this.element.dataset.sourceGeneration = String(header.generation);
+      this.paintQuality();
+      if (qualityChanged) this.onFrame();
+      if (old) URL.revokeObjectURL(old);
+    } catch (_) {
+      // A superseded/corrupt JPEG must not replace the last painted picture.
+    } finally {
+      if (this.pending === job) this.pending = null;
+      if (this.url !== url) URL.revokeObjectURL(url);
+    }
+  }
+
+  paintQuality() {
+    const picture = this.rendered;
+    let label = picture?.quality === "high" ? "High quality" : "Overview";
+    if (this.wantsHigh && this.qualityReason) {
+      const reason = QUALITY_REASONS[this.qualityReason.code];
+      label += ` · High quality unavailable${reason ? ` (${reason})` : ""}`;
+    }
+    else if (this.wantsHigh && picture?.quality !== "high") label += " · Upgrading…";
+    else if (!this.wantsHigh && picture?.quality === "high") label += " · Returning to overview…";
+    const text = picture ? `${picture.width} × ${picture.height} · ${label}` : label;
+    if (this.metrics.textContent !== text) this.metrics.textContent = text;
+    this.metrics.title = this.qualityReason?.message || "";
   }
 
   paint(status) {
     this.element.dataset.state = status.state;
     this.badge.textContent = LABELS[status.state] || status.state;
-    this.metrics.textContent = status.width ? `${status.width} × ${status.height} · Overview` : "Overview";
+    this.paintQuality();
     this.placeholder.textContent = status.error || LABELS[status.state] || "Connecting…";
     this.element.title = status.error || "";
   }
 
-  pause() { this.paint({state:"stopped"}); }
+  pause() { this.cancelDecode(); this.sources.clear(); this.generations.clear(); this.paint({state:"stopped"}); }
 
   dispose() {
     this.disposed = true;
+    this.cancelDecode();
     this.expansion.dispose();
     this.display.dispose();
     this.image.removeAttribute("src");

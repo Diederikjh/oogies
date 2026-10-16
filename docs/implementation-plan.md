@@ -15,15 +15,16 @@ frame PNG downloads and ±10/30-second seeking are now implemented. See
 Milestone 1's seven-camera live checks pass; one live preview plus historical
 playback/control checks now coexist through one login. A fully fresh remote/LFS
 installation and full-grid historical coexistence remain unverified. Milestone 2's initial
-grid, sharing, cleanup and expansion pass; expansion currently keeps overview
-quality. Frontend main-stream switching and sustained recovery are later work.
+grid, sharing, cleanup and expansion pass. Expansion now requests a shared main
+stream with overview fallback; collapse releases that viewer's high request.
 The [high-quality live viewing plan](live-quality-plan.md) separates backend stream
 identity, admission and measurements from frontend expansion switching. Backend
 support is implemented with one shared high-quality source by default and
 overview fallback when either capacity budget is exhausted. Milestone 1 passed
 the backend/browser/native suites and a bounded device check with four overview
-streams, one high-quality stream and historical playback. It is paused for review
-before frontend work.
+streams, one high-quality stream and historical playback. Milestone 1 was
+committed as `482aa8d` before frontend switching. Milestone 2 now connects expansion
+to quality selection while retaining animation, scrolling and per-view cleanup.
 
 ## Primary use cases
 

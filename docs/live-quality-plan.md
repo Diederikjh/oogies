@@ -1,9 +1,10 @@
 # High-quality live viewing plan
 
 Proposed: 16 October 2026; approved plan committed as `efc4007`.
-Milestone 1's backend implementation is under review. The complete offline suite
-passed 94 backend and 73 browser/native cases. Device evidence is recorded in
-[live grid](live-grid.md); frontend switching remains milestone 2.
+Milestone 1's backend was reviewed and committed as `482aa8d` after passing
+94 backend and 73 browser/native cases. Milestone 2's frontend switching is now
+implemented; verification and device evidence are recorded in
+[live grid](live-grid.md) and [progress](../progress.md).
 
 ## Intended behavior
 

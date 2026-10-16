@@ -18,9 +18,9 @@ date cases also verify successful submission closes the picker and invalid
 dates keep the error visible without disturbing playback.
 Visibility inside native closed `<details>` uses Chromium's `checkVisibility()`;
 the installed Selenium version reports those unpainted descendants as visible.
-The latest complete local run passed 73 cases: 69 browser cases, three native
+The latest complete local run passed 84 cases: 80 browser cases, three native
 buffer regressions and one live-quality/frame-bounds native case, using the same
-command as GitHub Actions. The separate backend suite passed 94 cases.
+command as GitHub Actions. The separate backend suite passed 96 cases.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
 Clear marks, reduced motion and keyboard navigation to export jobs.
@@ -46,10 +46,19 @@ Live-quality API coverage opens two high-quality viewer leases for one camera
 while the ordinary grid remains at overview quality. The browser decodes the
 actual multiplexed JPEG feed and checks its larger raster and inverted fixture
 colors, one shared high source, capacity fallback for a different camera and
-independent release. This does not implement expansion switching. Host tests use
+independent release. Expansion cases now verify actual upgraded images and labels,
+moving overview while high frames are gated, collapse, refused/disabled/unsupported/
+offline inputs, decoder failures and stalls. Controlled delayed GET/PATCH replies
+and JPEG decode completion check revision/generation/lifecycle guards. A lost
+reply releases unconfirmed upgrades but preserves an acknowledged high source;
+shared-tab expiry keeps the remaining viewer moving. Mobile/keyboard/reduced-motion
+cases and existing animation/rapid-toggle checks exercise successful upgrades.
+Known refused cameras are not retried by another camera change. Host tests use
 the real worker/session logic with a substituted native command transport to
 cover admission races, delayed native stops, failed/stalled upgrades, generations,
 lease expiry, bounded diagnostics, and contention with history/export reservations.
+Scoped retry validation and a failure between browser polls exercise the optional
+`retry_high` API contract without changing the legacy full-selection behavior.
 The native bounds case checks SDK main/substream selection and supported YV12
 sizes, including accepting a common 4K raster and rejecting oversized/malformed
 frames. Real SDK/device compatibility is verified separately.

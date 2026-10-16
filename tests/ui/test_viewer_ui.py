@@ -22,6 +22,20 @@ from fixture import COLORS, SyntheticMedia, ViewerFixture
 class ViewerUITests(unittest.TestCase):
     WINDOW_SIZES = {"test_history_mobile_collapsed_events_can_play_seek_and_mark":(390,844)}
     OPTIONS = {
+        "test_picture_click_and_keyboard_toggle_expansion": {"limit":9},
+        "test_expansion_and_collapse_animate_and_keep_picture_in_focus": {"limit":9},
+        "test_rapid_reversal_and_reduced_motion_leave_stable_layout": {"limit":9},
+        "test_live_quality_disabled_unsupported_and_offline_are_explicit": {"limit":9,"high_limit":0},
+        "test_live_expansion_switches_actual_frames_and_ignores_old_poll": {"limit":9},
+        "test_live_quality_shared_tabs_and_expiry_keep_other_view_moving": {"limit":9},
+        "test_live_quality_refused_camera_is_not_retried_by_other_expansions": {"limit":9},
+        "test_live_quality_decoder_failure_and_stall_keep_overview_moving": {"limit":9},
+        "test_live_quality_collapse_ignores_delayed_upgrade_reply": {"limit":9},
+        "test_live_quality_old_decode_cannot_replace_new_generation": {"limit":9},
+        "test_live_quality_pending_reply_cannot_modify_replacement_lease": {"limit":9},
+        "test_live_quality_lost_reply_releases_unconfirmed_high_source": {"limit":9},
+        "test_live_quality_lost_reply_preserves_acknowledged_other_camera": {"limit":9},
+        "test_live_quality_mobile_keyboard_and_reduced_motion": {"limit":9},
         "test_live_quality_api_shares_main_stream_without_changing_overview": {"limit":9},
         "test_capacity_limit_keeps_admitted_cameras_live": {"limit": 2},
         "test_camera_start_failure_is_local_to_its_tile": {"failed_camera": "camera-2"},
@@ -159,7 +173,8 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(self.element(view).get_attribute("aria-expanded"), "true")
         self.element(view).send_keys(Keys.SPACE)
         self.assertEqual(self.element(view).get_attribute("aria-expanded"), "false")
-        self.assertTrue(all(count == 1 for count in self.fixture.worker.started.values()))
+        self.wait_quality(quality="overview"); self.wait_counts(1,8)
+        self.assertTrue(all(count == 1 for key,count in self.fixture.worker.started.items() if not key.endswith('-high')))
 
     def test_live_quality_api_shares_main_stream_without_changing_overview(self):
         self.wait_live()
@@ -212,6 +227,192 @@ class ViewerUITests(unittest.TestCase):
         finally:
             self.driver.execute_script("window.testQualityFeed?.close()")
             for identifier in views: api("/api/live/sessions/"+identifier,"DELETE")
+
+    def wait_quality(self, channel=1, quality="high"):
+        selector = self.tile(channel)
+        width = 704 if quality == "high" else 352
+        self.wait.until(lambda _:self.element(selector).get_attribute("data-quality") == quality and
+                        self.driver.execute_script("return document.querySelector(arguments[0]+' img').naturalWidth",selector)==width)
+
+    def picture_click(self, channel=1):
+        self.element(self.tile(channel)+" .camera-view").click()
+
+    def hold_quality_reply(self, lose=False):
+        self.driver.execute_script("""
+            const original=window.fetch;window.qualityHeld=false;
+            window.fetch=async (...args)=>{
+              const response=await original(...args);
+              if(!qualityHeld && args[1]?.method==='PATCH' && args[1].body?.includes('"cameras"')){
+                const body=await response.text();window.qualityHeld=true;
+                await new Promise(resolve=>window.releaseQuality=resolve);
+                if(arguments[0])throw new TypeError('Simulated lost quality reply');
+                return new Response(body,{status:response.status,headers:{'Content-Type':'application/json'}});
+              }
+              return response;
+            };
+        """,lose)
+
+    def test_live_expansion_switches_actual_frames_and_ignores_old_poll(self):
+        self.wait_live()
+        self.driver.execute_script("""
+            const original=window.fetch;window.oldQualityPollHeld=false;
+            window.fetch=async (...args)=>{
+              const response=await original(...args);
+              if(!oldQualityPollHeld && String(args[0]).includes('/api/live/sessions/') && args[1]?.method==='GET'){
+                const body=await response.text();window.oldQualityPollHeld=true;
+                await new Promise(resolve=>window.releaseOldQualityPoll=resolve);
+                return new Response(body,{status:response.status,headers:{'Content-Type':'application/json'}});
+              }return response;
+            };
+        """)
+        self.wait.until(lambda _:self.driver.execute_script("return window.oldQualityPollHeld"))
+        self.fixture.worker.high_gate.clear(); self.picture_click()
+        self.wait.until(lambda _:"Upgrading" in self.element(self.tile()+" .tile-metrics").text)
+        self.wait_quality(quality="overview")
+        before = self.pixels(); self.wait.until(lambda _:self.pixels()!=before)
+        self.fixture.worker.high_gate.set(); self.wait_quality()
+        self.assertIn("704 × 576 · High quality",self.element(self.tile()+" .tile-metrics").text)
+        self.assertIn("1 high quality",self.element("#view-note").text)
+        self.driver.execute_script("window.releaseOldQualityPoll()")
+        self.wait_quality(); self.wait_live()
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+        self.picture_click(); self.wait_quality(quality="overview"); self.wait_counts(1,8)
+        self.assertEqual(self.element("#view-note").text,"Video only · Overview quality")
+        self.assertTrue(all(count==1 for key,count in self.fixture.worker.started.items() if not key.endswith('-high')))
+
+    def test_live_quality_refused_camera_is_not_retried_by_other_expansions(self):
+        self.wait_live(); self.picture_click(); self.wait_quality()
+        self.picture_click(2)
+        self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile(2)+" .tile-metrics").text)
+        self.assertEqual(self.element(self.tile(2)+" .tile-metrics").get_attribute("role"),"status")
+        self.assertIn("capacity",self.element(self.tile(2)+" .tile-metrics").get_attribute("title"))
+        self.wait_quality(2,"overview"); self.picture_click(); self.wait_counts(1,8)
+        self.picture_click(3); self.wait_quality(3)
+        self.assertNotIn("camera-2-high",self.fixture.worker.started)
+        self.assertIn("High quality unavailable",self.element(self.tile(2)+" .tile-metrics").text)
+        self.picture_click(3); self.wait_counts(1,8)
+        self.picture_click(2); self.picture_click(2); self.wait_quality(2)
+        self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
+
+    def test_live_quality_decoder_failure_and_stall_keep_overview_moving(self):
+        self.wait_live(); self.fixture.worker.failed_camera="camera-1-high"
+        self.picture_click()
+        self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile()+" .tile-metrics").text)
+        self.wait_counts(1,8); self.wait_live()
+        self.assertIn("Simulated",self.element(self.tile()+" .tile-metrics").get_attribute("title"))
+        self.fixture.worker.failed_camera=None; self.picture_click(); self.picture_click(); self.wait_quality()
+        self.fixture.worker.set_state("camera-1-high","stale")
+        self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile()+" .tile-metrics").text)
+        self.wait_quality(quality="overview"); self.wait_counts(1,8); self.wait_live()
+        before=self.pixels(2); self.wait.until(lambda _:self.pixels(2)!=before)
+        self.assertEqual(self.element(self.tile()).get_attribute("data-state"),"live")
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],2)
+
+    def test_live_quality_disabled_unsupported_and_offline_are_explicit(self):
+        self.wait_live(); self.picture_click()
+        self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile()+" .tile-metrics").text)
+        self.fixture.sessions.high_limit=1
+        self.fixture.worker.cameras["camera-2"]["live_qualities"]=["overview"]
+        self.picture_click(2)
+        self.wait.until(lambda _:"unsupported" in self.element(self.tile(2)+" .tile-metrics").get_attribute("title"))
+        self.picture_click(9)
+        self.wait.until(lambda _:"offline" in self.element(self.tile(9)+" .tile-metrics").get_attribute("title"))
+        self.assertEqual(self.state(9),"offline"); self.wait_counts(1,8); self.wait_live()
+        self.assertFalse(any(key.endswith('-high') for key in self.fixture.worker.started))
+
+    def test_live_quality_collapse_ignores_delayed_upgrade_reply(self):
+        self.wait_live(); self.fixture.worker.high_gate.clear(); self.hold_quality_reply()
+        self.picture_click(); self.wait.until(lambda _:self.driver.execute_script("return window.qualityHeld"))
+        self.picture_click(); self.fixture.worker.high_gate.set()
+        self.wait.until(lambda _:self.fixture.worker.sources["camera-1-high"]["received"]>=3)
+        self.wait_quality(quality="overview")
+        self.assertNotIn("Upgrading",self.element(self.tile()+" .tile-metrics").text)
+        self.driver.execute_script("window.releaseQuality()")
+        self.wait_counts(1,8); self.wait_quality(quality="overview")
+        self.assertEqual(self.element(self.tile()+" .camera-view").get_attribute("aria-expanded"),"false")
+
+    def test_live_quality_old_decode_cannot_replace_new_generation(self):
+        self.wait_live()
+        self.driver.execute_script("""
+            const original=HTMLImageElement.prototype.decode;window.qualityDecodeHeld=false;window.revokedQualityUrls=[];
+            const revoke=URL.revokeObjectURL.bind(URL);URL.revokeObjectURL=url=>{revokedQualityUrls.push(url);revoke(url)};
+            HTMLImageElement.prototype.decode=function(){return original.call(this).then(()=>{
+              if(this.naturalWidth===704 && !qualityDecodeHeld){window.qualityDecodeHeld=true;window.heldQualityUrl=this.src;
+                return new Promise(resolve=>window.releaseQualityDecode=resolve)};
+            })};
+        """)
+        self.picture_click(); self.wait.until(lambda _:self.driver.execute_script("return window.qualityDecodeHeld"))
+        self.wait_quality(quality="overview"); self.picture_click(); self.wait_counts(1,8)
+        self.wait.until(lambda _:self.driver.execute_script("return revokedQualityUrls.includes(heldQualityUrl)"))
+        self.picture_click(); self.wait_quality()
+        self.assertEqual(self.element(self.tile()).get_attribute("data-source-generation"),"2")
+        self.driver.execute_script("window.releaseQualityDecode()")
+        self.wait_quality()
+        self.assertTrue(self.driver.execute_script("return document.querySelector(arguments[0]+' img').src!==heldQualityUrl",self.tile()))
+        self.assertEqual(self.element(self.tile()).get_attribute("data-source-generation"),"2")
+
+    def test_live_quality_pending_reply_cannot_modify_replacement_lease(self):
+        self.wait_live(); self.fixture.worker.high_gate.clear(); self.hold_quality_reply()
+        first=next(iter(self.fixture.sessions.sessions))
+        self.picture_click(); self.wait.until(lambda _:self.driver.execute_script("return window.qualityHeld"))
+        self.element("#stop").click(); self.wait_counts(0,0)
+        self.picture_click(); self.element("#start").click(); self.wait_live(); self.wait_counts(1,8)
+        second=next(iter(self.fixture.sessions.sessions)); self.assertNotEqual(first,second)
+        self.driver.execute_script("window.releaseQuality()"); self.fixture.worker.high_gate.set()
+        self.wait_live(); self.wait_quality(quality="overview"); self.wait_counts(1,8)
+        self.assertEqual(next(iter(self.fixture.sessions.sessions)),second)
+
+    def test_live_quality_lost_reply_releases_unconfirmed_high_source(self):
+        self.wait_live(); self.hold_quality_reply(lose=True); self.picture_click()
+        self.wait.until(lambda _:self.driver.execute_script("return window.qualityHeld"))
+        self.wait_quality(); self.driver.execute_script("window.releaseQuality()")
+        self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile()+" .tile-metrics").text)
+        self.wait_counts(1,8); self.wait_quality(quality="overview"); self.wait_live()
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+
+    def test_live_quality_lost_reply_preserves_acknowledged_other_camera(self):
+        self.wait_live()
+        self.driver.execute_script("""
+            const original=window.fetch;window.firstQualityAcknowledged=false;
+            window.fetch=async (...args)=>{
+              const response=await original(...args);
+              if(args[1]?.method==='PATCH' && args[1].body?.includes('"cameras"')){
+                const json=response.json.bind(response);
+                response.json=async()=>{const data=await json();window.firstQualityAcknowledged=true;return data};
+              }return response;
+            };
+        """)
+        self.picture_click(); self.wait_quality()
+        self.wait.until(lambda _:self.driver.execute_script("return window.firstQualityAcknowledged"))
+        self.hold_quality_reply(lose=True); self.picture_click(2)
+        self.wait.until(lambda _:self.driver.execute_script("return window.qualityHeld"))
+        self.driver.execute_script("window.releaseQuality()")
+        self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile(2)+" .tile-metrics").text)
+        self.wait.until(lambda _:not any(camera=="camera-2" and quality=="high" for session in self.fixture.sessions.sessions.values() for camera,quality in session["cameras"]))
+        self.wait_quality(); self.wait_counts(1,9); self.wait_live()
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+        self.assertEqual(self.fixture.worker.stopped["camera-1-high"],0)
+
+    def test_live_quality_mobile_keyboard_and_reduced_motion(self):
+        self.wait_live(); self.driver.set_window_size(390,844)
+        self.driver.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features":[{"name":"prefers-reduced-motion","value":"reduce"}]})
+        self.element(self.tile()+" .camera-view").send_keys(Keys.ENTER); self.wait_quality()
+        self.assertAlmostEqual(self.ratio(self.tile()+" img"),16/9,delta=.01)
+        self.assertTrue(self.driver.execute_script("return document.documentElement.scrollWidth<=innerWidth"))
+        self.assertEqual(self.driver.execute_script("return document.getAnimations().length"),0)
+        self.element(self.tile()+" .camera-view").send_keys(Keys.SPACE); self.wait_quality(quality="overview"); self.wait_counts(1,8)
+
+    def test_live_quality_shared_tabs_and_expiry_keep_other_view_moving(self):
+        self.wait_live(); self.picture_click(); self.wait_quality(); first=self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument",{"source":"""
+            const interval=window.setInterval.bind(window);
+            window.setInterval=(fn,delay,...args)=>delay>=3000?0:interval(fn,delay,...args);
+        """})
+        self.driver.get(self.fixture.url); self.wait_live(); self.picture_click(); self.wait_quality(); self.wait_counts(2,9)
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+        self.driver.switch_to.window(first); self.wait_counts(1,9); self.wait_quality()
+        before=self.pixels(); self.wait.until(lambda _:self.pixels()!=before)
+        self.picture_click(); self.wait_quality(quality="overview"); self.wait_counts(1,8)
 
     def test_expansion_and_collapse_animate_and_keep_picture_in_focus(self):
         self.wait_live()
@@ -325,6 +526,7 @@ class ViewerUITests(unittest.TestCase):
             },60);},60);
         """, view)
         self.assertEqual(result, {"expanded":"true","animations":0})
+        self.wait_quality(6)
         self.assertAlmostEqual(self.ratio(self.tile(6)+" img"),16/9,delta=.01)
         self.driver.execute_cdp_cmd("Emulation.setEmulatedMedia", {"features":[{"name":"prefers-reduced-motion","value":"reduce"}]})
         result = self.driver.execute_script("""
@@ -332,7 +534,8 @@ class ViewerUITests(unittest.TestCase):
             return {expanded:view.getAttribute('aria-expanded'),animations:document.getAnimations().length};
         """, view)
         self.assertEqual(result, {"expanded":"false","animations":0})
-        self.assertTrue(all(count==1 for count in self.fixture.worker.started.values()))
+        self.wait_quality(6,"overview"); self.wait_counts(1,8)
+        self.assertTrue(all(count==1 for key,count in self.fixture.worker.started.items() if not key.endswith('-high')))
 
     def test_settings_are_per_camera_persisted_and_keyboard_accessible(self):
         self.wait_live()

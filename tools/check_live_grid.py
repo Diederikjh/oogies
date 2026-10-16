@@ -61,8 +61,24 @@ def main():
         driver.save_screenshot(str(output / "grid-desktop.png"))
         driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .camera-view').click()
         wait.until(lambda _: driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"]').get_attribute("class").endswith("is-expanded"))
-        assert backend()["active_live_sources"] == len(online)
+        can_upgrade = results["one_view"]["high_quality_limit"] > 0 and len(online) < results["one_view"]["source_limit"]
+        def quality(value):
+            return driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"]').get_attribute("data-quality") == value
+        if can_upgrade:
+            wait.until(lambda _: quality("high"))
+            results["expanded_quality"] = next(pic for pic in pictures() if pic["id"]=="camera-1")
+            assert backend()["active_live_sources"] == len(online)+1
+            assert backend()["sources_by_quality"]["high"] == 1
+            assert "1 high quality" in driver.find_element(By.ID,"view-note").text
+            assert abs(results["expanded_quality"]["ratio"]-16/9)<.01
+            before = hashlib.sha256(pixels().encode()).hexdigest(); time.sleep(1)
+            assert hashlib.sha256(pixels().encode()).hexdigest()!=before
+        else:
+            wait.until(lambda _: "High quality unavailable" in driver.find_element(By.CSS_SELECTOR,'.camera-tile[data-camera-id="camera-1"] .tile-metrics').text)
+            assert backend()["active_live_sources"] == len(online)
+        driver.save_screenshot(str(output / "grid-expanded.png"))
         driver.find_element(By.CSS_SELECTOR, '.camera-tile[data-camera-id="camera-1"] .camera-view').click()
+        wait.until(lambda _: quality("overview") and backend()["sources_by_quality"]["high"]==0)
         driver.set_window_size(390, 844)
         wait.until(lambda _: all(pic["fits"] for pic in pictures() if pic["displayed"]))
         driver.save_screenshot(str(output / "grid-mobile.png"))
@@ -72,12 +88,29 @@ def main():
         results["two_views"] = backend()
         assert results["two_views"]["active_live_sources"] == len(online)
         assert results["two_views"]["sdk_login_calls"] == results["one_view"]["sdk_login_calls"] == 1
+        second_tab = driver.current_window_handle
+        if can_upgrade:
+            driver.find_element(By.CSS_SELECTOR,'.camera-tile[data-camera-id="camera-1"] .camera-view').click()
+            wait.until(lambda _:quality("high"))
+            driver.switch_to.window(first_tab)
+            driver.find_element(By.CSS_SELECTOR,'.camera-tile[data-camera-id="camera-1"] .camera-view').click()
+            wait.until(lambda _:quality("high"))
+            results["two_high_views"] = backend()
+            assert results["two_high_views"]["active_live_sources"] == len(online)+1
+            assert results["two_high_views"]["sources_by_quality"]["high"] == 1
+            driver.switch_to.window(second_tab)
         driver.find_element(By.ID, "stop").click()
         wait.until(lambda _: backend()["viewer_sessions"] == 1)
-        assert backend()["active_live_sources"] == len(online)
+        assert backend()["active_live_sources"] == len(online)+int(can_upgrade)
         driver.close(); driver.switch_to.window(first_tab)
         wait.until(lambda _: all(pic["state"] == "live" for pic in pictures() if pic["id"] in online))
         results["closing_one_view_preserves_other"] = True
+        if can_upgrade:
+            wait.until(lambda _:quality("high"))
+            before = hashlib.sha256(pixels().encode()).hexdigest(); time.sleep(1)
+            assert hashlib.sha256(pixels().encode()).hexdigest()!=before
+            driver.find_element(By.CSS_SELECTOR,'.camera-tile[data-camera-id="camera-1"] .camera-view').click()
+            wait.until(lambda _:quality("overview") and backend()["sources_by_quality"]["high"]==0)
         driver.find_element(By.ID, "history-tab").click()
         wait.until(lambda _: backend()["active_live_sources"] == 0)
         wait.until(lambda _: all(driver.find_element(By.ID, "history-" + name).get_attribute("data-state")

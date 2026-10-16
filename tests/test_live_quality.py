@@ -156,6 +156,28 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(self.camera(offline)["state"],"offline")
         self.assertFalse(any(" high " in command for command in self.worker.commands))
 
+    def test_scoped_retry_does_not_restart_an_unobserved_failure(self):
+        view = self.create(); self.worker.frame(quality="high")
+        self.worker.sources["camera-1-high"].update(state="error",error="Decoder failed between polls")
+        update = selection(("camera-1","high"),("camera-2","high"))
+        self.live.patch(view["id"],{**update,"retry_high":["camera-2"]})
+        self.assertEqual(self.camera(view)["upgrade_state"],"error")
+        self.assertEqual(self.worker.commands.count("start 1 high 1"),1)
+        self.assertNotIn("start 1 high 2",self.worker.commands)
+        self.assertIn("camera-2-high",self.live.wanted)
+        self.live.patch(view["id"],{**selection(("camera-1","high")),"retry_high":["camera-1"]})
+        self.assertIn("start 1 high 2",self.worker.commands)
+
+    def test_invalid_scoped_retry_does_not_mutate_selection(self):
+        view = self.create(quality="overview")
+        bodies = [{"retry_high":[]}]+[{**selection(("camera-1","high")),"retry_high":value}
+                  for value in (None,"camera-1",["camera-2"],["camera-1","camera-1"],[{}])]
+        for body in bodies:
+            with self.subTest(body=body):
+                with self.assertRaises(SessionError): self.live.patch(view["id"],body)
+                self.assertEqual(self.live.get(view["id"])["selection_revision"],view["selection_revision"])
+                self.assertEqual(self.live.wanted,{"camera-1"})
+
     def test_export_and_high_quality_share_budget_in_both_directions(self):
         class Capture:
             entered = threading.Event()

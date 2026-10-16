@@ -6,7 +6,45 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
-## High-quality live backend: milestone 1 review
+## Expansion-driven quality: milestone 2
+
+Milestone 1 was committed as `482aa8d` before frontend work. Expanding now requests
+high quality through the existing lease and collapsing requests overview. The
+grid keeps its current picture until a selected rendition is decoded. Quality
+labels and the footer describe painted frames, with upgrading/fallback feedback,
+short reasons and tooltip details. Existing aspect correction, animation,
+keyboard access, reduced motion and manual-scroll cancellation remain in place.
+
+A separate frontend quality coordinator serializes full selections, coalesces
+rapid changes and guards lease/revision/intent lifetimes. Per-tile offscreen
+JPEG decoding rejects superseded generations and revokes obsolete Blob URLs.
+Slow tiles skip frames instead of buffering. Refused/failed preferences remain
+local until an explicit retry. Lost responses trigger one cleanup selection for
+unconfirmed upgrades while retaining acknowledged high requests.
+
+An optional validated `retry_high` list scopes retries to explicitly selected
+cameras, preserving legacy API behavior when omitted. This prevents a failed
+stream between polls from being retried by another camera's selection change.
+Two backend regressions cover that race and invalid-request atomicity. All 96
+backend tests passed. Focused browser cases passed for actual larger images,
+sharing/expiry, failure/stall/limit/unsupported/offline feedback, delayed replies,
+late JPEG decoding, replacement leases, ambiguous responses and preserving an
+acknowledged high source. The complete offline browser/native suite passed all
+84 cases (80 browser and four native). The existing CI command discovers all
+new cases. Publication and documentation-link checks passed.
+
+A Docker Chromium check against the real running service passed with four
+reported online cameras. Expansion painted the 960×1088 main stream, kept 16:9
+display proportions and showed the high-quality footer/label. Collapse returned
+to overview. Two browser tabs shared four overview sources plus one high source
+through one SDK login; pausing/closing one preserved moving high video in the
+other. Final live/view/occupied-slot counts were zero, with no browser errors.
+The expanded screenshot was visually reviewed. Private evidence is under
+`.local/grid-quality-ui-check/`, including `grid-check.json` and screenshots.
+The service remains running at `http://localhost:8088/`; refresh an existing tab
+to load the new frontend. Milestone 2 was reviewed and approved for commit.
+
+## High-quality live backend: milestone 1
 
 The approved plan was committed as `efc4007` before implementation. Backend live
 selections now accept overview and high quality, sharing separate native sources
@@ -40,9 +78,10 @@ these are short operating samples, not a maximum-capacity or sustained-use claim
 Independent high-view release and final zero-source cleanup passed. Private
 evidence is in `.local/live-quality-check/quality-check/quality-check.json`.
 
-The service was relaunched with the updated backend. Frontend expansion still
-uses overview; automatic switching is milestone 2. Implementation is left
-uncommitted for the requested milestone review. Keep the high-quality cap at one.
+The service was relaunched with the updated backend. At that milestone,
+frontend expansion still used overview. The owner approved the review and
+committed milestone 1 as `482aa8d` before milestone 2. Keep the high-quality cap
+at one.
 
 ## Recent history range boundary in CI
 

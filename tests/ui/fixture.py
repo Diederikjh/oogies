@@ -82,6 +82,7 @@ class FakeRecorderWorker(GridWorker):
         self.timeline_gate = threading.Event(); self.timeline_gate.set()
         self.playback_commands = []
         self.rate_failure = False
+        self.high_gate = threading.Event(); self.high_gate.set()
         self.export_commands = []; self.export_stops = {}; self.export_gate = threading.Event(); self.export_gate.set()
         self.discovery_gate = threading.Event()
         if not delayed:
@@ -220,6 +221,7 @@ class FakeRecorderWorker(GridWorker):
                         continue
                     source["sequence"] += 1
                     camera, quality = source_identity(key)
+                    if quality == "high" and not self.high_gate.is_set(): continue
                     frames = self.media.high_frames if quality == "high" else self.media.frames
                     source.update(state="live", frame=frames[camera][source["sequence"] % 2],
                         width=704 if quality == "high" else 352, height=576 if quality == "high" else 288,
@@ -251,9 +253,9 @@ class FakeRecorderWorker(GridWorker):
 
 
 class ViewerFixture:
-    def __init__(self, media, *, limit=8, lease=10, recording=True, playback_limit=1, **worker_options):
+    def __init__(self, media, *, limit=8, lease=10, recording=True, playback_limit=1, high_limit=1, **worker_options):
         self.worker = FakeRecorderWorker(media, **worker_options)
-        self.sessions = LiveSessions(self.worker, limit=limit, lease_seconds=lease)
+        self.sessions = LiveSessions(self.worker, limit=limit, lease_seconds=lease, high_limit=high_limit)
         self.server = create_server(self.worker, self.sessions, address=("127.0.0.1", 0), web="/web",
             recording=media.recording if recording else media.directory / "missing.mp4",
             playback=PlaybackSessions(self.worker, self.sessions, limit=playback_limit, lease_seconds=lease))

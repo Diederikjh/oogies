@@ -120,8 +120,8 @@ The same idempotency key and selection reuses an active view; conflicting select
 returns 409. A refreshed or copied tab creates its own document lease and shares
 existing sources. Eight viewer leases and one feed per lease are allowed.
 
-Expand currently changes layout only and keeps overview quality. The backend
-now accepts `quality: "high"` in POST/PATCH selections. Sources are shared per
+Expansion now requests high quality; collapse requests overview. The backend
+accepts `quality: "high"` in POST/PATCH selections. Sources are shared per
 camera and quality; a high request retains an overview fallback and uses an
 extra slot under both the high-quality and total source budgets.
 
@@ -142,6 +142,16 @@ work. A stalled high stream falls back rather than repeatedly opening previews.
 `max_high_quality_sources` defaults to one; zero disables admission. The total
 `max_live_sources` budget also includes history/export reservations and live stops
 awaiting native acknowledgement.
+
+PATCH optionally accepts `retry_high: ["camera-1"]` alongside the complete
+`cameras` selection. Each entry must be distinct and selected at high quality.
+When supplied, failed/refused high requests already in the selection are retried
+only for those IDs; an empty list preserves all such outcomes. New high selections
+still request admission. Omitting the field keeps the original retry behavior.
+Renewal remains `{}`; `retry_high` without `cameras` is rejected.
+The frontend uses this option so a failure between polls cannot be retried by
+an unrelated camera change. It also remembers refused preferences locally and
+requests overview for them in later selections until the user explicitly retries.
 
 `/api/status` adds `high_quality_limit`, requested/starting/active counts,
 `sources_by_quality` (including stopping sources), `reserved_sources`,

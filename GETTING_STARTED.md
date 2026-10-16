@@ -59,15 +59,20 @@ while the grid is active and return automatically when they recover.
 Click a camera picture to expand it; click again to collapse. Enter and Space
 work too. Expand/collapse animates smoothly and scrolls the picture into view;
 manual scrolling immediately takes control. Reduced-motion preferences are
-respected. Expansion uses the same overview stream. Change picture proportions
+respected. Expansion requests high quality and keeps overview video moving until
+the upgraded picture is ready. Collapsing returns to overview. If high quality is
+unavailable, the enlarged picture keeps overview quality and shows a short reason
+in its quality label, with details in a tooltip; collapse and expand again to retry.
+Change picture proportions
 under **Settings → Picture proportions**; your browser remembers each camera’s
 choice, including that camera's History playback.
 
-The backend also accepts high-quality live requests through the API; automatic
-upgrading on expansion is the next milestone. Optional
+Optional
 `max_high_quality_sources` in `.local/nvr-config.json` defaults to one shared
 high-quality source; zero disables it. Each high source needs an extra slot in
-the total `max_live_sources` budget. See the [quality plan](docs/live-quality-plan.md).
+the total `max_live_sources` budget. Viewers expanding the same camera share that
+source; another camera can stay at overview when capacity is occupied. See
+[live quality](docs/live-quality-plan.md).
 
 Use a camera's **History** button to open its timeline, or open the **History**
 tab to select a camera and browse the last three hours. You can choose

@@ -15,16 +15,20 @@ hide or change a camera's default display proportions.
 
 Each tile has independent live/stale/offline/error/capacity state. Click its
 picture to expand/collapse; the picture is a button supporting Enter and Space,
-with an accessible action label and expansion state. Expansion keeps the overview
-substream and creates no extra NVR connection. Expand/collapse animates the same
+with an accessible action label and expansion state. Expansion requests a shared
+high-quality main stream, retaining overview fallback; collapse releases only
+that viewer's high request. A high source uses one extra recorder stream slot.
+Other viewers expanding that same camera reuse it. If capacity/support/decoding
+prevents upgrading, overview remains visible with explicit quality feedback and
+the reason in a tooltip. Collapse and expand to retry. Expand/collapse animates the same
 tile over 360 ms while preserving picture proportions; the page follows it into
 view. Wheel, touch, keyboard or scrollbar input immediately cancels automatic
 scrolling while the size transition finishes. Rapid toggles continue from the
 current rectangle, and reduced-motion preferences use an immediate transition.
 Aspect selectors are under
 Settings → Picture proportions, with one saved browser preference per camera
-shared by its live and recorded views. Backend main-stream support is implemented;
-automatic frontend switching remains the next milestone. Camera 1's
+shared by its live and recorded views. Automatic quality switching leaves the
+current picture visible until the selected rendition has decoded. Camera 1's
 16:9 setting matches the owner's Hik-Connect screenshot; other cameras can use
 4:3 or Original. Browsers scale the original JPEGs without backend upscaling.
 
@@ -34,9 +38,9 @@ every 30 seconds cleans up killed/disconnected tabs. The last subscriber leaving
 stops that source's preview/decoder. The backend retains its one recorder login
 until service shutdown, avoiding repeated authentication when views return.
 
-The saved historical clip remains available. Switching to it releases that
-page's live subscriptions. Timeline browsing and arbitrary historical playback
-remain later milestones.
+History provides recording/motion timelines and interactive recorded playback.
+Switching to it releases that page's live subscriptions, including high quality,
+while other viewers continue independently.
 
 ## Backend and SDK boundaries
 
@@ -196,9 +200,8 @@ Private evidence is under `.local/grid-check/`: `capacity.json`,
 `resources.json`, browser screenshots and `browser/grid-check.json`. The
 browser reproduction tool is [check_live_grid.py](../tools/check_live_grid.py).
 Older one-camera browser/aspect tools document the previous frontend and are
-not the grid acceptance test. Long-running failure recovery, main-stream
-enlargement, rediscovery of changed configuration and historical timelines
-remain future work.
+not the grid acceptance test. Long-running failure recovery and rediscovery of
+changed configuration remain future work.
 
 A real unrenewed lease expired after 90 seconds while a separate lease, renewed
 every 25 seconds, kept its camera live. Only the abandoned source stopped; the
@@ -207,8 +210,9 @@ remaining view retained the same recorder login. Evidence: private
 
 ## High-quality backend verification — 16 October 2026
 
-The approved plan is committed as `efc4007`; milestone 1 is implemented and paused
-for review. Frontend expansion continues to request overview. All 94 backend
+The approved plan is committed as `efc4007`; milestone 1 was reviewed and committed
+as `482aa8d` before frontend work. The following figures record its backend-only
+check, when expansion still requested overview. All 94 backend
 tests and 73 offline browser/native tests passed; C++ compilation and SDK/decoder
 initialization passed without network access or credentials. The current SDK's
 bundled `incEn/HCNetSDK.h` documents `NET_DVR_PREVIEWINFO.dwStreamType` as zero
@@ -256,6 +260,46 @@ No settings or credentials are modified. Outputs include private camera frames
 and logs, so bind `/output` beneath ignored `.local/` and keep it private.
 Evidence for this run is under
 `.local/live-quality-check/quality-check/quality-check.json`.
+
+## Frontend quality switching
+
+[live-quality.js](../web/live/live-quality.js) coordinates desired qualities for
+one document's lease. It serializes full selections and coalesces rapid changes
+to the latest intent. Failed/refused preferences remain local until a deliberate
+collapse/expand retry. Optional PATCH `retry_high` IDs prevent unrelated changes
+from retrying failures the browser has not observed yet. Renewal keeps selection
+unchanged. A lost reply triggers one bounded cleanup selection, releasing only
+unconfirmed upgrades while preserving previously acknowledged high requests.
+
+Frames carry quality, generation and selection revision. The coordinator rejects
+obsolete revisions/leases; the tile rejects obsolete generations. Tiles decode
+JPEGs offscreen before replacing the visible image and recheck intent after
+decoding. Superseded loads revoke their Blob URLs and cannot replace a newer
+picture. Slow tiles still skip frames instead of queuing. Existing browser picture
+fitting remains responsible for aspect correction; no backend resizing or extra
+encoding was added.
+
+The quality label describes the painted image and reports Upgrading, returning
+to overview or a short unavailability reason. Tooltip text retains the full
+reason. Labels use polite status announcements and update only when their text
+changes. The footer counts painted high-quality views. Animation, keyboard
+activation, manual-scroll cancellation and reduced-motion behavior are retained.
+
+Pause, navigation, close and lease expiry release this viewer's requests. Another
+viewer of the same high source continues independently. Returning to Live or
+resuming preserves expanded tiles and requests their preferred quality in the
+new lease. The existing device reproduction tool now verifies expansion quality,
+collapse, two high viewers sharing one source and independent release, retaining
+private screenshots and source counts.
+
+On 16 October, the real Chromium check passed with four reported online inputs.
+Expansion displayed Camera 1's 960×1088 main stream at a measured 1.778 display
+ratio; the expanded screenshot was visually reviewed. Two high tabs shared five
+live sources (four overview plus one high) through one SDK login. Pausing/closing
+one kept the other moving, and collapse returned to overview. Final live/view/
+occupied-slot counts were zero with no browser errors. Evidence is private under
+`.local/grid-quality-ui-check/`. The complete offline suite passed 84 cases
+(80 browser and four native), and the backend suite passed 96.
 
 ## Offline display-control check
 
