@@ -142,7 +142,7 @@ Denied upgrades are not queued. After failure/refusal, an explicit selection
 PATCH requesting high retries admission; polling and renewal do not. Existing
 admissions retain their slots and upgrades do not evict overview/history/export
 work. A stalled high stream falls back rather than repeatedly opening previews.
-`max_high_quality_sources` defaults to one; zero disables admission. The total
+`max_high_quality_sources` defaults to two; zero disables admission. The total
 `max_live_sources` budget also includes history/export reservations and live stops
 awaiting native acknowledgement.
 

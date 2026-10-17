@@ -10,7 +10,8 @@ is implemented with offline recovery checks and a successful 302.6-second
 real-browser workload check, committed as `a05a2dc`. A subsequent bounded
 experiment passed with two concurrent high-quality sources and History;
 [measurements and scope](live-grid.md#two-main-stream-capacity-experiment) are
-recorded separately. The original operating limit of one was restored.
+recorded separately. The experiment restored the original operating limit of one; the subsequent
+approved rollout raises the configured limit and project default to two.
 
 ## Intended behavior
 
@@ -19,8 +20,9 @@ requests its main stream; the enlarged picture stays usable at overview quality
 until a fresh high-quality frame arrives. Collapsing releases that viewer's
 high-quality request. Other viewers and cameras continue independently.
 
-Start with one distinct high-quality source across the backend, configurable
-after measurement. Several viewers expanding the same camera share that source
+The initial limit was one distinct high-quality source across the backend.
+After the two-source experiment, the default and owner configuration allow two;
+the limit remains configurable. Several viewers expanding the same camera share that source
 and count as one. Expanding different cameras competes for the available slots;
 existing admissions retain their slots. Keep the existing ability to expand
 multiple tiles; an expanded tile can remain at overview quality.

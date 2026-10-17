@@ -364,14 +364,14 @@ class QualityTests(unittest.TestCase):
     def test_config_validation_and_defaults(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/"config.json"
-            for value in (None, 0, 1, 16, True, -1, 17, "1"):
+            for value in (None, 0, 1, 2, 16, True, -1, 17, "1"):
                 data = {"host":"192.0.2.10"}
                 if value is not None: data["max_high_quality_sources"] = value
                 path.write_text(json.dumps(data))
                 if value is not None and (type(value) is not int or not 0 <= value <= 16):
                     with self.assertRaises(ValueError): load_config(path)
                 else:
-                    self.assertEqual(load_config(path)["max_high_quality_sources"],1 if value is None else value)
+                    self.assertEqual(load_config(path)["max_high_quality_sources"],2 if value is None else value)
 
     def test_http_quality_status_and_feed_contract(self):
         server = create_server(self.worker,self.live,address=("127.0.0.1",0),web=ROOT/"web",recording=Path("/missing"))

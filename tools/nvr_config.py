@@ -36,7 +36,7 @@ def load_config(path=None):
     if not isinstance(value, dict) or set(value) - allowed:
         raise ValueError("invalid or unknown recorder configuration fields")
     config = dict(sdk_port=8000, timezone="Africa/Johannesburg", sdk_profile=DEFAULT_SDK_ID,
-                  max_live_sources=8, max_high_quality_sources=1, lease_seconds=90, camera_overrides={})
+                  max_live_sources=8, max_high_quality_sources=2, lease_seconds=90, camera_overrides={})
     config.update(value)
     config["exports"] = export_limits(config.get("exports"))
     if not isinstance(config.get("host"), str):

@@ -319,7 +319,7 @@ Create `.local/nvr-config.json` using the owner's actual IP address and SDK port
   "timezone": "Africa/Johannesburg",
   "sdk_profile": "hcnet-6.1.9.48-linux64",
   "max_live_sources": 8,
-  "max_high_quality_sources": 1,
+  "max_high_quality_sources": 2,
   "lease_seconds": 90,
   "camera_overrides": {}
 }
@@ -345,7 +345,7 @@ can be 10-300; default 90 with frontend renewal every 30 seconds. The timezone
 sets the recorder's clock context for historical range conversion;
 live OSD timestamps are unchanged.
 
-`max_high_quality_sources` is an optional integer from 0-16, default one; zero
+`max_high_quality_sources` is an optional integer from 0-16, default two; zero
 disables high-quality live sources. It limits distinct camera main streams,
 shared across viewers, within the existing total `max_live_sources` budget.
 An upgrade retains its overview fallback, so it consumes one additional slot.
@@ -353,6 +353,12 @@ Historical playback and exports also use the total budget; closing native live
 sources count until their stop acknowledgement arrives. If there is no room,
 the API returns overview quality with an explicit refusal reason. Refused/failed
 upgrades are not queued or automatically retried. Restart after changing limits.
+Allow one overview slot per online camera plus one per distinct high-quality
+camera and one per active History/export. Seven online cameras with two main
+streams and one History or export need `max_live_sources: 10`; changing only
+`max_high_quality_sources` does not enlarge the total budget. A refusal's
+`source_limit` reason identifies this total-budget constraint, while
+`high_quality_limit` identifies the separate main-stream cap.
 Frontend expansion requests high quality and collapsing releases that viewer's
 high request. The picture stays at overview until a decoded high frame is ready.
 Per-tile quality text and the footer reflect painted frames; “High quality

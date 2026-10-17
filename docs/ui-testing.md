@@ -33,6 +33,12 @@ sources, sharing across tabs and independent release; its focused run passed.
 The expanded suite has 91 browser/native cases and has not been rerun in full.
 The complete backend/monitor suite now passes 100 cases, including two-source
 admission and Docker monitor startup/exit races.
+An additional case reproduces the seven-overview/eight-total-source constraint
+with a high-quality cap of two, checks the distinct total-budget refusal label,
+and confirms that an explicit retry admits both mains after capacity increases.
+It passed alongside the shared-two-main and high-quality-cap refusal cases.
+The expanded browser/native suite now contains 92 cases; it has not been rerun
+in full since adding these capacity cases.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
 Clear marks, reduced motion and keyboard navigation to export jobs.

@@ -4,7 +4,7 @@ import {TileExpansion} from "/live/tile-expansion.js";
 
 const LABELS = {starting:"Connecting", live:"Live", stale:"Video delayed", offline:"Offline",
   error:"Unavailable", capacity_limited:"Stream limit", stopping:"Stopping", stopped:"Stopped"};
-const QUALITY_REASONS = {high_quality_limit:"stream limit", source_limit:"stream limit", unsupported:"unsupported",
+const QUALITY_REASONS = {high_quality_limit:"high-quality limit", source_limit:"total stream limit", unsupported:"unsupported",
   offline:"camera offline", stream_failed:"stream failed", quality_request_failed:"request failed"};
 
 export class CameraTile {

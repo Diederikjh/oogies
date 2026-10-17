@@ -102,10 +102,17 @@ that recovery problem. Hikvision documents the signal/hardware flags in
 `quality: "overview"` and `quality: "high"` are supported by the backend. High
 requests retain an overview fallback, share a separate source with other high
 viewers of that camera, and promote only after a fresh main-stream frame.
-The configurable high-quality limit defaults to one; zero disables it. Limits,
+The configurable high-quality limit defaults to two; zero disables it. Limits,
 unsupported streams, failed decoding or stale high frames preserve overview
 with an explicit quality reason. Refused/failed requests require an explicit
 selection PATCH to retry; they do not wait in an upgrade queue.
+The UI distinguishes "total stream limit" (`source_limit`) from "high-quality
+limit" (`high_quality_limit`); the tooltip explains the relevant configured cap.
+The total budget must cover all online overview streams plus the additional
+main streams and History/export reservations. Seven overview cameras with two
+main streams require nine slots, or ten with one History/export reservation.
+The original owner's local budget is now ten, with the high-quality cap two;
+the portable total-budget default remains eight.
 Requests beyond the configured source
 budget retain working tiles and label excess cameras capacity-limited. There
 are at most eight viewer leases and one feed per lease. The configured source
@@ -160,7 +167,7 @@ Example schema:
   "timezone": "Africa/Johannesburg",
   "sdk_profile": "hcnet-6.1.9.48-linux64",
   "max_live_sources": 8,
-  "max_high_quality_sources": 1,
+  "max_high_quality_sources": 2,
   "lease_seconds": 90,
   "camera_overrides": {
     "1": {"name": "Driveway", "aspect_ratio": "16:9"},
@@ -423,7 +430,8 @@ creation race is covered by host monitor regressions: service statistics remain
 available while Docker has not yet created, or has just removed, the browser.
 The offline worker/browser seam separately verifies two admitted main streams,
 two viewers sharing them, independent release and refusal of a third main until
-an explicit new request. Production defaults remain one main/eight total sources.
+an explicit new request. At the time of this experiment, production defaults were one main/eight total
+sources; the subsequent rollout raises the high-quality default to two.
 
 The 16 October 2026 experiment passed with camera-1 and camera-6, each at native
 960x1088. All four online overview streams remained running. Mean CPU below is

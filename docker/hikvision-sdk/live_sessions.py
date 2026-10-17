@@ -138,7 +138,9 @@ class LiveSessions:
                     upgrade["state"] = "pending"
                 elif high_used >= self.high_limit or self.used_sources() >= self.limit or key in self.occupied_sources():
                     self._upgrade_result(session, camera, "capacity_limited", dict(code="high_quality_limit" if high_used >= self.high_limit else "source_limit",
-                        message="High-quality capacity is unavailable; showing overview."))
+                        message=(f"High-quality stream limit ({self.high_limit}) reached; showing overview."
+                                 if high_used >= self.high_limit else
+                                 f"Total stream budget ({self.limit}) is occupied by live video, History, exports or streams closing; showing overview.")))
                 else:
                     self.worker.start_source(key); self.wanted.add(key)
                     upgrade["state"] = "pending"

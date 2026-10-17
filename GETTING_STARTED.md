@@ -71,11 +71,15 @@ under **Settings â†’ Picture proportions**; your browser remembers each cameraâ€
 choice, including that camera's History playback.
 
 Optional
-`max_high_quality_sources` in `.local/nvr-config.json` defaults to one shared
-high-quality source; zero disables it. Each high source needs an extra slot in
+`max_high_quality_sources` in `.local/nvr-config.json` defaults to two shared
+high-quality sources; zero disables it. Each high source needs an extra slot in
 the total `max_live_sources` budget. Viewers expanding the same camera share that
 source; another camera can stay at overview when capacity is occupied. See
 [live quality](docs/live-quality-plan.md).
+Size the total budget for the online overview cameras plus the desired high-quality
+streams and History/export slots. For example, seven overview cameras, two high-quality
+streams and one History or export need `max_live_sources: 10`. The default total
+budget is eight. Restart the service after changing these settings.
 
 Use a camera's **History** button to open its timeline, or open the **History**
 tab to select a camera and browse the last three hours. You can choose

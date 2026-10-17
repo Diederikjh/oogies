@@ -44,6 +44,7 @@ class ViewerUITests(unittest.TestCase):
         "test_history_media_reconnect_preserves_high_live_view_and_pause": {"limit":10},
         "test_live_quality_api_shares_main_stream_without_changing_overview": {"limit":9},
         "test_two_distinct_high_streams_share_and_release_independently": {"limit":10,"high_limit":2},
+        "test_two_high_streams_need_total_budget_for_seven_overviews": {"limit":8,"high_limit":2,"offline_camera":"camera-3"},
         "test_capacity_limit_keeps_admitted_cameras_live": {"limit": 2},
         "test_camera_start_failure_is_local_to_its_tile": {"failed_camera": "camera-2"},
         "test_recorder_rejection_has_no_automatic_retries": {"failure": True},
@@ -304,7 +305,8 @@ class ViewerUITests(unittest.TestCase):
         click(2)
         self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile(2)+" .tile-metrics").text)
         self.assertEqual(self.element(self.tile(2)+" .tile-metrics").get_attribute("role"),"status")
-        self.assertIn("capacity",self.element(self.tile(2)+" .tile-metrics").get_attribute("title"))
+        self.assertIn("High quality unavailable (high-quality limit)",self.element(self.tile(2)+" .tile-metrics").text)
+        self.assertIn("High-quality stream limit (1)",self.element(self.tile(2)+" .tile-metrics").get_attribute("title"))
         self.wait_quality(2,"overview"); click(); self.wait_counts(1,8)
         click(3); self.wait_quality(3)
         self.assertNotIn("camera-2-high",self.fixture.worker.started)
@@ -331,6 +333,29 @@ class ViewerUITests(unittest.TestCase):
         self.element(self.tile(1)+" .camera-view").send_keys(Keys.ENTER)
         self.wait_quality(1,"overview"); self.wait_counts(1,9); self.wait_quality(2)
         self.assertEqual(self.fixture.worker.stopped["camera-2-high"],0)
+        self.element("#stop").click(); self.wait_counts(0,0)
+
+    def test_two_high_streams_need_total_budget_for_seven_overviews(self):
+        channels=[1,2,4,5,6,7,8]
+        self.wait_live(channels); self.wait_counts(1,7)
+        self.element(self.tile(1)+" .camera-view").send_keys(Keys.ENTER)
+        self.wait_quality(1); self.wait_counts(1,8)
+        self.element(self.tile(2)+" .camera-view").send_keys(Keys.ENTER)
+        metrics=self.tile(2)+" .tile-metrics"
+        self.wait.until(lambda _:"High quality unavailable (total stream limit)" in self.element(metrics).text)
+        self.assertIn("Total stream budget (8)",self.element(metrics).get_attribute("title"))
+        self.assertEqual(self.fixture.sessions.high_limit,2)
+        self.wait_quality(2,"overview"); self.wait_live(channels)
+        with self.fixture.worker.condition:
+            self.fixture.sessions.limit=10
+        self.element(self.tile(2)+" .camera-view").send_keys(Keys.ENTER)
+        self.wait.until(lambda _:self.element(self.tile(2)+" .camera-view").get_attribute("aria-expanded")=="false")
+        self.element(self.tile(2)+" .camera-view").send_keys(Keys.ENTER)
+        self.wait_quality(2); self.wait_quality(1); self.wait_counts(1,9)
+        self.assertIn("2 high quality",self.element("#view-note").text)
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+        self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
+        self.wait_live(channels)
         self.element("#stop").click(); self.wait_counts(0,0)
 
     def test_live_quality_decoder_failure_and_stall_keep_overview_moving(self):

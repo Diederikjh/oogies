@@ -6,6 +6,54 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Second high-quality stream refused by total budget
+
+The running service correctly reported a high-quality cap of two, but its
+recorded upgrade refusals were `source_limit`, not `high_quality_limit`.
+Seven cameras were now online, compared with four in the capacity experiment:
+seven overview fallbacks plus two main streams need nine slots, exceeding
+the unchanged total budget of eight. Updated only the owner's private total
+budget to ten, preserving the cap of two and allowing one History or export
+alongside the seven-camera/two-main workload. Restarted the service; portable
+configuration still defaults to eight total sources.
+
+The UI now distinguishes total-stream and high-quality limits, and backend
+tooltips explain the applicable configured cap. A new offline browser case
+reproduces this exact refusal with seven overviews and then verifies two mains
+after increasing capacity and explicitly retrying. All 100 backend tests and
+three focused browser cases passed. The full expanded 92-case browser/native
+suite was not rerun. Private logs are `.local/two-high-budget-backend-tests.log`
+and `.local/two-high-budget-ui-tests.log`.
+
+A restricted real-browser check then painted two 960x1088 main streams while
+retaining all seven online overview sources (nine occupied slots). Every live
+tile's pixels changed across samples; all source frames remained fresh, with
+zero upgrade refusals/failures and one SDK login. The diagnostic released its
+viewer and all nine sources. Private evidence and a screenshot are under
+`.local/two-high-budget-check/`; the command log is
+`.local/two-high-budget-live-check.log`. The normal service remains running with
+ten total slots and two high-quality slots.
+
+## Two-high-stream rollout
+
+Committed the capacity experiment as `5566de8` before changing the operating
+limit. Following owner approval, the project configuration default and private
+owner setting now allow two distinct high-quality live sources. The total
+source budget remains eight, shared with overview, History and exports. Explicit
+owner overrides, including zero or one high-quality source, still apply.
+Configuration examples and the experiment runner's missing-value fallback match
+the new default. The local service was restarted to load the updated setting.
+
+All 100 backend/monitor tests passed on rerun, and the focused two-high-stream
+browser test passed. The initial backend run encountered an intermittent export
+storage-accounting race: a partial clip disappeared between `is_file()` and
+`stat()` in `_used_bytes`. This unrelated issue remains unresolved; the rerun
+passed without changing export code. Private logs are
+`.local/two-high-rollout-backend-tests.log`,
+`.local/two-high-rollout-backend-rerun.log` and
+`.local/two-high-rollout-ui-tests.log`. The full browser/native suite was not
+rerun for this configuration change.
+
 ## Two-high-stream load experiment
 
 The reviewed reliability work and character replacement were committed as

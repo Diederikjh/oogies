@@ -72,7 +72,7 @@ def main():
     browser_output=output/'browser'; browser_output.mkdir(mode=0o700)
     config_path=ROOT/'.local/nvr-config.json'
     original=config_path.read_bytes(); original_mode=config_path.stat().st_mode & 0o777
-    config=json.loads(original); original_limit=config.get('max_high_quality_sources',1)
+    config=json.loads(original); original_limit=config.get('max_high_quality_sources',2)
     (output/'nvr-config.original.json').write_bytes(original)
     config['max_high_quality_sources']=2
     temporary=(json.dumps(config,indent=2)+'\n').encode()
