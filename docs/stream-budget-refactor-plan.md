@@ -1,6 +1,6 @@
 # Target 2: separate export/playback ownership from shared stream capacity
 
-Status: **implemented and verified on 17 October 2026; implementation uncommitted**.
+Status: **implemented, verified and committed as `3021d42` on 17 October 2026**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `0f3bf9f`, the committed target-1 export-accounting fix.
 Parent: [architecture refactoring targets](refactoring-targets.md).
@@ -8,7 +8,7 @@ Parent: [architecture refactoring targets](refactoring-targets.md).
 ## Implementation and verification
 
 The approved plan was committed as `900483a` before implementation. Source
-changes are currently uncommitted; the original design below is retained as
+changes were reviewed and committed as `3021d42`; the original design below is retained as
 the behavioral contract.
 
 - [stream_budget.py](../docker/hikvision-sdk/stream_budget.py) owns identified

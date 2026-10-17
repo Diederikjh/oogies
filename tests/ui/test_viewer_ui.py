@@ -11,6 +11,7 @@ import unittest
 from zoneinfo import ZoneInfo
 
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -150,8 +151,29 @@ class ViewerUITests(unittest.TestCase):
         self.driver.find_element(By.ID, "settings-close").click()
 
     def wait_counts(self, viewers, sources):
-        self.wait.until(lambda _: self.fixture.snapshot()["viewers"] == viewers and
-                        self.fixture.snapshot()["sources"] == sources)
+        latest = None
+        def reached(_):
+            nonlocal latest
+            latest = self.fixture.snapshot()
+            return latest["viewers"] == viewers and latest["sources"] == sources
+        try:
+            self.wait.until(reached)
+        except TimeoutException as error:
+            page = self.driver.execute_script("""
+                return {summary:document.getElementById('grid-summary').textContent,
+                    stopDisabled:document.getElementById('stop').disabled,
+                    animating:document.querySelectorAll('.camera-tile.is-animating').length,
+                    scrollY:window.scrollY};
+            """)
+            error.msg += f" Expected viewers={viewers}, sources={sources}; last backend snapshot={latest}; page={page}"
+            raise
+
+    def pause_live_view(self):
+        # Ownership tests must not depend on pointer coordinates during focus scrolling.
+        self.element("#stop").send_keys(Keys.ENTER)
+        self.wait.until(lambda _:self.element("#grid-summary").text == "View paused" and
+                        not self.element("#stop").is_enabled(),
+                        "Stop action did not reach a paused page with its Stop button disabled.")
 
     def test_eight_moving_cameras_have_correct_identity_and_offline_tile(self):
         self.wait_live()
@@ -326,14 +348,14 @@ class ViewerUITests(unittest.TestCase):
         self.wait_live(); expand(1); expand(2); self.wait_counts(2,10)
         self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
         self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
-        self.element("#stop").click(); self.wait_counts(1,10)
+        self.pause_live_view(); self.wait_counts(1,10)
         self.driver.close(); self.driver.switch_to.window(first)
         self.wait_quality(1); self.wait_quality(2)
         before=self.pixels(2); self.wait.until(lambda _:self.pixels(2)!=before)
         self.element(self.tile(1)+" .camera-view").send_keys(Keys.ENTER)
         self.wait_quality(1,"overview"); self.wait_counts(1,9); self.wait_quality(2)
         self.assertEqual(self.fixture.worker.stopped["camera-2-high"],0)
-        self.element("#stop").click(); self.wait_counts(0,0)
+        self.pause_live_view(); self.wait_counts(0,0)
 
     def test_two_high_streams_need_total_budget_for_seven_overviews(self):
         channels=[1,2,4,5,6,7,8]
@@ -356,7 +378,7 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
         self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
         self.wait_live(channels)
-        self.element("#stop").click(); self.wait_counts(0,0)
+        self.pause_live_view(); self.wait_counts(0,0)
 
     def test_live_quality_decoder_failure_and_stall_keep_overview_moving(self):
         self.wait_live(); self.fixture.worker.failed_camera="camera-1-high"

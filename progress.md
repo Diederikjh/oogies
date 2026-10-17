@@ -6,6 +6,30 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Two-main Stop timeout investigated
+
+Committed the reviewed task-2 refactor as `3021d42` before investigating the
+owner's CI timeout at `0f3bf9f`. The reported test reached its final Stop pointer
+click after collapsing a tile, then timed out waiting for zero viewers/sources.
+Three unmodified local reruns and two lengthened-animation/pointer-delay probes
+passed. Stop clicks were delivered and cleanup completed in those probes; the
+exact CI failure has not been reproduced. A pointer/focus timing issue is a
+hypothesis, not an established backend defect.
+
+The two-main ownership cases now use native Enter activation on Stop, require
+the page to acknowledge pause, then retain the backend cleanup assertions.
+Resource waits sample counts atomically and add backend/page diagnostics on
+timeout. No application code, cleanup timeout or retry policy changed. Seven
+focused cases passed, including three reruns of the reported case and unchanged
+pointer/animation/manual-scroll coverage. Evidence: `.local/stop-click-*.log`
+and `.local/stop-click-investigation/`. See [UI testing](docs/ui-testing.md).
+A final slowed-animation keyboard probe passed with Stop activated during active
+animation and zero final resource counts; it also verified timeout diagnostics
+by deliberately waiting for impossible counts. Log:
+`.local/stop-keyboard-motion.log`.
+The preceding task-2 full suite passed 93 cases; it was not repeated for this
+test-only adjustment. Changes remain uncommitted.
+
 ## Target 2 implementation: independent capacity ownership
 
 Committed the approved task-2 plan as `900483a` before implementation. The new
@@ -36,7 +60,7 @@ tightened. Full report: `.local/task2-full-ui-report.json`; logs:
 `.local/task2-*.log`. See the
 [task-2 results](docs/stream-budget-refactor-plan.md).
 
-The refactor remains uncommitted. No real recorder request, service restart or
+The refactor was reviewed and committed as `3021d42`. No real recorder request, service restart or
 owner configuration change was performed.
 
 ## Target 2 planned: independent export/playback ownership and shared capacity

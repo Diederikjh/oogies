@@ -7,6 +7,46 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
+## Two-main Stop timeout in CI
+
+CI at `0f3bf9f` timed out waiting for zero viewers/sources after the final Stop
+pointer click in `test_two_distinct_high_streams_share_and_release_independently`.
+This occurred after an animated collapse; the backend/paint assertions preceding
+Stop had passed. The test's Stop interaction was unchanged through the later
+capacity refactor, committed as `3021d42`.
+
+Three unmodified local reruns and two private motion/pointer-delay probes passed.
+Both probes delivered Stop clicks and cleaned up correctly. The exact CI cause
+was therefore not reproduced; animation-related input timing remains a
+hypothesis, and the supplied traceback alone cannot distinguish a missed
+activation from delayed cleanup. No application or backend change is based on
+that hypothesis.
+
+The two-main ownership/capacity tests now activate the real Stop button with
+Enter, then require the page's "View paused" state and disabled Stop control
+before checking unchanged backend resource counts. Keyboard activation makes
+these ownership assertions independent of pointer coordinates during focus
+scrolling. Dedicated pointer, animation and manual-scroll cases remain intact.
+There are no new retries, sleeps or increased timeouts. Resource waits read one
+atomic fixture snapshot per poll and include expected/last counts plus page
+summary, Stop state, active-animation count and scroll position on timeout.
+
+Seven focused cases passed in 73.8 seconds: the reported test three times, the
+adjacent seven-overview/two-main budget case, and three animation/manual-scroll
+cases. Logs are `.local/stop-click-baseline.log`, `.local/stop-click-motion.log`,
+`.local/stop-click-motion20.log` and `.local/stop-click-focused-ui.log`.
+Private diagnostic scripts/traces are in `.local/stop-click-investigation/`.
+A final keyboard-input probe with 20-times-lengthened animation passed in 16.2
+seconds, recording Stop activation while animation was still active and final
+counts of zero viewers/sources. A deliberately impossible resource wait verified
+the enriched timeout message against the real browser and fixture. Its log is
+`.local/stop-keyboard-motion.log`; the expected error is recorded privately as
+`.local/stop-click-investigation/expected-timeout.txt`.
+The complete suite was not rerun for these test-only changes; task 2's preceding
+full 93-case pass is preserved separately below.
+
+## Shared-capacity refactor verification
+
 Task 2 migrates the fixture to an identified shared stream budget and neutral
 application maintenance. A new case holds capture active while the user seeks,
 changes History camera and closes that tab, then verifies that the immutable

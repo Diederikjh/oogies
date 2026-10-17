@@ -6,7 +6,8 @@ implementation after committing it on 17 October 2026 as `19d12bf`. Target 1 is
 **implemented, verified and committed as `0f3bf9f`**. Target 2's reviewed plan was
 committed as `900483a`; its implementation, all 127 backend checks and all
 [93 browser/native checks pass](stream-budget-refactor-plan.md). Implementation
-is uncommitted. Targets 3-9 remain backlog proposals. Target 1 passed its seven
+was reviewed and committed as `3021d42`. Targets 3-9 remain backlog proposals.
+Target 1 passed its seven
 new accounting tests, all 25 export tests and the then-complete 107-test backend
 suite; these regressions remain in the expanded suite. See the
 [target-1 results](export-accounting-refactor-plan.md#implementation-and-verification-result).

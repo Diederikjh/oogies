@@ -47,8 +47,8 @@ passing focused/full backend checks on 17 October 2026.
 It is committed as `0f3bf9f`. The
 [target-2 plan](stream-budget-refactor-plan.md) was committed as `900483a` before
 implementation. Export/playback ownership is now separated from shared stream
-capacity; all 127 backend and 93 browser/native cases pass. Implementation is
-uncommitted pending review.
+capacity; all 127 backend and 93 browser/native cases pass. Implementation was
+reviewed and committed as `3021d42`.
 
 ### Live overview
 
