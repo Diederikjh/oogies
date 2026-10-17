@@ -9,9 +9,16 @@ The owner's running viewer and recorder are not used.
 
 The [frontend test-layer plan](frontend-test-layer-plan.md) describes moving
 logic matrices into JavaScript unit tests while preserving browser wiring,
-input, layout and API/media integration coverage. Its first slice adds
-[JavaScript logic tests](js-testing.md) for the existing filename sanitizer;
-browser assertions remain unchanged in this milestone.
+input, layout and API/media integration coverage. Milestone 2 adds
+[104 JavaScript logic tests](js-testing.md) for filenames and clip/timeline/range
+calculations. Five browser cases now focus on wiring and presentation instead
+of repeating those rule matrices; all 89 browser/four native case IDs remain.
+
+The full pre-extraction `ab2dd80` baseline passed 93 cases in 943.3 seconds from
+an immutable source snapshot. After extraction, 15 focused browser cases passed
+in 143.1 seconds. The complete updated browser suite was not repeated; see the
+[milestone-2 results](frontend-test-layer-plan.md#milestone-2-extraction-and-coverage)
+for exact coverage, evidence and the limits of the timing comparison.
 
 ## Pending-reply Stop timeout and input timing
 

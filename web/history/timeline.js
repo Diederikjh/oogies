@@ -1,4 +1,7 @@
 // Timeline rendering and local time selection; recorder calls belong to the view.
+import {clipStatus, clipKeyTarget} from "./clip-model.js";
+import {timelineSelection, seekWindow, clipDomain, fitView, clipZoom} from "./timeline-model.js";
+
 export class Timeline {
   constructor(panel, onSelect) {
     this.panel = panel;
@@ -33,8 +36,9 @@ export class Timeline {
   }
 
   select(value, notify = true) {
-    this.selected = Math.max(this.begin, Math.min(this.end - 1000, Math.round(value / 1000) * 1000));
-    this.slider.value = String(Math.max(0, Math.min(Number(this.slider.max), (this.selected - this.seekBegin) / 1000)));
+    const {selected, offset} = timelineSelection(value, this.begin, this.end, this.seekBegin, Number(this.slider.max));
+    this.selected = selected;
+    this.slider.value = String(offset);
     const label = this.time(this.selected, true) + (this.selected < this.viewBegin || this.selected >= this.viewEnd ? " · Outside zoom" : "");
     this.slider.setAttribute("aria-valuetext", label);
     this.panel.querySelector("#history-selected").textContent = label;
@@ -60,9 +64,10 @@ export class Timeline {
   draw() {
     const data = this.data;
     if (!data) return;
-    this.seekBegin = Math.max(this.begin, this.viewBegin); this.seekEnd = Math.min(this.end, this.viewEnd);
-    this.slider.max = String(Math.max(0, (this.seekEnd - this.seekBegin) / 1000 - 1));
-    this.slider.disabled = this.seekEnd - this.seekBegin < 1000;
+    const seek = seekWindow(this.begin, this.end, this.viewBegin, this.viewEnd);
+    this.seekBegin = seek.begin; this.seekEnd = seek.end;
+    this.slider.max = String(seek.max);
+    this.slider.disabled = seek.disabled;
     const unknown = this.viewBegin < this.begin || this.viewEnd > this.end ? " · Coverage outside the loaded range is unknown" : "";
     this.panel.querySelector("#history-range").textContent = `${this.time(this.viewBegin, true)} - ${this.time(this.viewEnd, true)} · ${this.zone}${this.isZoomed() ? " · Zoomed" : ""}${unknown}`;
     this.panel.querySelector("#history-axis").replaceChildren(...Array.from({length:5}, (_, index) => {
@@ -156,24 +161,21 @@ export class Timeline {
 
   isZoomed() { return Number.isFinite(this.viewBegin) && (this.viewBegin !== this.begin || this.viewEnd !== this.end); }
   invalidClip() {
-    const duration = this.clipTo - this.clipFrom;
-    return Number.isFinite(duration) && (duration < 1000 || duration > this.maxClipSeconds * 1000);
+    return clipStatus(this.clipFrom, this.clipTo, this.maxClipSeconds).invalid;
   }
 
   domain() {
-    const marks = [this.clipFrom, this.clipTo].filter(Number.isFinite);
-    return [Math.min(this.begin, ...marks), Math.max(this.end, ...marks)];
+    return clipDomain(this.begin, this.end, this.clipFrom, this.clipTo);
   }
 
   setView(center, width) {
-    const [min, max] = this.domain(); width = Math.min(width, max - min);
-    this.viewBegin = Math.max(min, Math.min(max - width, Math.floor((center - width / 2) / 1000) * 1000));
-    this.viewEnd = this.viewBegin + width; this.draw();
+    [this.viewBegin, this.viewEnd] = fitView(center, width, this.domain());
+    this.draw();
   }
 
   zoomToClip() {
-    if (!Number.isFinite(this.clipFrom) || !Number.isFinite(this.clipTo) || this.drag) return;
-    this.setView((this.clipFrom + this.clipTo) / 2, Math.max(60000, Math.ceil(Math.abs(this.clipTo - this.clipFrom) * 1.4 / 1000) * 1000));
+    const zoom = clipZoom(this.clipFrom, this.clipTo);
+    if (zoom && !this.drag) this.setView(...zoom);
   }
   zoomOut() { if (!this.drag) this.setView((this.viewBegin + this.viewEnd) / 2, (this.viewEnd - this.viewBegin) * 2); }
   fullRange() { if (!this.drag) { this.viewBegin = this.begin; this.viewEnd = this.end; this.draw(); } }
@@ -212,8 +214,7 @@ export class Timeline {
     const flag = event.target.closest(".clip-marker");
     if (!flag) return;
     const name = flag.dataset.bound, current = name === "from" ? this.clipFrom : this.clipTo;
-    const [min, max] = this.clipBounds(name), step = event.shiftKey ? 10000 : 1000;
-    const target = {ArrowLeft:current-step, ArrowRight:current+step, Home:min, End:max}[event.key];
+    const target = clipKeyTarget(event.key, current, this.clipBounds(name), event.shiftKey);
     if (target === undefined) return;
     const track = this.markers;
     const repairing = this.invalidClip();

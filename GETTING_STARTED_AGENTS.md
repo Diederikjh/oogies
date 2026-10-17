@@ -650,7 +650,8 @@ python3 tools/run_js_tests.py --docker
 ```
 
 Pull retrieves the pinned image and exits; execution is a separate offline step.
-Verify exit status 0 and the named test results (initially 27 filename cases).
+Verify exit status 0 and named filename, clip, timeline and history-range results
+(currently 104 cases).
 The TAP report is `.local/js-test-results/tests.tap`; a deliberate assertion
 failure must return nonzero. There are no npm dependencies or build steps.
 See [JavaScript testing](docs/js-testing.md) for selection and diagnostics.

@@ -845,11 +845,10 @@ class ViewerUITests(unittest.TestCase):
                         self.element("#history-motion").get_attribute("data-state") != "pending")
 
     def test_history_camera_ranges_include_offline_inputs(self):
-        # Only the page's wall clock is controlled; HTTP, animation, cache and
-        # lease timers keep running normally. Start just before recorder New Year.
+        # A fixed page clock makes the wiring check deterministic. Minute/year
+        # transitions and fixed/recent calculations are covered in Node.
         self.driver.execute_script("""
-            window.historyTestNow = Date.parse('2024-12-31T21:59:59Z');
-            Date.now = () => window.historyTestNow;
+            Date.now = () => Date.parse('2025-01-15T10:00:00Z');
         """)
         self.wait_live(); self.open_history()
         Select(self.element("#history-camera")).select_by_value("camera-9"); self.history_ready()
@@ -859,24 +858,16 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(self.element("#history-position").get_attribute("max"), "3599")
         initial = self.element("#history-range").text
         self.assertEqual(self.fixture.worker.timeline_calls[-1],
-                         ("camera-9", "2024-12-31T22:59:00", "2024-12-31T23:59:00"))
-        for elapsed in (0, 1000):
-            with self.subTest(elapsed_ms=elapsed):
-                self.element("#history-earlier").click(); self.history_ready()
-                earlier = self.element("#history-range").text
-                self.assertNotEqual(earlier, initial)
-                self.assertTrue(self.element("#history-later").is_enabled())
-                self.driver.execute_script("window.historyTestNow += arguments[0];", elapsed)
-                self.assertEqual(self.element("#history-range").text, earlier)
-                self.element("#history-recent").click(); self.history_ready()
-                if elapsed == 0:
-                    self.assertEqual(self.element("#history-range").text, initial)
-                else:
-                    self.assertNotEqual(self.element("#history-range").text, initial)
-                    self.assertEqual(self.fixture.worker.timeline_calls[-1],
-                                     ("camera-9", "2024-12-31T23:00:00", "2025-01-01T00:00:00"))
-                self.assertEqual(self.element("#history-position").get_attribute("max"), "3599")
-                self.assertFalse(self.element("#history-later").is_enabled())
+                         ("camera-9", "2025-01-15T11:00:00", "2025-01-15T12:00:00"))
+        self.element("#history-earlier").click(); self.history_ready()
+        self.assertNotEqual(self.element("#history-range").text, initial)
+        self.assertTrue(self.element("#history-later").is_enabled())
+        self.element("#history-later").click(); self.history_ready()
+        self.assertEqual(self.element("#history-range").text, initial)
+        self.element("#history-earlier").click(); self.history_ready()
+        self.element("#history-recent").click(); self.history_ready()
+        self.assertEqual(self.element("#history-range").text, initial)
+        self.assertFalse(self.element("#history-later").is_enabled())
 
     def test_history_empty_unsupported_and_error_motion_are_distinct(self):
         self.wait_live()
@@ -1205,21 +1196,12 @@ class ViewerUITests(unittest.TestCase):
         filename=next(self.downloads.glob("*.png")).name
         self.assertTrue(filename.startswith("oogies-Front -porch- & gate_"),filename)
         self.assertNotRegex(filename,r'[<>:"/\\|?*\x00-\x1f]')
-        cases = [" Garage:/\\<>\"|?*\nDoor. ", "../..", "", "CON", "NUL.txt", "Café tuin", "e\u0301", "🎥"*100]
-        result=self.driver.execute_async_script("""
-            const [names,done]=arguments;
-            import('/history/frame-download.js').then(module=>done(names.map(module.safeCameraName)));
-        """,cases)
-        self.assertEqual(result[:7],["Garage-Door","Camera","Camera","CON","NUL.txt","Café tuin","é"])
-        self.assertLessEqual(len(result[7].encode("utf-8")),128)
-        for name in result: self.assertNotRegex(name,r'[<>:"/\\|?*\x00-\x1f]')
 
     def test_history_clip_bounds_and_mobile_controls(self):
         self.paused_history(); self.driver.set_window_size(390,844)
-        self.element("#clip-start").click(); self.element("#clip-end").click()
-        self.assertFalse(self.element("#clip-queue").is_enabled())
-        self.element("#history-full-range").click()
-        # Move the paused preview beyond ten minutes without changing marks.
+        self.element("#clip-start").click()
+        # Keep one invalid-state layout check on mobile; the validity matrix is
+        # exercised in Node rather than repeated through playback and the DOM.
         self.driver.execute_script("const s=document.getElementById('history-position');s.value=Number(s.value)+601;s.dispatchEvent(new Event('change',{bubbles:true}))")
         self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
         self.assertIn("up to 600 seconds",self.element("#clip-duration").text)
@@ -1247,20 +1229,23 @@ class ViewerUITests(unittest.TestCase):
         self.mark_clip()
         self.assertIn("Zoomed",self.element("#history-range").text)
         window=lambda:float(self.element("#history-recordings").get_attribute("data-view-to"))-float(self.element("#history-recordings").get_attribute("data-view-from"))
-        self.assertLess(window(),3*3600000)
-        for _ in range(6): self.element("#history-zoom-out").click()
+        initial_window=window()
+        self.element("#history-zoom-out").click()
+        self.assertGreater(window(),initial_window)
+        self.element("#history-full-range").click()
+        self.assertNotIn("Zoomed",self.element("#history-range").text)
         before=len(self.fixture.worker.playback_commands)
         generation=next(iter(self.fixture.worker.playbacks.values()))["generation"]
         selected=self.element("#history-position").get_attribute("value")
         frozen=(self.element("#history-recordings").get_attribute("data-view-from"),self.element("#history-recordings").get_attribute("data-view-to"))
-        for name,direction,seconds in (("to",1,600),("from",1,1),("from",-1,600),("to",-1,1)):
-            self.drag_clip(name,direction); self.assertEqual(self.clip_seconds(),seconds)
+        # One native gesture verifies model-to-marker wiring. All four boundary
+        # directions and duration/order combinations live in clip-model tests.
+        self.drag_clip("to",1)
+        self.assertEqual(self.clip_seconds(),600)
         self.assertEqual(len(self.fixture.worker.playback_commands),before)
         self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["generation"],generation)
         self.assertEqual(self.element("#history-position").get_attribute("value"),selected)
         self.assertEqual(frozen,(self.element("#history-recordings").get_attribute("data-view-from"),self.element("#history-recordings").get_attribute("data-view-to")))
-        self.element("#history-full-range").click(); self.assertEqual(window(),3*3600000)
-        self.assertNotIn("Zoomed",self.element("#history-range").text)
 
     def test_history_overlong_clip_zooms_and_can_be_repaired_with_keyboard(self):
         self.mark_clip(1200)
@@ -1269,16 +1254,7 @@ class ViewerUITests(unittest.TestCase):
         commands=len(self.fixture.worker.playback_commands)
         self.element('#history-clip-marks .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
         self.assertEqual(self.clip_seconds(),600); self.assertTrue(self.element("#clip-queue").is_enabled())
-        self.element('#history-clip-marks .clip-marker[data-bound="from"]').send_keys(Keys.END)
-        self.assertEqual(self.clip_seconds(),1)
-        self.element('#history-clip-marks .clip-marker[data-bound="to"]').send_keys(Keys.ARROW_LEFT)
-        self.assertEqual(self.clip_seconds(),1)
-        self.element('#history-clip-marks .clip-marker[data-bound="from"]').send_keys(Keys.HOME)
-        self.assertEqual(self.clip_seconds(),600)
-        self.element("#clip-start").click()  # Last displayed frame is after the edited end.
-        self.assertLess(self.clip_seconds(),0); self.assertFalse(self.element("#clip-queue").is_enabled())
-        self.element('#history-clip-marks .clip-marker[data-bound="from"]').send_keys(Keys.ARROW_LEFT)
-        self.assertEqual(self.clip_seconds(),1); self.assertTrue(self.element("#clip-queue").is_enabled())
+        self.assertEqual(self.driver.switch_to.active_element.get_attribute("data-bound"),"to")
         self.assertEqual(len(self.fixture.worker.playback_commands),commands)
 
     def test_history_clip_handles_respect_configured_limit(self):

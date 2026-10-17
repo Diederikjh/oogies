@@ -3,6 +3,7 @@ import {Timeline} from "/history/timeline.js";
 import {PlaybackControls} from "/history/playback-controls.js";
 import {DateTimeNavigation} from "/history/date-time-navigation.js";
 import {ClipSelection} from "/history/clip-selection.js";
+import {currentMinute, historyWindow, shiftHistoryWindow, motionTime} from "./history-range.js";
 
 export class HistoryView {
   constructor(panel, onCameras = () => {}, onExports = () => {}) {
@@ -30,21 +31,20 @@ export class HistoryView {
     for (const [id, direction] of [["history-earlier", -1], ["history-later", 1]]) {
       panel.querySelector(`#${id}`).addEventListener("click", () => {
         if (!this.end) return;
-        this.end += direction * Number(this.hours.value) * 3600000;
-        this.end = Math.min(this.end, this.now()); this.recent = false; this.load();
+        this.end = shiftHistoryWindow(this.end, this.hours.value, direction, this.now());
+        this.recent = false; this.load();
       });
     }
     for (const [id, direction] of [["history-previous", -1], ["history-next", 1]]) {
       panel.querySelector(`#${id}`).addEventListener("click", () => {
         const events = this.data?.motion.intervals || [], selected = this.timeline.selected;
-        const event = direction > 0 ? events.find(item => selected === undefined || Date.parse(item.start) > selected) :
-          [...events].reverse().find(item => selected === undefined || Date.parse(item.start) < selected);
-        if (event) this.timeline.select(Date.parse(event.start));
+        const position = motionTime(events, selected, direction);
+        if (position !== undefined) this.timeline.select(position);
       });
     }
   }
 
-  now() { return Math.floor(Date.now() / 60000) * 60000; }
+  now() { return currentMinute(Date.now()); }
 
   play(position, rate, autoplay = false) {
     this.recent = false;
@@ -89,8 +89,8 @@ export class HistoryView {
       query = new URLSearchParams({local_time:dateJob.localTime, hours:this.hours.value});
     } else {
       this.dateNavigation.error("");
-      if (this.recent || !this.end) this.end = this.now();
-      const begin = this.end - Number(this.hours.value) * 3600000;
+      const {begin, end} = historyWindow({end:this.end, hours:this.hours.value, recent:this.recent, nowMs:Date.now()});
+      this.end = end;
       if (this.player.session && (this.player.session.camera_id !== cameraId || Date.parse(this.player.session.from) !== begin || Date.parse(this.player.session.to) !== this.end)) {
         this.player.stop(); this.timeline.selected = undefined;
       }

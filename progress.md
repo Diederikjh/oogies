@@ -6,6 +6,36 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 3 milestone 2: directly tested clip, timeline and range calculations
+
+Committed milestone 1 as `ab2dd80` before implementation. Extracted pure
+`clip-model.js`, `timeline-model.js` and `history-range.js` and wired the actual
+History controllers to them. Marks still permit invalid selections for repair;
+editing clamps duration/order. Zoom remains independent of loaded/SDK bounds.
+Clock inputs are explicit in logic tests; recorder-zone/DST resolution, rendering,
+requests and control state remain in their existing owners. Added the three
+module routes to the backend's static asset allowlist.
+
+The same native/Docker runner now passes 104 cases (77 new), in 300.3/485.6 ms
+of Node test time. All 134 Python tests pass. The full immutable `ab2dd80`
+browser/native baseline passed 93 cases in 943.3 s. After extraction, 15 focused
+browser cases passed in 143.1 s, including all five tightened wiring cases and
+nearby input, touch, range, zoom, playback and date-navigation paths.
+
+The filename matrix, mark/edit/key boundaries and calendar/range matrices now
+live in Node. Browser checks keep real downloads, native gesture/key wiring,
+focus, configuration propagation and layout. All 89 browser/four native IDs
+remain; submission-feedback cases are untouched for milestone 3. Matched browser
+case timings were 144.12 s before and 142.66 s after, insufficient for a meaningful
+speedup claim. The gain here is direct, fast logic feedback and more combinations.
+The complete post-extraction browser suite was not repeated.
+
+Evidence and the assertion migration map are in the
+[milestone-2 results](docs/frontend-test-layer-plan.md#milestone-2-extraction-and-coverage)
+and `.local/js-m2-*` reports/logs. After implementation, the viewer was restarted
+at the user's request and its page/new module routes verified over HTTP, without
+a recorder probe. Milestone 2 was reviewed before starting milestone 3.
+
 ## Target 3 milestone 1: JavaScript runner and direct filename tests
 
 Committed the reviewed plan as `8e60f84`, then implemented the initial runner
@@ -28,8 +58,7 @@ TAP reports. Both setup guides, test docs and the
 [target-3 plan](docs/frontend-test-layer-plan.md) describe the new layer. Evidence
 is retained in `.local/js-m1-*.log` and `.tap` files. Hosted execution awaits a
 push. No recorder request or service restart was performed. Milestone 1 was
-reviewed and approved for commit before starting milestone 2; milestones 3-4
-have not started.
+reviewed and committed as `ab2dd80` before starting milestone 2.
 
 ## Target 3 planned: frontend logic tests below the browser
 

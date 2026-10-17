@@ -8,7 +8,8 @@ committed as `900483a`; its implementation, all 127 backend checks and all
 [93 browser/native checks pass](stream-budget-refactor-plan.md). Implementation
 was reviewed and committed as `3021d42`. Target 3's
 [approved detailed plan](frontend-test-layer-plan.md) was committed as `8e60f84`;
-milestone 1 is implemented and verified, ready for review before milestone 2.
+milestone 1 was committed as `ab2dd80`, and milestone 2 is implemented and
+verified, ready for review before milestone 3.
 Targets 4-9 remain backlog proposals.
 Target 1 passed its seven
 new accounting tests, all 25 export tests and the then-complete 107-test backend
@@ -31,7 +32,7 @@ not a promised runtime speedup.
 | --- | --- | --- | --- |
 | 1. Race-safe export file accounting (implemented) | Estimated 0.5-1 day | High; resolve a demonstrated failure with a small change | Replaced separate existence/size checks with one metadata observation and per-file missing-path handling; deterministic regression and caller/queue tests pass. |
 | 2. Shared stream-budget manager and independent export/playback ownership (implemented and verified) | Estimated 2-4 days | Very high; explicit ownership and isolated contention tests | Identified shared reservations replace live-counter mutations; helper/maintenance ownership and fixtures migrated. Backend contention, failure and cleanup checks pass. |
-| 3. Faster logic tests below the browser layer (milestone 1 verified) | 1-3 days initially | Very high; more combinations, faster feedback | A native/Docker Node runner now tests 27 filename cases directly; all 134 Python tests and three unchanged browser download cases pass. Clip/range/state extraction is next. |
+| 3. Faster logic tests below the browser layer (milestone 2 verified) | 1-3 days initially | Very high; more combinations, faster feedback | Native/Docker Node tests cover 104 filename, clip, timeline and range cases; 134 Python and 15 post-extraction browser wiring cases pass. Submission/feedback state is next; browser startup costs remain. |
 | 4. Separate playback state from rendering | 2-4 days | High; simpler reasoning about overlapping controls | `PlaybackControls` combines leases, requests, seeks, rates, JPEG rendering, downloads and DOM state. Epoch/generation/control guards solve real races but are spread through the controller. |
 | 5. Shorter shared-lock critical sections | 2-4 days | High; reduce opportunities for unrelated work to stall | Export manifest writes, `fsync`, directory cleanup and frame packet construction use the worker's shared condition lock. Actual contention needs measurement before claiming a speedup. |
 | 6. Native transport boundary and protocol tests | 2-4 days | High; cover bridge failures and prepare for another SDK | `GridWorker` combines process transport, event handling, discovery and frame/state caches. The fake recorder and native helper tests cover useful behavior but do not exercise the complete SDK bridge protocol. |

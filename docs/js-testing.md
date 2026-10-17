@@ -2,14 +2,18 @@
 
 These tests import production frontend functions directly into Node. They run
 without a browser, server, recorder, SDK, npm dependencies or private configuration.
-The initial 27 cases cover `safeCameraName()` in
-[frame-download.js](../web/history/frame-download.js): unsafe characters, fallback
-names, Unicode normalization and complete-code-point UTF-8 length limits.
+The 104 cases cover these production modules:
 
-This is milestone 1 of the [frontend test-layer plan](frontend-test-layer-plan.md).
-Clip/range calculations and submission/confirmation state have not moved yet.
-Existing browser assertions remain in place for this milestone. As logic moves,
-unit tests own its rules and browser tests verify wiring and browser behavior.
+| Module | Logic covered |
+| --- | --- |
+| [frame-download.js](../web/history/frame-download.js) | Filename sanitization, fallback names, Unicode normalization and UTF-8 length limits |
+| [clip-model.js](../web/history/clip-model.js) | Mark rounding, validity, configured duration limits, edit bounds and keyboard targets |
+| [timeline-model.js](../web/history/timeline-model.js) | Selection, loaded/visible/seek domains, slider offsets and zoom bounds |
+| [history-range.js](../web/history/history-range.js) | Recent/fixed windows, calendar/minute boundaries, Earlier/Later and motion navigation |
+
+This follows milestone 2 of the [frontend test-layer plan](frontend-test-layer-plan.md).
+Submission/confirmation state remains for milestone 3. Unit tests own the logic
+rules; browser tests verify wiring and browser-specific behavior.
 
 ## Run with existing native Node
 
@@ -19,6 +23,7 @@ Use native Node **22.x** and the existing Python 3.9+ launcher:
 node --version
 python3 tools/run_js_tests.py
 python3 tools/run_js_tests.py tests/js/frame-download.test.mjs
+python3 tools/run_js_tests.py tests/js/clip-model.test.mjs
 ```
 
 The launcher checks the Node major version. It does not install or change Node.
@@ -47,8 +52,8 @@ image. The immutable image reference is maintained in
 Docker is also useful in agent execution environments that restrict native Node
 child-process reporting. During development, the host agent sandbox reported
 only file-level results; a deliberate failed assertion still returned nonzero.
-The normal native run outside that sandbox and the Docker run both reported all
-27 named tests. Use Docker when per-assertion reporting is needed in that context.
+Normal native execution outside that sandbox and Docker provide complete named
+results. Use Docker when per-assertion reporting is needed in that context.
 
 ## Results and CI
 

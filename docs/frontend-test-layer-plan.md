@@ -1,6 +1,6 @@
 # Target 3: faster frontend logic tests below the browser layer
 
-Status: **milestone 1 reviewed and approved; milestone 2 authorized**.
+Status: **milestone 2 implemented and verified; review before milestone 3**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `9e61f20`.
 Parent: [architecture refactoring targets](refactoring-targets.md).
@@ -35,9 +35,74 @@ Docker commands; hosted Actions execution awaits a push. No SDK login, recorder
 access or service restart was performed. The full browser baseline is still
 required before milestone 2 removes/migrates browser assertions.
 
-Milestone 1 has been reviewed and approved for commit before milestone 2 starts.
+Milestone 1 was reviewed and committed as `ab2dd80` before milestone 2 started.
 Milestones 3-4 have not started. The approved design below remains the behavioral
 contract.
+
+## Milestone 2 extraction and coverage
+
+The DOM controllers delegate their calculations to three production modules:
+
+| Module | Explicit inputs and outputs | Direct test coverage |
+| --- | --- | --- |
+| `clip-model.js` | Frame/mark timestamps, loaded bounds, maximum seconds, key/Shift; returns rounded marks, status, bounds and edit targets | Missing/equal/reversed/overlong marks, floor versus nearest-second rounding, four edit directions, 600/120-second limits, year-2000 floor and repair |
+| `timeline-model.js` | Loaded/visible ranges, selected time, marks, center/width; returns selection/slider offset, seek intersection, domain and zoom window | End-exclusive selection, positions outside zoom, partial/empty seek ranges, finite/partial marks, 60-second zoom, padding, alignment and unchanged SDK bounds |
+| `history-range.js` | Supplied clock, hours, Recent/fixed endpoint and motion intervals/direction; returns window or motion timestamp | Minute/day/month/year changes, fixed Refresh windows, current-time ceiling, equal event starts, empty results and unchanged interval order |
+
+The modules have no DOM, network or owned timers. `ClipSelection`, `Timeline`
+and `HistoryView` keep event handling, rendering and request lifetimes. The HTTP
+asset allowlist explicitly serves the new relative imports. Recorder-zone/DST
+resolution and playback control state remain in their existing owners.
+
+Raw marking still permits invalid clips; only editing clamps to valid bounds.
+Visible zoom and loaded/SDK playback ranges stay separate. The full browser
+baseline uses an immutable `ab2dd80` source snapshot, unaffected by workspace
+edits. Browser assertions are tightened after their unit coverage passes; the
+baseline result and post-extraction wiring checks must pass before review.
+
+Five browser cases now retain their wiring/presentation checks while their rule
+matrices live in Node. No browser case IDs were removed (89 browser/four native
+checks remain); smaller browser flows are not yet a reduction in browser startup
+cost. Export feedback/response-ordering cases remain untouched for milestone 3.
+
+| Browser case | Logic coverage now in Node | Retained browser wiring/presentation |
+| --- | --- | --- |
+| Unsafe camera-name frame download | `frame-download.test.mjs`: full filename-component matrix | Real camera-name snapshot reaches an actual downloaded PNG filename |
+| Offline camera history ranges | `history-range.test.mjs`: minute/calendar transitions, fixed/Recent windows, navigation ceiling | Offline camera selection, range selector, Earlier/Later/Recent, SDK timezone and returned UI range |
+| Mobile clip bounds | `clip-model.test.mjs`: unset/equal/reversed/overlong validity | One invalid range reaches disabled Save clip and long feedback fits the mobile layout |
+| Clip dragging and zoom controls | `clip-model.test.mjs` and `timeline-model.test.mjs`: four edit directions, order/duration limits, zoom arithmetic | A native drag updates a marker; zoom-out/full-range controls work; SDK seek/generation and current time stay unchanged |
+| Keyboard clip repair | `clip-model.test.mjs`: Home/End/arrow/Shift targets, reversed and overlong repair | Native key repairs the UI selection, enables Save clip and retains marker focus without an SDK seek |
+
+Verification:
+
+- Full pre-extraction baseline from `ab2dd80`: all 93 browser/native cases pass
+  in 943.3 seconds. Sources were archived before edits and mounted independently.
+- All 104 JavaScript cases pass in native Node and the pinned offline Docker
+  runtime (77 added cases). Node-reported durations are 300.3 ms and 485.6 ms.
+- All 134 Python tests pass in 9.1 seconds. An offline HTTP check also verified
+  the new module routes, MIME types and bytes with no recorder queries/sources.
+- After extraction, all 15 focused browser cases pass in 143.1 seconds, covering
+  the five tightened cases plus configured limits, touch/refresh, zoomed SDK
+  bounds, camera reset, motion selection, fixed Refresh, mobile selection,
+  one-seek slider wiring, moving playback and recorder-zone date navigation.
+
+The matching 15 baseline cases totalled 144.12 seconds versus 142.66 seconds
+after extraction. These observations differ in run/order and host activity and
+do not establish a meaningful browser speedup. The immediate gain is 104 direct
+logic cases executable in under a second of Node time; browser startup costs
+remain. The complete updated browser suite was not repeated for this milestone;
+full post-migration measurement remains part of milestone 4.
+
+Evidence: `.local/js-m2-baseline-browser{.log,-report.json}`,
+`.local/js-m2-model-{native,docker}.log`, `.local/js-m2-model-docker.tap`,
+`.local/js-m2-backend.log`, `.local/js-m2-assets.log`,
+`.local/js-m2-focused-browser{.log,-report.json}`, `.local/js-m2-comparison.json`
+and `.local/js-m2-migration-inventory.json`.
+
+Milestone 2 was reviewed before proceeding to milestone 3. The viewer was
+subsequently restarted at the user's request; the page and all three new module
+routes returned HTTP 200, with the expected JavaScript MIME types and source
+bytes. No recorder probe was needed for this check.
 
 ## Goal and boundaries
 

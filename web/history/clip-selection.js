@@ -1,5 +1,6 @@
 import {api} from "/shared/api.js";
 import {readAspect} from "/shared/display-preferences.js";
+import {clipMark, clipStatus, clipBounds, editClipMark} from "./clip-model.js";
 
 export class ClipSelection {
   constructor(panel, player, timeline, onExports) {
@@ -11,7 +12,7 @@ export class ClipSelection {
     timeline.clipBounds = name => this.bounds(name);
     for (const [name, button] of [["from", this.start], ["to", this.end]]) button.addEventListener("click", () => {
       const frame = player.snapshot; if (!frame) return;
-      this[name] = Math.floor(frame.position / 1000) * 1000; this.paint();
+      this[name] = clipMark(frame.position); this.paint();
       timeline.zoomToClip();
     });
     panel.querySelector("#clip-clear").addEventListener("click", () => {
@@ -33,22 +34,18 @@ export class ClipSelection {
     this.messageTimer = undefined; this.message.replaceChildren();
   }
   bounds(name) {
-    const earliest = Date.UTC(2000, 0, 1), latest = Math.max(this.timeline.end || earliest, this.from || earliest, this.to || earliest);
-    if (name === "from") return [Math.max(earliest, Number.isFinite(this.to) ? this.to - this.maxSeconds * 1000 : this.timeline.begin),
-      Number.isFinite(this.to) ? this.to - 1000 : latest - 1000];
-    return [Number.isFinite(this.from) ? this.from + 1000 : this.timeline.begin + 1000,
-      Math.min(latest, Number.isFinite(this.from) ? this.from + this.maxSeconds * 1000 : latest)];
+    return clipBounds(name, {from:this.from, to:this.to, begin:this.timeline.begin,
+      end:this.timeline.end, maxSeconds:this.maxSeconds});
   }
   edit(name, value) {
-    const [min, max] = this.bounds(name);
-    this[name] = Math.max(min, Math.min(max, Math.round(value / 1000) * 1000));
+    this[name] = editClipMark(value, this.bounds(name));
     this.paint(); return this[name];
   }
   paint() {
     const frame = this.player.snapshot;
     this.start.disabled = this.end.disabled = !frame || frame.cameraId !== this.camera?.id;
-    const duration = (this.to - this.from) / 1000;
-    this.valid = Number.isFinite(duration) && duration >= 1 && duration <= this.maxSeconds;
+    const {duration, valid} = clipStatus(this.from, this.to, this.maxSeconds);
+    this.valid = valid;
     this.queue.disabled = !this.valid || this.submitting;
     const label = value => value === undefined ? "Not set" : this.timeline.time(value, true);
     this.panel.querySelector("#clip-range").textContent = `Start: ${label(this.from)} · End: ${label(this.to)}`;
