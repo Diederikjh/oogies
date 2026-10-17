@@ -6,6 +6,23 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 3 planned: frontend logic tests below the browser
+
+Reviewed and approved the [detailed target-3 plan](docs/frontend-test-layer-plan.md),
+based on `9e61f20`. Start with Node's built-in runner and the existing pure
+filename sanitizer, then extract clip/timeline/range arithmetic and the smaller
+clip-export submission/confirmation state. Explicit clocks and deferred promises
+cover boundaries, expiry and late responses without browser timing.
+
+The plan maps current Selenium assertions to replacement JavaScript coverage and
+retained browser wiring, layout, native input, downloads, media and ownership
+regressions. It includes native Node plus a Docker option, a separate CI job,
+feature-based browser organization, setup-document updates and measurement gates.
+Pause after the first working runner slice for review. The larger playback/live
+controller refactors remain separate. Commit this plan before starting milestone
+1. No implementation, test execution, package installation, recorder access or
+service restart was performed for the planning stage.
+
 ## Pending-reply CI timeout: shared input-timing mechanism
 
 Compared the new pending-quality-reply timeout with the previous two-main Stop

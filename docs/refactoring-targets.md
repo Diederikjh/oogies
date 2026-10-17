@@ -6,7 +6,9 @@ implementation after committing it on 17 October 2026 as `19d12bf`. Target 1 is
 **implemented, verified and committed as `0f3bf9f`**. Target 2's reviewed plan was
 committed as `900483a`; its implementation, all 127 backend checks and all
 [93 browser/native checks pass](stream-budget-refactor-plan.md). Implementation
-was reviewed and committed as `3021d42`. Targets 3-9 remain backlog proposals.
+was reviewed and committed as `3021d42`. Target 3 now has a
+[approved detailed plan](frontend-test-layer-plan.md); milestone 1 begins after
+committing the plan. Targets 4-9 remain backlog proposals.
 Target 1 passed its seven
 new accounting tests, all 25 export tests and the then-complete 107-test backend
 suite; these regressions remain in the expanded suite. See the
@@ -51,7 +53,9 @@ not a promised runtime speedup.
 3. **Test structure:** extract logic with explicit clock/timer inputs. Partition
    the large UI suite by feature for navigation, while retaining representative
    browser interaction, layout and integration cases. Moving files alone does
-   not create a faster or more complete test suite.
+   not create a faster or more complete test suite. See the
+   [detailed target-3 plan](frontend-test-layer-plan.md) for the JavaScript runner,
+   production seams, assertion migration map and staged review/verification gates.
 4. **Playback controller:** separate explicit state transitions/request ownership
    from image and button rendering. Test seek/rate response reordering, stop
    during startup, camera changes, reconnection and late frames using a small

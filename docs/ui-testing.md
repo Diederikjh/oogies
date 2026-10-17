@@ -7,6 +7,10 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
+The proposed [frontend test-layer plan](frontend-test-layer-plan.md) describes
+moving logic matrices into JavaScript unit tests while preserving browser input,
+layout and API/media integration coverage. That layer is not implemented yet.
+
 ## Pending-reply Stop timeout and input timing
 
 The later failure in
