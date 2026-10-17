@@ -69,7 +69,9 @@ environment readiness from recorder connectivity and successful live video.
 | Resources and storage | Inspect machine and Docker capacity; leave headroom for the host | Runtime currently has a 2 GiB memory cap and a 2-CPU limit; adequate disk space for images, SDK and private outputs |
 
 Docker Compose, host FFmpeg, host C++ compilers, Node.js and host
-Selenium are not prerequisites for the current prototype. Automated browser
+Selenium are not runtime prerequisites. Optional JavaScript logic tests can
+reuse existing native Node 22 or run in Docker without a host Node installation.
+Automated browser
 checks use a separate Docker image and are optional. The grid checker includes
 History metadata/navigation; neither History nor offline UI tests need a private
 historical clip.
@@ -628,6 +630,31 @@ proportions and playback, and releases its views. The old one-camera browser and
 saved-media aspect scripts describe the preceding frontend; use the grid tool
 for this milestone.
 
+## Optional: JavaScript logic tests
+
+These tests need neither recorder configuration nor SDK extraction. Prefer an
+existing native Node 22 installation for quick local runs; verify it explicitly:
+
+```sh
+node --version
+python3 tools/run_js_tests.py
+```
+
+The version must be `v22.x.x`. If unavailable or the agent environment restricts
+native Node child processes, use the existing Docker prerequisite instead of
+installing Node on the host:
+
+```sh
+python3 tools/run_js_tests.py --docker --pull
+python3 tools/run_js_tests.py --docker
+```
+
+Pull retrieves the pinned image and exits; execution is a separate offline step.
+Verify exit status 0 and the named test results (initially 27 filename cases).
+The TAP report is `.local/js-test-results/tests.tap`; a deliberate assertion
+failure must return nonzero. There are no npm dependencies or build steps.
+See [JavaScript testing](docs/js-testing.md) for selection and diagnostics.
+
 ## Optional: offline UI acceptance
 
 Run `python3 tools/run_ui_tests.py --build` to build the browser image and run the
@@ -637,9 +664,10 @@ with container networking disabled. No credentials, SDK archive or saved footage
 are mounted. See [UI testing](docs/ui-testing.md). UI success establishes browser
 behavior and does not establish compatibility with the owner's recorder.
 
-The [GitHub workflow](.github/workflows/ci.yml) runs the unit and UI suites on
-pushes and pull requests without recorder setup or Git LFS retrieval. It retains
-synthetic UI screenshots and the JSON report as run artifacts; details are in
+The [GitHub workflow](.github/workflows/ci.yml) runs Python unit, JavaScript logic
+and UI suites on pushes and pull requests without recorder setup or Git LFS
+retrieval. It retains the JavaScript TAP report, synthetic UI screenshots and
+the UI JSON report as run artifacts; details are in
 [the CI notes](docs/ui-testing.md#github-actions).
 
 ## Maintaining this guide

@@ -6,6 +6,31 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 3 milestone 1: JavaScript runner and direct filename tests
+
+Committed the reviewed plan as `8e60f84`, then implemented the initial runner
+slice. Native Node 22 and a digest-pinned official Docker image run the same
+27 tests against the existing filename sanitizer. No production function moved,
+browser assertion was removed, npm dependency added or host package installed.
+The Docker execution mounts only web/test sources, is read-only and offline,
+and uses the current user with CPU/memory/PID limits. Image retrieval is separate.
+
+Added seven Python safeguards for selection, runtime checks, failure propagation
+and report refresh, bringing the full passing Python suite to 134 cases. Both
+Node modes pass all 27 cases and return exit 1 for a deliberate failed assertion.
+Warm launcher samples were about 0.16 s native and 3.97 s Docker. Three unchanged
+browser download/name/proportion cases pass in 30.0 s. The host agent sandbox
+reports native results at file level; normal native and Docker runs verified all
+named assertions, and even the sandbox's deliberate failure remained nonzero.
+
+A separate GitHub JavaScript job runs the verified Docker commands and retains
+TAP reports. Both setup guides, test docs and the
+[target-3 plan](docs/frontend-test-layer-plan.md) describe the new layer. Evidence
+is retained in `.local/js-m1-*.log` and `.tap` files. Hosted execution awaits a
+push. No recorder request or service restart was performed. Milestone 1 was
+reviewed and approved for commit before starting milestone 2; milestones 3-4
+have not started.
+
 ## Target 3 planned: frontend logic tests below the browser
 
 Reviewed and approved the [detailed target-3 plan](docs/frontend-test-layer-plan.md),
@@ -19,9 +44,9 @@ retained browser wiring, layout, native input, downloads, media and ownership
 regressions. It includes native Node plus a Docker option, a separate CI job,
 feature-based browser organization, setup-document updates and measurement gates.
 Pause after the first working runner slice for review. The larger playback/live
-controller refactors remain separate. Commit this plan before starting milestone
-1. No implementation, test execution, package installation, recorder access or
-service restart was performed for the planning stage.
+controller refactors remain separate. The plan was committed as `8e60f84` before
+milestone 1. No implementation, test execution, package installation, recorder
+access or service restart was performed for the planning stage.
 
 ## Pending-reply CI timeout: shared input-timing mechanism
 

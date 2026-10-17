@@ -123,3 +123,5 @@ Contributors can start with [the Python SDK adapter seam](docs/sdk-adapter-seam.
 
 Developers can run [offline UI tests](docs/ui-testing.md) in Docker without a
 recorder or private configuration.
+Fast [JavaScript logic tests](docs/js-testing.md) use existing Node 22 or a small
+Docker runtime; Node is not needed to run the viewer.

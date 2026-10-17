@@ -1,9 +1,43 @@
 # Target 3: faster frontend logic tests below the browser layer
 
-Status: **approved; begin milestone 1 after committing this plan**.
+Status: **milestone 1 reviewed and approved; milestone 2 authorized**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `9e61f20`.
 Parent: [architecture refactoring targets](refactoring-targets.md).
+
+## Milestone 1 implementation and verification
+
+Committed the approved plan as `8e60f84` before implementation. The first slice
+adds [the runner](../tools/run_js_tests.py), explicit ES-module metadata,
+[27 filename cases](../tests/js/frame-download.test.mjs), a separate JavaScript
+CI job and [setup/test documentation](js-testing.md). Tests import the existing
+`safeCameraName()` directly; no production function or browser assertion moved.
+
+Native Node 22 and the pinned offline Docker runtime both pass all 27 tests.
+Measured Node test durations were 74.7 ms native and 95.8 ms Docker; the warm
+launcher totals were about 0.16 s and 3.97 s respectively. Deliberate failed
+assertions returned exit 1 with TAP evidence in both modes, followed by clean
+passing runs. Seven Python runner safeguards cover empty/missing/outside
+selections, unsupported runtimes, nonzero failure propagation and report refresh.
+All 134 Python tests pass (8.7 s). Three unchanged browser cases verify unsafe
+camera-name downloads, PNG contents and original/preset proportions (30.0 s).
+
+The agent's native execution sandbox exposed file-level TAP instead of named
+assertions; deliberate failure still returned nonzero. Native execution outside
+that sandbox and Docker produced the complete per-assertion results. This is
+documented as an environment/reporting limitation, without modifying the runner
+to use experimental isolation flags or changing application code.
+
+Evidence: `.local/js-m1-{native,docker}.log` and matching `.tap` files,
+`.local/js-m1-failure-{native,docker}.{log,tap}`, `.local/js-m1-backend.log` and
+`.local/js-m1-browser.log`. The GitHub job is configured with the same verified
+Docker commands; hosted Actions execution awaits a push. No SDK login, recorder
+access or service restart was performed. The full browser baseline is still
+required before milestone 2 removes/migrates browser assertions.
+
+Milestone 1 has been reviewed and approved for commit before milestone 2 starts.
+Milestones 3-4 have not started. The approved design below remains the behavioral
+contract.
 
 ## Goal and boundaries
 
@@ -71,11 +105,12 @@ paths with extensions; existing absolute browser imports need not be rewritten
 across the application. Pure modules must be importable without DOM globals.
 Do not use custom import loaders, copied source, source-text rewriting or VM eval.
 
-Proposed commands, available only after implementation:
+Runner commands (implemented in milestone 1):
 
 ```sh
 python3 tools/run_js_tests.py
-python3 tools/run_js_tests.py tests/js/clip-model.test.mjs
+python3 tools/run_js_tests.py tests/js/frame-download.test.mjs
+python3 tools/run_js_tests.py --docker --pull
 python3 tools/run_js_tests.py --docker
 ```
 

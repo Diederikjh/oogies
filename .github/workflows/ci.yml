@@ -27,6 +27,36 @@ jobs:
       - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
 
+  javascript:
+    name: JavaScript logic tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Verify Docker access
+        run: docker info
+
+      - name: Retrieve pinned Node runtime
+        run: python3 tools/run_js_tests.py --docker --pull
+
+      - name: Run JavaScript logic tests offline
+        run: python3 tools/run_js_tests.py --docker
+
+      - name: Upload JavaScript test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: js-test-results
+          path: .local/js-test-results/tests.tap
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
   ui:
     name: Offline UI tests
     runs-on: ubuntu-24.04

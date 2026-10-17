@@ -7,9 +7,11 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
-The proposed [frontend test-layer plan](frontend-test-layer-plan.md) describes
-moving logic matrices into JavaScript unit tests while preserving browser input,
-layout and API/media integration coverage. That layer is not implemented yet.
+The [frontend test-layer plan](frontend-test-layer-plan.md) describes moving
+logic matrices into JavaScript unit tests while preserving browser wiring,
+input, layout and API/media integration coverage. Its first slice adds
+[JavaScript logic tests](js-testing.md) for the existing filename sanitizer;
+browser assertions remain unchanged in this milestone.
 
 ## Pending-reply Stop timeout and input timing
 
@@ -403,13 +405,15 @@ update, and manual dispatch. A local commit triggers GitHub checks when it is
 pushed; a push containing several commits tests the pushed revision. Every push
 gets its own run; newer pushes do not cancel older runs.
 
-Two independent Ubuntu 24.04 jobs use the same local commands:
+Three independent Ubuntu 24.04 jobs use the same local commands:
 
 - **Unit tests:** `python3 -m unittest discover -s tests -v`.
+- **JavaScript logic tests:** `python3 tools/run_js_tests.py --docker --pull`,
+  then `python3 tools/run_js_tests.py --docker`.
 - **Offline UI tests:** `python3 tools/run_ui_tests.py --build`.
 
 The workflow checks Docker access without sudo and skips Git LFS downloads.
-The SDK pointer can stay unmaterialized because both suites use source/fixtures.
+The SDK pointer can stay unmaterialized because all suites use source/fixtures.
 It requires no NVR credentials, repository secrets or private `.local/` setup.
 Browser tests run with container networking disabled. The workflow has read-only
 repository permissions, and action versions are pinned to release commit hashes.
@@ -419,7 +423,9 @@ tests fail. Look for the **ui-test-results** artifact in the workflow run; it
 expires after 14 days. Only `.local/ui-test-results/ui-tests.json` and its PNGs
 are selected. Hidden-file inclusion is enabled because the output lives under
 `.local/`. Build failures before any results exist produce an artifact warning.
-Job timeouts are five minutes for unit tests and twenty minutes for the image
+The separate JavaScript job uploads `.local/js-test-results/tests.tap` as
+**js-test-results**, also with 14-day retention; see [JavaScript testing](js-testing.md).
+Job timeouts are five minutes for Python/JavaScript tests and twenty minutes for the image
 build plus UI suite. The workflow runs tests; it does not deploy the service.
 
 Commit the workflow together with the new UI test suite before pushing it to
