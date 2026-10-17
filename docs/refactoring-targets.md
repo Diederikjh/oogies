@@ -2,8 +2,11 @@
 
 Reviewed: 17 October 2026 (Africa/Johannesburg).
 Baseline: `480c85c`. The owner reviewed the detailed target-1 plan and approved
-implementation after committing it on 17 October 2026. Its status is **approved
-for implementation**; targets 2-9 remain backlog proposals.
+implementation after committing it on 17 October 2026 as `19d12bf`. Target 1 is
+**implemented and verified; implementation uncommitted**; targets 2-9 remain
+backlog proposals. Its seven new accounting tests, all 25 export tests and the
+complete 107-test backend suite pass. See the
+[target-1 results](export-accounting-refactor-plan.md#implementation-and-verification-result).
 
 Keep the existing Python/C++ split, one SDK login, shared quality-specific
 sources, bounded latest-frame caches, synthetic recorder seam and frontend
@@ -19,7 +22,7 @@ not a promised runtime speedup.
 
 | Target | Effort | Expected return | Pressure / evidence |
 | --- | --- | --- | --- |
-| 1. Race-safe export file accounting | 0.5-1 day | High; resolve a demonstrated failure with a small change | `ExportJobs._used_bytes()` checks existence then separately reads metadata. A normal partial-file disappearance caused an observed `FileNotFoundError`. |
+| 1. Race-safe export file accounting (implemented) | Estimated 0.5-1 day | High; resolve a demonstrated failure with a small change | Replaced separate existence/size checks with one metadata observation and per-file missing-path handling; deterministic regression and caller/queue tests pass. |
 | 2. Shared stream-budget manager | 1-3 days | Very high; explicit ownership and isolated contention tests | Playback and exports mutate live-session reservation counts and call private reconciliation. Seven overviews plus two mains exhausted an eight-slot total budget despite an HQ cap of two. |
 | 3. Faster logic tests below the browser layer | 1-3 days initially | Very high; more combinations, faster feedback | The last complete 90-case browser/native run took about 14 minutes. Clip bounds, date/range calculations, state transitions and response ordering can be exercised independently. |
 | 4. Separate playback state from rendering | 2-4 days | High; simpler reasoning about overlapping controls | `PlaybackControls` combines leases, requests, seeks, rates, JPEG rendering, downloads and DOM state. Epoch/generation/control guards solve real races but are spread through the controller. |

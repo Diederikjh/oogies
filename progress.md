@@ -6,6 +6,32 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 1 implemented: race-safe export accounting
+
+Committed the reviewed architecture targets and seven-test implementation plan
+as `19d12bf` before changing code. A deterministic metadata hook renamed a real
+partial MP4 between the old check and size read, reproducing the recorded
+`FileNotFoundError`. Accounting now obtains one metadata result per candidate
+for regular-file type and size, skips only missing candidates and continues
+counting survivors. Other I/O errors are preserved; concurrent scans remain
+best-effort rather than transactional quota snapshots.
+
+Added seven tests for atomic rename, disappearing file/parent, exact stable
+totals and filtering, permission/other I/O errors, the actual HTTP export-list
+request during finalization, storage-admission refusal with a survivor, and
+background queue progress with exact acquire/release transitions. Race injection
+uses real temporary files and targeted metadata hooks/events, not random timing.
+The reproduction failed before the fix; all 25 export tests and all 107 backend
+tests passed afterwards. Logs are `.local/export-accounting-red.log`,
+`.local/export-accounting-focused.log` and
+`.local/export-accounting-backend-tests.log`.
+
+The [target-1 plan](docs/export-accounting-refactor-plan.md) and
+[architecture backlog](docs/refactoring-targets.md) reflect completion. Production
+changes are confined to export file accounting. The browser/native suite was
+not rerun; no live service restart or recorder requests were needed. Target-1
+implementation is ready for review and remains uncommitted.
+
 ## Architecture refactoring review and target-1 plan
 
 The two-HQ rollout, total-budget fix, refusal labels and regressions were

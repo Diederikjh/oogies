@@ -1,4 +1,6 @@
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+import errno
 import json
 from pathlib import Path
 import sys
@@ -9,6 +11,7 @@ import unittest
 from zoneinfo import ZoneInfo
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools")); sys.path.insert(0, str(ROOT / "docker/hikvision-sdk"))
@@ -203,6 +206,169 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(self.live.reserved_sources, 0)
         self.assertEqual(self.jobs.get(first["id"])["state"], "failed")
         self.assertEqual(self.jobs.get(second["id"])["state"], "queued")
+
+
+class ExportAccountingTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
+        self.worker = Worker(); self.live = LiveSessions(self.worker, limit=2)
+        self.capture = Capture()
+        self.now = datetime(2026,10,11,20,tzinfo=timezone.utc).timestamp()
+        self.jobs = ExportJobs(self.worker, self.live, self.temporary.name,
+                               encoder=self.capture, clock=lambda:self.now, start=False)
+        self.addCleanup(self.jobs.close)
+        self.body = dict(camera_id="camera-1", aspect_ratio="16:9",
+                         **{"from":"2026-10-11T10:00:00Z", "to":"2026-10-11T10:00:10Z"})
+
+    def clip(self, identifier, name, content):
+        directory = self.jobs.directory / identifier
+        directory.mkdir(exist_ok=True)
+        path = directory / name; path.write_bytes(content)
+        return path
+
+    @contextmanager
+    def during_metadata(self, target, change, *, after=True, thread=None):
+        """Change a real path at a precise observation, without replacing accounting."""
+        original = Path.stat; fired = threading.Event()
+        def observe(path, *args, **kwargs):
+            if path != target or fired.is_set() or (thread is not None and threading.current_thread() is not thread):
+                return original(path, *args, **kwargs)
+            result = original(path, *args, **kwargs) if after else None
+            fired.set(); change()
+            return result if after else original(path, *args, **kwargs)
+        with patch.object(Path, "stat", observe):
+            yield fired
+
+    def runner(self):
+        failures = []
+        def run():
+            try: self.jobs._run()
+            except Exception as error:
+                failures.append(error)
+                with self.worker.condition: self.worker.condition.notify_all()
+        self.jobs.thread = threading.Thread(target=run, daemon=True)
+        return self.jobs.thread, failures
+
+    def test_accounting_survives_partial_rename_after_metadata_read(self):
+        partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
+        self.clip("b"*32, "clip.mp4", b"survivor")
+        final = partial.with_name("clip.mp4")
+        with self.during_metadata(partial, lambda:partial.replace(final)) as fired:
+            self.assertGreaterEqual(self.jobs._used_bytes(), 8)
+        self.assertTrue(fired.is_set(), "The rename must occur during accounting")
+        self.assertFalse(partial.exists()); self.assertTrue(final.is_file())
+        self.assertEqual(self.jobs._used_bytes(), 15)
+
+    def test_accounting_skips_disappearing_candidates_and_keeps_survivors(self):
+        self.clip("b"*32, "clip.mp4", b"survivor")
+        for remove_directory in (False, True):
+            with self.subTest(remove_directory=remove_directory):
+                partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
+                def remove():
+                    partial.unlink()
+                    if remove_directory: partial.parent.rmdir()
+                with self.during_metadata(partial, remove, after=False) as fired:
+                    self.assertEqual(self.jobs._used_bytes(), 8)
+                self.assertTrue(fired.is_set())
+                self.assertEqual(self.jobs._used_bytes(), 8)
+
+    def test_accounting_counts_matching_regular_files(self):
+        self.assertEqual(self.jobs._used_bytes(), 0)
+        self.clip("a"*32, "clip.mp4", b"final")
+        self.clip("b"*32, "clip.partial.mp4", b"partial")
+        self.clip("b"*32, "clip.additional.mp4", b"more")
+        self.clip("b"*32, "unrelated.mp4", b"ignore me")
+        self.clip("b"*32, "clip.txt", b"ignore me too")
+        (self.jobs.directory / ("a"*32) / "clip.directory.mp4").mkdir()
+        self.assertEqual(self.jobs._used_bytes(), 16)
+
+    def test_accounting_preserves_unexpected_io_errors(self):
+        partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
+        for error in (PermissionError(errno.EACCES, "Denied"), OSError(errno.EIO, "I/O failure")):
+            with self.subTest(error=type(error).__name__):
+                def fail(): raise error
+                with self.during_metadata(partial, fail, after=False) as fired:
+                    with self.assertRaises(type(error)) as caught: self.jobs._used_bytes()
+                self.assertTrue(fired.is_set())
+                self.assertEqual(caught.exception.errno, error.errno)
+
+    def test_http_export_list_succeeds_during_finalization(self):
+        prepared, finalize, published = (threading.Event() for _ in range(3))
+        class AtomicCapture:
+            def capture(_, job, directory, cancel, progress):
+                partial = directory / "clip.partial.mp4"; partial.write_bytes(b"synthetic-mp4")
+                prepared.set()
+                if not finalize.wait(5): raise ExportFailure("Test finalization gate timed out")
+                if cancel.is_set(): raise ExportCancelled()
+                partial.replace(directory / "clip.mp4"); published.set()
+                return dict(bytes=13, actual_duration_seconds=job["duration_seconds"], frames=10)
+        self.jobs.encoder = AtomicCapture()
+        job = self.jobs.create(self.body)
+        server = create_server(self.worker, self.live, address=("127.0.0.1",0), web=ROOT/"web",
+                               recording=Path(self.temporary.name)/"unused.mp4", exports=self.jobs)
+        self.addCleanup(server.server_close)
+        http = threading.Thread(target=server.serve_forever, daemon=True); http.start()
+        self.addCleanup(http.join, 3); self.addCleanup(server.shutdown)
+        self.addCleanup(finalize.set)
+        runner, failures = self.runner(); runner.start()
+        self.assertTrue(prepared.wait(3))
+        def publish():
+            finalize.set()
+            self.assertTrue(published.wait(3), "Capture must rename outside the shared lock")
+        partial = self.jobs.directory / job["id"] / "clip.partial.mp4"
+        url = f"http://127.0.0.1:{server.server_port}/api/exports"
+        with self.during_metadata(partial, publish) as fired:
+            with urlopen(url, timeout=5) as response:
+                self.assertEqual(response.status, 200); data = json.load(response)
+        self.assertTrue(fired.is_set())
+        self.assertIsInstance(data["storage_used_bytes"], int)
+        with self.worker.condition:
+            self.assertTrue(self.worker.condition.wait_for(
+                lambda:self.jobs.jobs[job["id"]]["state"] == "ready" or failures, timeout=3))
+        self.assertEqual(failures, [])
+        with urlopen(url, timeout=3) as response:
+            self.assertEqual(json.load(response)["storage_used_bytes"], 13)
+        self.assertEqual(self.live.reserved_sources, 0)
+
+    def test_create_preserves_storage_limit_when_candidate_disappears(self):
+        partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
+        self.clip("b"*32, "clip.mp4", b"survivor")
+        self.jobs.limits["storage_bytes"] = 2 * self.jobs.limits["max_file_bytes"]
+        with self.during_metadata(partial, partial.unlink, after=False) as fired:
+            with self.assertRaises(SessionError) as caught: self.jobs.create(self.body)
+        self.assertTrue(fired.is_set()); self.assertEqual(caught.exception.status, 409)
+        self.assertIn("storage", str(caught.exception).lower())
+        self.assertEqual(self.worker.ensure_calls, 0)
+        self.assertEqual(self.jobs.jobs, {}); self.assertEqual(self.capture.calls, [])
+        self.assertEqual(self.live.reserved_sources, 0)
+
+    def test_queue_continues_after_accounting_candidate_disappears(self):
+        class TrackedReservations(LiveSessions):
+            @property
+            def reserved_sources(self): return self._reserved_sources
+            @reserved_sources.setter
+            def reserved_sources(self, value):
+                previous = getattr(self, "_reserved_sources", 0)
+                self._reserved_sources = value
+                if value != previous: transitions.append((previous, value))
+        transitions = []
+        self.jobs.live = self.live = TrackedReservations(self.worker, limit=2)
+        first = self.jobs.create(self.body); second = self.jobs.create(self.body)
+        partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
+        runner, failures = self.runner()
+        self.capture.gate.set()
+        with self.during_metadata(partial, partial.unlink, thread=runner) as fired:
+            runner.start()
+            self.assertTrue(fired.wait(3), "Fault must occur in the runner's storage check")
+            with self.worker.condition:
+                self.assertTrue(self.worker.condition.wait_for(lambda:failures or
+                    all(job["state"] == "ready" for job in self.jobs.jobs.values()), timeout=3))
+        self.assertEqual(failures, [])
+        self.assertTrue(runner.is_alive())
+        self.assertEqual([job["id"] for job in self.capture.calls], [first["id"], second["id"]])
+        self.assertEqual(transitions, [(0,1), (1,0), (0,1), (1,0)])
+        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.jobs.list()["storage_used_bytes"], 26)
 
 
 class ExportClockTests(unittest.TestCase):

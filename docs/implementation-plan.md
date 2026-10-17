@@ -41,8 +41,9 @@ unverified. Keep the shared high-quality cap at one.
 
 The subsequent [architecture refactoring targets](refactoring-targets.md) track
 maintenance/testability proposals separately from the feature milestones below.
-The [export-accounting plan](export-accounting-refactor-plan.md) is the first
-detailed proposal, reviewed and approved for implementation on 17 October 2026.
+The [export-accounting plan](export-accounting-refactor-plan.md) was committed as
+`19d12bf` after review; target 1 is implemented with seven new regressions and
+passing focused/full backend checks on 17 October 2026.
 
 ### Live overview
 

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import stat
 import threading
 import time
 import uuid
@@ -77,7 +78,15 @@ class ExportJobs:
         if changed: self._save()
 
     def _used_bytes(self):
-        return sum(path.stat().st_size for path in self.directory.glob("*/clip*.mp4") if path.is_file())
+        total = 0
+        for path in self.directory.glob("*/clip*.mp4"):
+            try:
+                metadata = path.stat()
+            except FileNotFoundError:
+                # Capture can rename/remove a partial after directory enumeration.
+                continue
+            if stat.S_ISREG(metadata.st_mode): total += metadata.st_size
+        return total
 
     def create(self, body, key=None):
         if not isinstance(body, dict) or set(body) != {"camera_id", "from", "to", "aspect_ratio"}:

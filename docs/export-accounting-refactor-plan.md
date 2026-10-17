@@ -1,9 +1,31 @@
 # Target 1: race-safe export file accounting
 
-Status: **approved for implementation on 17 October 2026**.
+Status: **implemented and verified on 17 October 2026; implementation uncommitted**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `480c85c`. Estimated effort: 0.5-1 focused developer day, including tests.
 Parent: [architecture refactoring targets](refactoring-targets.md).
+
+## Implementation and verification result
+
+The approved plan was committed as `19d12bf` before implementation.
+`ExportJobs._used_bytes()` now uses one metadata result per candidate for its
+type and size, skips individual missing paths and preserves other I/O errors.
+The seven tests below are implemented in `ExportAccountingTests` in
+[`tests/test_export_jobs.py`](../tests/test_export_jobs.py).
+
+The atomic-rename regression failed on the old implementation with the observed
+`FileNotFoundError` before the production change. All 25 focused export tests
+and all 107 backend tests subsequently passed, including the event-coordinated
+HTTP request and the background-runner check with exact reservation transitions.
+Private logs: `.local/export-accounting-red.log`,
+`.local/export-accounting-focused.log` and
+`.local/export-accounting-backend-tests.log`.
+
+The implementation preserves the existing lock/queue/API behavior and best-effort
+accounting semantics during concurrent changes. No browser suite or real NVR
+check is needed for this filesystem-only change; the live service was not
+restarted and no recorder login was attempted. The following sections retain
+the approved design, test requirements and verification procedure.
 
 ## Tests are part of this change
 
@@ -12,7 +34,7 @@ Add the seven focused backend tests below in
 existing export tests. Write the regression first and demonstrate its failure
 on the current implementation, then apply the accounting fix. These tests are
 required work for target 1; they are not deferred to the broader testing refactor.
-Names below are proposed names for the new tests, not tests already implemented.
+Names below match the seven implemented tests.
 
 1. **`test_accounting_survives_partial_rename_after_metadata_read`**
    Create a real partial file in a temporary export directory. A targeted hook
@@ -177,7 +199,7 @@ Run focused export tests first:
 python3 -m unittest discover -s tests -p test_export_jobs.py -v
 ```
 
-Then run the complete backend suite (currently 100 tests before additions):
+Then run the complete backend suite (107 tests including these additions):
 
 ```sh
 python3 -m unittest discover -s tests -v

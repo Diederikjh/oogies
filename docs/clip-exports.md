@@ -95,6 +95,15 @@ scheduling leave one extra file cap of finalization headroom. Completed files
 are never silently evicted to admit another job. Optional strict configuration
 is documented in [the setup agent guide](../GETTING_STARTED_AGENTS.md).
 
+Storage accounting observes matching regular clip files with one metadata read
+per candidate. A file or parent directory disappearing during capture
+finalization/cleanup is skipped without discarding the rest of the scan;
+permission and other I/O errors remain visible. A scan is best-effort while
+files change, and converges to the exact total once the store is stable. This
+does not make the quota checks transactional. Seven deterministic accounting,
+HTTP and queue regression tests cover this behavior; see the
+[implementation and test plan](export-accounting-refactor-plan.md).
+
 ## Capture path and precision
 
 Python owns validation, admission, persistence, HTTP and FFmpeg. The existing
