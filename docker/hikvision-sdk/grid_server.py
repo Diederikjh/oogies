@@ -17,11 +17,14 @@ from urllib.parse import parse_qs, urlsplit
 from browser_server import Handler as BaseHandler, byte_range
 from export_jobs import ExportJobs
 from grid_worker import GridWorker
-from live_sessions import LiveSessions, SessionError
+from live_sessions import LiveSessions
+from service_errors import SessionError
 from history_timeline import HistoryTimeline
 from playback_sessions import PlaybackSessions
 from nvr_config import load_config
 from sdk_adapters import get_sdk_adapter
+from stream_budget import StreamBudget
+from maintenance import run_maintenance
 
 ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript"), "/style.css": ("style.css", "text/css"),
@@ -231,6 +234,8 @@ class Handler(BaseHandler):
 
 def create_server(worker, sessions, *, address, web, recording, recording_info=None, timeline=None, playback=None, exports=None):
     """Wire the HTTP service without initializing an SDK or choosing a worker."""
+    if any(service is not None and service.budget is not sessions.budget for service in (playback, exports)):
+        raise ValueError("Viewing and export services must share one stream budget")
     server = ThreadingHTTPServer(address, Handler)
     server.daemon_threads = True
     port = server.server_port
@@ -239,15 +244,16 @@ def create_server(worker, sessions, *, address, web, recording, recording_info=N
     server.web, server.recording = Path(web), Path(recording)
     server.recording_info = recording_info or {}
     server.timeline = timeline or HistoryTimeline(worker, worker.config.get("timezone", "Africa/Johannesburg"))
-    server.playback = playback or PlaybackSessions(worker, sessions, lease_seconds=sessions.lease_seconds)
-    sessions.playback_sessions = server.playback
+    server.playback = playback or PlaybackSessions(worker, sessions.budget, lease_seconds=sessions.lease_seconds)
+    server.maintenance_stop = threading.Event()
     temporary = None
     if exports is None:
         temporary = tempfile.TemporaryDirectory(prefix="oogies-exports-fixture-")
-        exports = ExportJobs(worker, sessions, temporary.name)
+        exports = ExportJobs(worker, sessions.budget, temporary.name)
     server.exports = exports
     close = server.server_close
     def close_exports():
+        server.maintenance_stop.set()
         server.exports.close()
         close()
         if temporary: temporary.cleanup()
@@ -266,19 +272,23 @@ def main():
     adapter = get_sdk_adapter(config["sdk_profile"])
     binary = adapter.compile_live_bridge()
     worker = GridWorker(binary, adapter, config, "/output")
-    sessions = LiveSessions(worker, config["max_live_sources"], config["lease_seconds"], high_limit=config["max_high_quality_sources"])
+    budget = StreamBudget(worker.condition, config["max_live_sources"], config["max_high_quality_sources"])
+    sessions = LiveSessions(worker, lease_seconds=config["lease_seconds"], budget=budget)
     recording_info = {"recording_begin": os.environ.get("CAM_RECORDING_BEGIN"),
         "recording_end": os.environ.get("CAM_RECORDING_END"), "recording_seconds": os.environ.get("CAM_RECORDING_SECONDS")}
     server = create_server(worker, sessions, address=("0.0.0.0", args.port),
         web="/web", recording="/recording/historical-clip.mp4", recording_info=recording_info,
-        exports=ExportJobs(worker, sessions, "/exports"))
-    threading.Thread(target=sessions.run_reaper, daemon=True).start()
+        exports=ExportJobs(worker, sessions.budget, "/exports"))
+    maintenance = threading.Thread(target=run_maintenance,
+        args=(sessions, server.playback, server.maintenance_stop), daemon=True)
+    maintenance.start()
     def shutdown(*_): threading.Thread(target=server.shutdown, daemon=True).start()
     signal.signal(signal.SIGTERM, shutdown); signal.signal(signal.SIGINT, shutdown)
     print(f"Live grid listening on port {args.port}; recorder connects when a viewer opens the page.", flush=True)
     try:
         server.serve_forever()
     finally:
+        server.maintenance_stop.set(); maintenance.join(timeout=2)
         server.exports.close(); sessions.close(); server.playback.close(); worker.close(); server.timeline.close(); server.server_close()
 
 

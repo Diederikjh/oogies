@@ -10,7 +10,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "docker/hikvision-sdk"))
-from live_sessions import LiveSessions, SessionError
+from live_sessions import LiveSessions
+from service_errors import SessionError
 from nvr_config import load_config
 from grid_worker import GridWorker
 from types import SimpleNamespace

@@ -6,8 +6,8 @@ import time
 import uuid
 from zoneinfo import ZoneInfo
 
-from history_timeline import timestamp, utc_text, recorder_wall
-from live_sessions import SessionError
+from recorder_time import timestamp, utc_text, recorder_wall
+from service_errors import SessionError
 
 RATES = (0.5, 1, 2, 4)
 
@@ -27,10 +27,12 @@ def playback_range(begin_text, end_text, zone):
     return begin, end
 
 class PlaybackSessions:
-    def __init__(self, worker, live, limit=1, lease_seconds=90, clock=time.monotonic):
-        self.worker, self.live, self.limit = worker, live, limit
+    def __init__(self, worker, budget, limit=1, lease_seconds=90, clock=time.monotonic):
+        self.worker, self.budget, self.limit = worker, budget, limit
         self.lease_seconds, self.clock = lease_seconds, clock
         self.lock = worker.condition
+        if budget.condition is not self.lock: raise ValueError("Budget must share the worker lock")
+        budget.snapshot()
         self.zone = ZoneInfo(worker.config.get("timezone", "Africa/Johannesburg"))
         self.sessions = {}
         self.closed = False
@@ -51,14 +53,16 @@ class PlaybackSessions:
                 raise SessionError("Unknown camera.", 404)
             if self.closed or self.worker.shutdown:
                 raise SessionError("Playback service stopped.", 503)
-            if len(self.sessions) >= self.limit or self.live.used_sources() >= self.live.limit:
+            if len(self.sessions) >= self.limit:
                 raise SessionError("No historical playback slot is available. Pause an unused live view first.", 409)
             identifier = uuid.uuid4().hex
+            reservation = self.budget.try_reserve("playback", identifier)
+            if reservation is None:
+                raise SessionError("No historical playback slot is available. Pause an unused live view first.", 409)
             session = dict(id=identifier, camera_id=camera, begin=begin, end=end, generation=1,
                            requested_position=position,
-                           expires=self.clock() + self.lease_seconds)
+                           expires=self.clock() + self.lease_seconds, reservation=reservation)
             self.sessions[identifier] = session
-            self.live.reserved_sources += 1
             try:
                 self.worker.start_playback(identifier, camera, recorder_wall(position, self.zone), recorder_wall(end, self.zone), 1, rate=rate)
             except (OSError, ValueError):
@@ -138,9 +142,7 @@ class PlaybackSessions:
             try:
                 self.worker.stop_playback(identifier)
             finally:
-                self.live.reserved_sources -= 1
-                self.live._reconcile()
-                self.lock.notify_all()
+                self.budget.release(session["reservation"])
 
     def reap(self):
         with self.lock:

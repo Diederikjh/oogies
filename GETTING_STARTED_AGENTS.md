@@ -359,6 +359,15 @@ streams and one History or export need `max_live_sources: 10`; changing only
 `max_high_quality_sources` does not enlarge the total budget. A refusal's
 `source_limit` reason identifies this total-budget constraint, while
 `high_quality_limit` identifies the separate main-stream cap.
+
+Backend capacity is owned by `docker/hikvision-sdk/stream_budget.py`. Live,
+playback and exports share one budget/worker condition; playback/export states
+own identified reservation handles rather than live-service counters. Production
+startup binds live occupancy before restored exports can run. Application-level
+maintenance expires playback with no live viewers. See the
+[ownership guide](docs/stream-budget-refactor-plan.md) when updating service or
+test-fixture construction; configuration and installation steps are unchanged.
+
 Frontend expansion requests high quality and collapsing releases that viewer's
 high request. The picture stays at overview until a decoded high frame is ready.
 Per-tile quality text and the footer reflect painted frames; “High quality

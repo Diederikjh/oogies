@@ -15,7 +15,8 @@ from grid_server import create_server
 from grid_worker import GridWorker
 from live_sessions import LiveSessions
 from playback_sessions import PlaybackSessions
-from history_timeline import recorder_utc, utc_text
+from maintenance import run_maintenance
+from recorder_time import recorder_utc, utc_text
 from live_sources import source_identity
 
 
@@ -258,12 +259,13 @@ class ViewerFixture:
         self.sessions = LiveSessions(self.worker, limit=limit, lease_seconds=lease, high_limit=high_limit)
         self.server = create_server(self.worker, self.sessions, address=("127.0.0.1", 0), web="/web",
             recording=media.recording if recording else media.directory / "missing.mp4",
-            playback=PlaybackSessions(self.worker, self.sessions, limit=playback_limit, lease_seconds=lease))
+            playback=PlaybackSessions(self.worker, self.sessions.budget, limit=playback_limit, lease_seconds=lease))
         self.worker.export_directory = self.server.exports.directory
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
-        self.reaper = threading.Thread(target=self.sessions.run_reaper, daemon=True)
+        self.reaper = threading.Thread(target=run_maintenance,
+            args=(self.sessions, self.server.playback, self.server.maintenance_stop), daemon=True)
         self.reaper.start()
 
     def snapshot(self):
@@ -273,6 +275,7 @@ class ViewerFixture:
                         attempts=self.worker.connection_attempts)
 
     def close(self):
+        self.server.maintenance_stop.set()
         self.worker.discovery_gate.set()
         self.worker.timeline_gate.set()
         self.server.shutdown()

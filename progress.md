@@ -6,6 +6,39 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 2 implementation: independent capacity ownership
+
+Committed the approved task-2 plan as `900483a` before implementation. The new
+`StreamBudget` owns total/HQ admission and identified playback/export handles,
+with immutable usage snapshots and identity-checked release. `LiveSessions`
+provides read-only occupancy including current native stops; playback and export
+services receive the budget directly and no longer mutate live counters or call
+private live reconciliation. A bound public refresh callback preserves immediate
+overview recovery without automatically retrying refused HQ requests.
+
+Shared errors and time conversion live in neutral modules. Application-level
+maintenance expires playback even with no live viewers. Production, diagnostic
+and offline-fixture construction match these boundaries. The HTTP factory
+rejects mismatched budgets; exports require completed occupancy wiring before
+restored queued work may run. Configuration, routes, media and public status
+field meanings remain in place.
+
+All 107 migrated backend tests initially passed. New budget/ownership/failure
+tests bring the complete suite to 127 passing cases. These cover last-slot
+contention, delayed/stale stops, repeated/foreign releases, callback failure and
+notification, controls retaining a handle, cancellation isolation, storage waits,
+persistence/encoder/cleanup failures and HTTP counts. All seven target-1 cases
+remain. Three focused browser cases passed, including immutable export state
+across History seek/camera change/tab close. The expanded full browser/native
+run passed all 93 cases (89 browser/four native) in 887.7 seconds. The final
+export-independence case passed again in 14.6 seconds after its cleanup wait was
+tightened. Full report: `.local/task2-full-ui-report.json`; logs:
+`.local/task2-*.log`. See the
+[task-2 results](docs/stream-budget-refactor-plan.md).
+
+The refactor remains uncommitted. No real recorder request, service restart or
+owner configuration change was performed.
+
 ## Target 2 planned: independent export/playback ownership and shared capacity
 
 Committed target 1 as `0f3bf9f` after review. The

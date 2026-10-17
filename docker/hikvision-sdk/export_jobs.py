@@ -12,15 +12,17 @@ import uuid
 from zoneinfo import ZoneInfo
 
 from export_encoder import ExportEncoder, ExportFailure, ExportCancelled
-from history_timeline import timestamp, utc_text, recorder_wall
-from live_sessions import SessionError
+from recorder_time import timestamp, utc_text, recorder_wall
+from service_errors import SessionError
 from nvr_config import export_limits
 
 
 class ExportJobs:
-    def __init__(self, worker, live, directory, *, encoder=None, clock=time.time, start=True):
-        self.worker, self.live, self.directory = worker, live, Path(directory)
+    def __init__(self, worker, budget, directory, *, encoder=None, clock=time.time, start=True):
+        self.worker, self.budget, self.directory = worker, budget, Path(directory)
         self.lock = worker.condition; self.clock = clock
+        if budget.condition is not self.lock: raise ValueError("Budget must share the worker lock")
+        budget.snapshot()
         self.zone = ZoneInfo(worker.config.get("timezone", "Africa/Johannesburg"))
         self.limits = export_limits(worker.config.get("exports"))
         self.encoder = encoder or ExportEncoder(worker, self.zone, self.limits["max_file_bytes"])
@@ -196,13 +198,17 @@ class ExportJobs:
                 if self.closed: return
                 job = next((job for job in self.jobs.values() if job["state"] == "queued"), None)
                 if job is None: self.lock.wait(timeout=1); continue
-                if self.live.used_sources() >= self.live.limit:
+                if not self.budget.snapshot().available:
                     job["waiting_reason"] = "Waiting for a recorder stream slot. Pause an unused live view."; self.lock.wait(timeout=1); continue
                 if self._used_bytes() + 2 * self.limits["max_file_bytes"] > self.limits["storage_bytes"]:
                     job["waiting_reason"] = "Waiting for export storage. Delete a completed clip."; self.lock.wait(timeout=1); continue
-                self.active = job["id"]; self.cancel = threading.Event(); self.live.reserved_sources += 1
-                job.update(state="running", waiting_reason=None); self._save()
+                reservation = self.budget.try_reserve("export", job["id"])
+                if reservation is None: continue
+                self.active = job["id"]; self.cancel = threading.Event()
+                job.update(state="running", waiting_reason=None)
             try:
+                with self.lock: self._save()
+                if self.cancel.is_set(): raise ExportCancelled()
                 self.worker.ensure_ready()
                 directory = self.directory / job["id"]; directory.mkdir(mode=0o700, exist_ok=True)
                 capture = {**job, **job["request"], "begin":timestamp(job["request"]["from"]), "end":timestamp(job["request"]["to"])}
@@ -224,8 +230,11 @@ class ExportJobs:
                                error=None if self.cancel.is_set() else str(error) if isinstance(error, ExportFailure) else "Export could not start.", finished_at=self.clock())
             finally:
                 with self.lock:
-                    self.live.reserved_sources -= 1; self.active = None; self.cancel = None
-                    self._expire(); self._save(); self.live._reconcile(); self.lock.notify_all()
+                    self.active = None; self.cancel = None
+                    try:
+                        self._expire(); self._save()
+                    finally:
+                        self.budget.release(reservation)
 
     def close(self):
         with self.lock:

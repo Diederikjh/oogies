@@ -7,6 +7,17 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
+Task 2 migrates the fixture to an identified shared stream budget and neutral
+application maintenance. A new case holds capture active while the user seeks,
+changes History camera and closes that tab, then verifies that the immutable
+export completes in another tab with reservations released. It passed alongside
+two-main capacity and live/export coexistence checks. The expanded suite contains
+93 browser/native cases; the complete run passed all 93 in 887.7 seconds
+(89 browser/four native). Its full report is retained privately as
+`.local/task2-full-ui-report.json` and its log as `.local/task2-full-ui.log`. The separate backend
+suite passes 127 cases, including contention, stale handles, delayed live stops,
+playback expiry without live viewers, independent cancellation and export faults.
+
 Compact History cases check that video, seeking, speed and mark/export controls
 stay inside the laptop/desktop viewport, including an active clip and queue
 confirmation. A long motion list scrolls without moving the video or page, and
@@ -21,7 +32,7 @@ the installed Selenium version reports those unpainted descendants as visible.
 Milestone 2's complete local run passed 84 cases: 80 browser cases, three native
 buffer regressions and one live-quality/frame-bounds native case, using the same
 command as GitHub Actions. Milestone 3 expands this to 90 cases (86 browser/four
-native). The latest complete run passed all 90 in 849.6 seconds after the owner's
+native). The previous complete run passed all 90 in 849.6 seconds after the owner's
 repository-wide en-dash-to-hyphen replacement. Its initial run passed 89; a capacity test clicked while another tile was
 still animating and timed out awaiting a collapse that never occurred. That test
 now waits for settled geometry and verifies its click; three consecutive reruns

@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from datetime import datetime, timedelta, timezone
 import errno
 import json
@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT / "tools")); sys.path.insert(0, str(ROOT / "docker/h
 from export_jobs import ExportJobs
 from export_encoder import FrameClock, ExportFailure, ExportCancelled, validate_video
 from grid_worker import GridWorker
-from live_sessions import LiveSessions, SessionError
+from live_sessions import LiveSessions
+from service_errors import SessionError
 from nvr_config import export_limits
 from grid_server import create_server
 
@@ -51,7 +52,7 @@ class ExportTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
         self.worker = Worker(); self.live = LiveSessions(self.worker, limit=2)
         self.capture = Capture(); self.now = datetime(2026,10,11,20,tzinfo=timezone.utc).timestamp()
-        self.jobs = ExportJobs(self.worker, self.live, self.temporary.name, encoder=self.capture, clock=lambda:self.now)
+        self.jobs = ExportJobs(self.worker, self.live.budget, self.temporary.name, encoder=self.capture, clock=lambda:self.now)
         self.addCleanup(self.jobs.close)
         self.body = dict(camera_id="camera-1", aspect_ratio="16:9", **{"from":"2026-10-11T10:00:00Z", "to":"2026-10-11T10:00:10Z"})
 
@@ -64,7 +65,7 @@ class ExportTests(unittest.TestCase):
     def ready(self):
         job = self.jobs.create(self.body); self.capture.gate.set()
         self.wait(lambda:self.jobs.get(job["id"])["state"] == "ready")
-        self.wait(lambda:self.live.reserved_sources == 0)
+        self.wait(lambda:self.live.budget.snapshot().reserved == 0)
         return job["id"]
 
     def test_invalid_ranges_options_and_future_dates_do_not_touch_sdk(self):
@@ -83,9 +84,9 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(self.jobs.create(self.body, "same-request")["id"], first["id"])
         self.wait(lambda:len(self.capture.calls) == 1)
         self.assertEqual(self.capture.calls[0]["aspect_ratio"], "16:9")
-        self.assertEqual(self.live.reserved_sources, 1)
+        self.assertEqual(self.live.budget.snapshot().reserved, 1)
         self.jobs.delete(first["id"]); self.jobs.delete(first["id"])
-        self.wait(lambda:self.live.reserved_sources == 0)
+        self.wait(lambda:self.live.budget.snapshot().reserved == 0)
         self.assertEqual(self.jobs.get(first["id"])["state"], "cancelled")
 
     def test_ten_minute_boundary_and_owner_lower_limit(self):
@@ -99,11 +100,11 @@ class ExportTests(unittest.TestCase):
         self.live.wanted = {"camera-1", "camera-2"}
         first = self.jobs.create(self.body)
         self.wait(lambda:self.jobs.get(first["id"])["waiting_reason"] is not None)
-        self.assertEqual(self.capture.calls, []); self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.capture.calls, []); self.assertEqual(self.live.budget.snapshot().reserved, 0)
         self.live.wanted.clear()
         with self.worker.condition: self.worker.condition.notify_all()
         self.wait(lambda:len(self.capture.calls) == 1)
-        self.jobs.delete(first["id"]); self.wait(lambda:self.live.reserved_sources == 0)
+        self.jobs.delete(first["id"]); self.wait(lambda:self.live.budget.snapshot().reserved == 0)
 
     def test_queue_bound_fifo_and_cancelled_waiter(self):
         first = self.jobs.create(self.body); self.wait(lambda:self.jobs.active == first["id"])
@@ -113,25 +114,25 @@ class ExportTests(unittest.TestCase):
         self.jobs.delete(queued[1]["id"]); self.capture.gate.set()
         self.wait(lambda:all(job["state"] in ("ready", "cancelled") for job in self.jobs.list()["jobs"]))
         self.assertEqual([job["id"] for job in self.capture.calls], [first["id"], queued[0]["id"], queued[2]["id"]])
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
 
     def test_failed_encoder_removes_partial_and_releases_slot_once(self):
         self.capture.failure = True; self.capture.gate.set(); first = self.jobs.create(self.body)
-        self.wait(lambda:self.jobs.get(first["id"])["state"] == "failed" and self.live.reserved_sources == 0)
+        self.wait(lambda:self.jobs.get(first["id"])["state"] == "failed" and self.live.budget.snapshot().reserved == 0)
         self.assertFalse((Path(self.temporary.name) / first["id"]).exists())
-        self.jobs.delete(first["id"]); self.assertEqual(self.live.reserved_sources, 0)
+        self.jobs.delete(first["id"]); self.assertEqual(self.live.budget.snapshot().reserved, 0)
 
     def test_restart_keeps_ready_and_queued_and_fails_interrupted_capture(self):
         identifier = self.ready(); self.jobs.close()
         data = json.loads(self.jobs.manifest.read_text()); ready = data["jobs"][0]
         queued = {**ready,"id":"a"*32,"state":"queued"}; running = {**ready,"id":"b"*32,"state":"running"}
         data["jobs"].extend([queued,running]); self.jobs.manifest.write_text(json.dumps(data))
-        recovered = ExportJobs(self.worker, self.live, self.temporary.name, start=False, clock=lambda:self.now)
+        recovered = ExportJobs(self.worker, self.live.budget, self.temporary.name, start=False, clock=lambda:self.now)
         self.addCleanup(recovered.close)
         self.assertEqual(recovered.get(identifier)["state"], "ready")
         self.assertEqual(recovered.get("a"*32)["state"], "queued")
         self.assertEqual(recovered.get("b"*32)["state"], "failed")
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
 
     def test_expiry_and_delete_defer_unlink_until_download_finishes(self):
         identifier = self.ready()
@@ -203,9 +204,76 @@ class ExportTests(unittest.TestCase):
     def test_shutdown_releases_capture_slot_and_leaves_queue_durable(self):
         first = self.jobs.create(self.body); self.wait(lambda:self.jobs.active == first["id"])
         second = self.jobs.create(self.body); self.jobs.close()
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
         self.assertEqual(self.jobs.get(first["id"])["state"], "failed")
         self.assertEqual(self.jobs.get(second["id"])["state"], "queued")
+
+    def test_export_failure_after_acquire_releases_once(self):
+        for stage in ("persistence","startup","encoding","cleanup"):
+            with self.subTest(stage=stage):
+                capture = Capture(); capture.gate.set()
+                jobs = ExportJobs(self.worker,self.live.budget,Path(self.temporary.name)/stage,
+                                  encoder=capture,clock=lambda:self.now,start=False)
+                independent = None
+                try:
+                    job = jobs.create(self.body)
+                    independent = self.live.budget.try_reserve("playback","independent")
+                    self.assertIsNotNone(independent)
+                    fired = threading.Event(); original_save = jobs._save; original_expire = jobs._expire
+                    original_release = jobs.budget.release
+                    def release(token):
+                        try: return original_release(token)
+                        finally: jobs.closed = True
+                    def save():
+                        if stage == "persistence" and jobs.active and not fired.is_set():
+                            fired.set(); raise OSError("Manifest write failed")
+                        return original_save()
+                    def expire():
+                        if stage == "cleanup" and jobs.active is None and jobs.jobs[job["id"]]["state"] == "ready":
+                            fired.set(); raise OSError("Cleanup failed")
+                        return original_expire()
+                    def fail_start(): fired.set(); raise ValueError("Capture startup failed")
+                    def fail_encode(*args): fired.set(); raise ExportFailure("Encoding failed")
+                    with ExitStack() as patches:
+                        patches.enter_context(patch.object(jobs,"_save",side_effect=save))
+                        patches.enter_context(patch.object(jobs,"_expire",side_effect=expire))
+                        released = patches.enter_context(patch.object(jobs.budget,"release",side_effect=release))
+                        if stage == "startup": patches.enter_context(patch.object(self.worker,"ensure_ready",side_effect=fail_start))
+                        if stage == "encoding": patches.enter_context(patch.object(capture,"capture",side_effect=fail_encode))
+                        if stage == "cleanup":
+                            with self.assertRaisesRegex(OSError,"Cleanup failed"): jobs._run()
+                        else:
+                            jobs._run()
+                            self.assertEqual(jobs.get(job["id"])["state"],"failed")
+                        self.assertTrue(fired.is_set())
+                        self.assertEqual(released.call_count,1)
+                        self.assertEqual(released.call_args.args[0].owner_id,job["id"])
+                    self.assertEqual(jobs.budget.snapshot().exports,0)
+                    self.assertEqual(jobs.budget.snapshot().playback,1)
+                    self.assertIs(jobs.budget.try_reserve("playback","independent"),independent)
+                    self.assertIsNone(jobs.active)
+                finally:
+                    jobs.close()
+                    self.live.budget.release(independent)
+
+    def test_storage_waiting_export_holds_no_slot_then_starts_after_space_is_freed(self):
+        budget = self.live.budget
+        first = budget.try_reserve("playback","one"); second = budget.try_reserve("playback","two")
+        try:
+            self.jobs.limits["storage_bytes"] = 2 * self.jobs.limits["max_file_bytes"]
+            job = self.jobs.create(self.body)
+            directory = Path(self.temporary.name)/("a"*32); directory.mkdir()
+            clip = directory/"clip.mp4"; clip.write_bytes(b"occupied storage")
+            budget.release(first)
+            self.wait(lambda:"storage" in (self.jobs.get(job["id"])["waiting_reason"] or "").lower())
+            self.assertEqual(budget.snapshot().exports,0)
+            self.assertEqual(self.capture.calls,[])
+            clip.unlink(); self.capture.gate.set()
+            with self.worker.condition: self.worker.condition.notify_all()
+            self.wait(lambda:self.jobs.get(job["id"])["state"] == "ready" and budget.snapshot().exports == 0)
+            self.assertEqual([item["id"] for item in self.capture.calls],[job["id"]])
+        finally:
+            budget.release(first); budget.release(second)
 
 
 class ExportAccountingTests(unittest.TestCase):
@@ -214,7 +282,7 @@ class ExportAccountingTests(unittest.TestCase):
         self.worker = Worker(); self.live = LiveSessions(self.worker, limit=2)
         self.capture = Capture()
         self.now = datetime(2026,10,11,20,tzinfo=timezone.utc).timestamp()
-        self.jobs = ExportJobs(self.worker, self.live, self.temporary.name,
+        self.jobs = ExportJobs(self.worker, self.live.budget, self.temporary.name,
                                encoder=self.capture, clock=lambda:self.now, start=False)
         self.addCleanup(self.jobs.close)
         self.body = dict(camera_id="camera-1", aspect_ratio="16:9",
@@ -328,7 +396,7 @@ class ExportAccountingTests(unittest.TestCase):
         self.assertEqual(failures, [])
         with urlopen(url, timeout=3) as response:
             self.assertEqual(json.load(response)["storage_used_bytes"], 13)
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
 
     def test_create_preserves_storage_limit_when_candidate_disappears(self):
         partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
@@ -340,24 +408,16 @@ class ExportAccountingTests(unittest.TestCase):
         self.assertIn("storage", str(caught.exception).lower())
         self.assertEqual(self.worker.ensure_calls, 0)
         self.assertEqual(self.jobs.jobs, {}); self.assertEqual(self.capture.calls, [])
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
 
     def test_queue_continues_after_accounting_candidate_disappears(self):
-        class TrackedReservations(LiveSessions):
-            @property
-            def reserved_sources(self): return self._reserved_sources
-            @reserved_sources.setter
-            def reserved_sources(self, value):
-                previous = getattr(self, "_reserved_sources", 0)
-                self._reserved_sources = value
-                if value != previous: transitions.append((previous, value))
-        transitions = []
-        self.jobs.live = self.live = TrackedReservations(self.worker, limit=2)
         first = self.jobs.create(self.body); second = self.jobs.create(self.body)
         partial = self.clip("a"*32, "clip.partial.mp4", b"partial")
         runner, failures = self.runner()
         self.capture.gate.set()
-        with self.during_metadata(partial, partial.unlink, thread=runner) as fired:
+        with patch.object(self.jobs.budget, "try_reserve", wraps=self.jobs.budget.try_reserve) as acquire, \
+             patch.object(self.jobs.budget, "release", wraps=self.jobs.budget.release) as release, \
+             self.during_metadata(partial, partial.unlink, thread=runner) as fired:
             runner.start()
             self.assertTrue(fired.wait(3), "Fault must occur in the runner's storage check")
             with self.worker.condition:
@@ -366,8 +426,10 @@ class ExportAccountingTests(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertTrue(runner.is_alive())
         self.assertEqual([job["id"] for job in self.capture.calls], [first["id"], second["id"]])
-        self.assertEqual(transitions, [(0,1), (1,0), (0,1), (1,0)])
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual([call.args for call in acquire.call_args_list],
+                         [("export",first["id"]),("export",second["id"])])
+        self.assertEqual([call.args[0].owner_id for call in release.call_args_list], [first["id"],second["id"]])
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
         self.assertEqual(self.jobs.list()["storage_used_bytes"], 26)
 
 

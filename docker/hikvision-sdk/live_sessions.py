@@ -2,27 +2,22 @@
 
 from datetime import datetime, timezone
 import json
-import threading
 import time
 import uuid
 from live_sources import source_key, source_identity
-
-
-class SessionError(ValueError):
-    def __init__(self, message, status=400):
-        super().__init__(message)
-        self.status = status
+from service_errors import SessionError
+from stream_budget import StreamBudget
 
 
 class LiveSessions:
-    def __init__(self, worker, limit=8, lease_seconds=90, clock=time.monotonic, high_limit=1):
-        self.worker, self.limit, self.lease_seconds, self.clock = worker, limit, lease_seconds, clock
+    def __init__(self, worker, limit=8, lease_seconds=90, clock=time.monotonic, high_limit=1, *, budget=None):
+        self.worker, self.lease_seconds, self.clock = worker, lease_seconds, clock
         self.lock = worker.condition
         self.sessions, self.keys, self.wanted = {}, {}, set()
         self.closed = False
-        self.reserved_sources = 0
-        self.playback_sessions = None
-        self.high_limit = high_limit
+        self.budget = budget if budget is not None else StreamBudget(self.lock, limit, high_limit)
+        if self.budget.condition is not self.lock: raise ValueError("Budget must share the worker lock")
+        self.budget.bind_live_usage(self.live_occupancy, self.refresh_capacity)
         self.upgrade_refusals = self.upgrade_failures = 0
         self.recent_upgrade_events = []
 
@@ -52,8 +47,22 @@ class LiveSessions:
         """Include native stops not yet acknowledged, under the shared lock."""
         return self.wanted | {key for key, source in self.worker.sources.items() if source.get("state") == "stopping"}
 
+    def live_occupancy(self):
+        with self.lock:
+            return {key:source_identity(key)[1] for key in self.occupied_sources()}
+
+    @property
+    def limit(self): return self.budget.limit
+
+    @property
+    def high_limit(self): return self.budget.high_limit
+
     def used_sources(self):
-        return len(self.occupied_sources()) + self.reserved_sources
+        return self.budget.snapshot().used
+
+    def refresh_capacity(self):
+        with self.lock:
+            if not self.closed: self._reconcile()
 
     def _upgrade_result(self, session, camera, state, reason=None):
         previous = session["upgrades"].get(camera, {})
@@ -118,7 +127,7 @@ class LiveSessions:
         for identifier in sorted(self.wanted - retained):
             self.worker.stop_source(identifier)
         self.wanted = retained
-        available = max(0, self.limit - self.used_sources())
+        available = self.budget.snapshot().available
         additions = set(sorted(desired - self.occupied_sources())[:available])
         for identifier in sorted(additions):
             self.worker.start_source(identifier)
@@ -136,7 +145,7 @@ class LiveSessions:
                     self._upgrade_result(session, camera, "capacity_limited", dict(code="source_limit", message="No overview fallback slot is available."))
                 elif key in self.wanted:
                     upgrade["state"] = "pending"
-                elif high_used >= self.high_limit or self.used_sources() >= self.limit or key in self.occupied_sources():
+                elif self.budget.check_live("high") is not None or key in self.occupied_sources():
                     self._upgrade_result(session, camera, "capacity_limited", dict(code="high_quality_limit" if high_used >= self.high_limit else "source_limit",
                         message=(f"High-quality stream limit ({self.high_limit}) reached; showing overview."
                                  if high_used >= self.high_limit else
@@ -205,12 +214,6 @@ class LiveSessions:
                 if self.sessions[identifier]["expires"] <= self.clock():
                     self.delete(identifier)
 
-    def run_reaper(self):
-        while not self.closed:
-            self.maintain()
-            if self.playback_sessions: self.playback_sessions.reap()
-            time.sleep(1)
-
     def maintain(self):
         with self.lock:
             self.reap()
@@ -265,7 +268,7 @@ class LiveSessions:
                 high_quality_starting=sum(self.worker.sources[key].get("state") == "starting" for key in high),
                 high_quality_active=sum(self.worker.sources[key].get("state") == "live" for key in high),
                 sources_by_quality={"overview":len(occupied)-len(high), "high":len(high)},
-                reserved_sources=self.reserved_sources, occupied_source_slots=self.used_sources(),
+                reserved_sources=self.budget.snapshot().reserved, occupied_source_slots=self.used_sources(),
                 upgrade_refusals=self.upgrade_refusals, upgrade_failures=self.upgrade_failures,
                 recent_upgrade_events=list(self.recent_upgrade_events), live_source_metrics=metrics)
 

@@ -8,7 +8,7 @@ import select
 import subprocess
 import time
 
-from history_timeline import recorder_utc, recorder_wall, utc_text
+from recorder_time import recorder_utc, recorder_wall, utc_text
 
 
 class ExportFailure(Exception):

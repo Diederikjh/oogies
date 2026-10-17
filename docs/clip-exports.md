@@ -90,6 +90,15 @@ files expire after 24 hours. Delete/expiry closes new downloads immediately and
 defers unlinking an already-open download until it finishes. Recent terminal
 history is bounded; idempotency keys remain valid while their jobs are retained.
 
+`ExportJobs` and `PlaybackSessions` own separate state and receive the same
+neutral `StreamBudget`. Queued exports hold no handle; an active export owns one
+identified reservation through finalization and cleanup. Duplicate release cannot
+free another owner's slot. Interactive playback owns its own handle through
+seeks, rates and pause until deletion/expiry. An export retains its original
+camera/time range when History changes or closes. Application maintenance expires
+playback independently of live-view leases. See the
+[capacity ownership implementation](stream-budget-refactor-plan.md).
+
 Defaults are a 256 MiB per-file cap and 1 GiB storage quota. Admission and
 scheduling leave one extra file cap of finalization headroom. Completed files
 are never silently evicted to admit another job. Optional strict configuration

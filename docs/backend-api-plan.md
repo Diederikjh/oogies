@@ -166,6 +166,13 @@ count distinct sources. Metrics are null until measured. Delivered FPS/bytes
 describe publication into the shared Python cache, not each viewer's bandwidth.
 The binary JPEG protocol is documented in [live-grid.md](live-grid.md).
 
+These field meanings are preserved by the
+[shared stream-budget extraction](stream-budget-refactor-plan.md):
+`reserved_sources` is the sum of identified playback/export reservations and
+`occupied_source_slots` includes those plus distinct live sources (including
+native stops awaiting acknowledgement). Opaque reservation handles remain
+internal; they are absent from HTTP responses and persisted export manifests.
+
 ## Recording and motion timeline data — milestones 3-4
 
 Implemented in the [first History slice](history-timeline.md), now connected to

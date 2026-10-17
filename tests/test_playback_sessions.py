@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "docker/hikvision-sdk"))
 from grid_worker import GridWorker
-from live_sessions import LiveSessions, SessionError
+from live_sessions import LiveSessions
+from service_errors import SessionError
 from playback_sessions import PlaybackSessions
 
 BEGIN, END = "2026-10-11T10:00:00Z", "2026-10-11T11:00:00Z"
@@ -33,7 +34,7 @@ class PlaybackTests(unittest.TestCase):
         self.worker = PlaybackWorker()
         self.now = 0
         self.live = LiveSessions(self.worker, limit=3, lease_seconds=10, clock=lambda:self.now)
-        self.playback = PlaybackSessions(self.worker, self.live, limit=2, lease_seconds=10, clock=lambda:self.now)
+        self.playback = PlaybackSessions(self.worker, self.live.budget, limit=2, lease_seconds=10, clock=lambda:self.now)
         self.addCleanup(self.live.close)
         self.addCleanup(self.playback.close)
 
@@ -141,7 +142,7 @@ class PlaybackTests(unittest.TestCase):
         self.assertEqual(len(self.worker.commands), 1)
 
     def test_range_jump_retains_lease_slot_rate_and_other_live_view(self):
-        self.live.limit = 2
+        self.live.budget.limit = 2
         self.worker.cameras["camera-2"]["online"] = True
         session = self.create(); identifier = session["id"]
         self.worker.playbacks[identifier].update(state="playing", rate=4, requested_rate=4, frame=b"old")
@@ -153,7 +154,7 @@ class PlaybackTests(unittest.TestCase):
         self.assertEqual(result["generation"], 2)
         self.assertEqual(result["requested_rate"], 4)
         self.assertEqual(result["from"], "2026-10-09T10:00:00Z")
-        self.assertEqual((len(self.live.wanted), self.live.reserved_sources), (1, 1))
+        self.assertEqual((len(self.live.wanted), self.live.budget.snapshot().reserved), (1, 1))
         self.assertEqual(self.live.get(live["id"])["cameras"][0]["state"], "live")
         self.assertIsNone(self.worker.playbacks[identifier]["frame"])
         self.assertTrue(self.worker.commands[-1].endswith("2026-10-09T13:15:30 2026-10-09T15:00:00 0 2"))
@@ -167,7 +168,7 @@ class PlaybackTests(unittest.TestCase):
             with self.assertRaises(SessionError): self.playback.patch(identifier, body)
             self.assertEqual(self.playback.get(identifier)["generation"], 1)
             self.assertEqual(self.playback.get(identifier)["from"], BEGIN)
-            self.assertEqual(self.live.reserved_sources, 1)
+            self.assertEqual(self.live.budget.snapshot().reserved, 1)
         self.assertEqual(len(self.worker.commands), 1)
 
     def test_independent_positions_controls_and_expiry(self):
@@ -178,12 +179,12 @@ class PlaybackTests(unittest.TestCase):
         self.now = 11; self.playback.reap()
         self.assertNotIn(first["id"], self.worker.playbacks)
         self.assertIn(second["id"], self.worker.playbacks)
-        self.assertEqual(self.live.reserved_sources, 1)
+        self.assertEqual(self.live.budget.snapshot().reserved, 1)
         self.playback.delete(first["id"])
-        self.assertEqual(self.live.reserved_sources, 1)
+        self.assertEqual(self.live.budget.snapshot().reserved, 1)
 
     def test_playback_capacity_does_not_evict_live_sources(self):
-        self.live.limit = 1
+        self.live.budget.limit = 1
         view = self.live.create({"cameras":[{"id":"camera-1", "quality":"overview"}]})
         with self.assertRaises(SessionError) as failure: self.create()
         self.assertEqual(failure.exception.status, 409)
@@ -191,7 +192,7 @@ class PlaybackTests(unittest.TestCase):
         self.assertEqual(self.worker.commands, [])
 
     def test_live_recovery_respects_reserved_slot_then_recovers_on_release(self):
-        self.live.limit = 2
+        self.live.budget.limit = 2
         self.live.create({"cameras":[{"id":f"camera-{number}", "quality":"overview"} for number in (1, 2)]})
         playback = self.create()
         self.worker.cameras["camera-2"]["online"] = True
@@ -199,7 +200,7 @@ class PlaybackTests(unittest.TestCase):
         self.assertEqual(self.live.wanted, {"camera-1"})
         self.playback.delete(playback["id"])
         self.assertEqual(self.live.wanted, {"camera-1", "camera-2"})
-        self.assertEqual(self.live.reserved_sources, 0)
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
 
     def test_frame_packets_include_absolute_position_and_seek_generation(self):
         result = self.create(); identifier = result["id"]

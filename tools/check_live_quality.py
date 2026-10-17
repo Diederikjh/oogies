@@ -42,7 +42,7 @@ def main():
     adapter = get_sdk_adapter(config["sdk_profile"])
     worker = GridWorker(adapter.compile_live_bridge(),adapter,config,output)
     live = LiveSessions(worker,limit=config["max_live_sources"],high_limit=1)
-    playback = PlaybackSessions(worker,live)
+    playback = PlaybackSessions(worker,live.budget)
     report = dict(passed=False, samples=[])
     deadline = time.monotonic()+180
 

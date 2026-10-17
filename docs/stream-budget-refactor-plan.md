@@ -1,9 +1,66 @@
 # Target 2: separate export/playback ownership from shared stream capacity
 
-Status: **approved for implementation on 17 October 2026**.
+Status: **implemented and verified on 17 October 2026; implementation uncommitted**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `0f3bf9f`, the committed target-1 export-accounting fix.
 Parent: [architecture refactoring targets](refactoring-targets.md).
+
+## Implementation and verification
+
+The approved plan was committed as `900483a` before implementation. Source
+changes are currently uncommitted; the original design below is retained as
+the behavioral contract.
+
+- [stream_budget.py](../docker/hikvision-sdk/stream_budget.py) owns identified
+  process-local reservations and frozen capacity snapshots. Acquisition is
+  idempotent per owner; release checks handle identity, so duplicate, stale and
+  foreign handles cannot free another owner's slot.
+- [live_sessions.py](../docker/hikvision-sdk/live_sessions.py) owns selections
+  and native-live occupancy. Its constructor binds read-only occupancy and a
+  public refresh callback before playback/export construction. Production uses
+  an explicit configured budget; existing small diagnostics can let live sessions
+  construct one. Limit accessors and `used_sources()` delegate to that budget.
+- Playback and export constructors take the budget directly, with no live-service
+  reference. Playback stores a handle through controls until delete/expiry.
+  Exports hold a local handle through active capture/finalization. Release is
+  protected even if persistence, startup, encoding or cleanup fails; handles are
+  not persisted in job manifests.
+- [maintenance.py](../docker/hikvision-sdk/maintenance.py) supplies a maintenance
+  tick and stoppable one-second loop owned by server/fixture composition.
+  Playback expiry works independently of live viewer leases.
+- [service_errors.py](../docker/hikvision-sdk/service_errors.py) and
+  [recorder_time.py](../docker/hikvision-sdk/recorder_time.py) own the extracted
+  common helpers. Callers no longer import them through feature modules.
+- The HTTP factory rejects services with different budgets before creating its
+  socket, preserves public status fields and signals maintenance shutdown.
+  Offline fixtures and diagnostics use the same ownership boundaries.
+
+All 107 migrated backend cases initially passed. New isolated budget and service
+tests bring the complete suite to 127 passing cases, retaining all seven target-1
+accounting regressions. Fault injection covers running-manifest persistence,
+capture startup, encoding and cleanup, preserving an independent playback handle
+and releasing the export handle once. An actual loopback status request checks
+closing-live and non-live counts. Existing timezone/DST and generation tests
+remain in use.
+
+Three focused browser cases passed: seven-overview/two-main budget behavior,
+exports alongside another live tab, and the new independence flow across History
+seek, camera change and closing its original tab. The expanded full 93-case
+browser/native run passed in 887.7 seconds (89 browser and four native cases).
+Private logs are `.local/task2-initial-backend.log`,
+`.local/task2-budget-tests.log`, `.local/task2-ownership-tests.log`,
+`.local/task2-backend-tests.log`, `.local/task2-focused-ui.log` and
+`.local/task2-full-ui.log`. The final backend log is
+`.local/task2-final-backend-tests.log`; the full browser report is preserved as
+`.local/task2-full-ui-report.json`.
+The final independence case also passed a focused rerun in 14.6 seconds after
+tightening its completion wait to require reservation cleanup; see
+`.local/task2-final-independence-ui.log`. The normal UI report path now reflects
+that focused rerun; the separate full report above retains all 93 results.
+
+No running-service restart, owner configuration change or real NVR request was
+performed. Actual SDK compatibility/performance beyond existing evidence is not
+newly measured by this extraction.
 
 ## Outcome and interpretation
 

@@ -18,7 +18,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "docker/hikvision-sdk"))
 from grid_worker import GridWorker
 from grid_server import create_server
-from live_sessions import LiveSessions, SessionError
+from live_sessions import LiveSessions
+from service_errors import SessionError
 from live_sources import source_key
 from playback_sessions import PlaybackSessions
 from nvr_config import load_config
@@ -164,7 +165,7 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(sorted(self.camera(view)["upgrade_state"] for view in views),["capacity_limited","pending"])
 
     def test_two_high_sources_share_independently_and_third_requires_explicit_retry(self):
-        self.live.high_limit=2
+        self.live.budget.high_limit=2
         first=self.create(); second=self.create("camera-2"); shared=self.create()
         self.worker.frame(quality="high"); self.worker.frame("camera-2",quality="high")
         self.assertEqual(self.camera(first)["quality"],"high")
@@ -187,13 +188,13 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(self.live.used_sources(),0)
 
     def test_total_budget_and_existing_playback_reservation_win_over_upgrade(self):
-        self.live.limit = 2
-        playback = PlaybackSessions(self.worker,self.live)
+        self.live.budget.limit = 2
+        playback = PlaybackSessions(self.worker,self.live.budget)
         session = playback.create(dict(camera_id="camera-1", **{"from":"2024-01-01T10:00:00Z","to":"2024-01-01T11:00:00Z"}))
         view = self.create()
         self.assertEqual(self.camera(view)["quality_reason"]["code"], "source_limit")
         self.assertEqual(self.live.used_sources(),2)
-        self.assertEqual(self.live.reserved_sources,1)
+        self.assertEqual(self.live.budget.snapshot().reserved,1)
         playback.delete(session["id"])
         self.assertEqual(self.camera(view)["upgrade_state"],"capacity_limited")
         self.live.patch(view["id"],selection(("camera-1","high")))
@@ -202,10 +203,10 @@ class QualityTests(unittest.TestCase):
             playback.create(dict(camera_id="camera-1", **{"from":"2024-01-01T10:00:00Z","to":"2024-01-01T11:00:00Z"}))
 
     def test_disabled_unsupported_and_offline_requests_have_fallback_reasons(self):
-        self.live.high_limit = 0
+        self.live.budget.high_limit = 0
         disabled = self.create()
         self.assertEqual(self.camera(disabled)["upgrade_state"], "capacity_limited")
-        self.live.high_limit = 1
+        self.live.budget.high_limit = 1
         self.worker.cameras["camera-2"]["live_qualities"] = ["overview"]
         unsupported = self.create("camera-2"); offline = self.create("camera-4")
         self.assertEqual(self.camera(unsupported)["upgrade_state"],"unsupported")
@@ -242,9 +243,9 @@ class QualityTests(unittest.TestCase):
                 self.entered.set()
                 cancel.wait(5)
                 raise ExportCancelled()
-        self.live.limit = 2; capture = Capture()
+        self.live.budget.limit = 2; capture = Capture()
         with tempfile.TemporaryDirectory() as directory:
-            jobs = ExportJobs(self.worker,self.live,directory,encoder=capture)
+            jobs = ExportJobs(self.worker,self.live.budget,directory,encoder=capture)
             try:
                 view = self.create()
                 job = jobs.create(dict(camera_id="camera-1",aspect_ratio="16:9",
@@ -258,19 +259,19 @@ class QualityTests(unittest.TestCase):
                 self.assertFalse(capture.entered.is_set())
                 self.worker._event(dict(type="stopped",channel=1,quality="high",generation=1))
                 self.assertTrue(capture.entered.wait(2))
-                self.assertEqual(self.live.reserved_sources,1)
+                self.assertEqual(self.live.budget.snapshot().reserved,1)
                 self.live.patch(view["id"],selection(("camera-1","high")))
                 self.assertEqual(self.camera(view)["quality_reason"]["code"],"source_limit")
                 self.assertEqual(self.live.used_sources(),2)
                 jobs.delete(job["id"])
                 with self.worker.condition:
-                    self.assertTrue(self.worker.condition.wait_for(lambda:self.live.reserved_sources==0,timeout=2))
+                    self.assertTrue(self.worker.condition.wait_for(lambda:self.live.budget.snapshot().reserved==0,timeout=2))
                 self.assertNotIn("camera-1-high",self.live.wanted)
             finally:
                 jobs.close()
 
     def test_stop_acknowledgement_keeps_both_budgets_reserved(self):
-        self.live.limit = 3
+        self.live.budget.limit = 3
         view = self.create(); self.worker.ack_stops = False
         self.live.patch(view["id"],selection(("camera-1","overview")))
         self.assertEqual(self.live.used_sources(),2)

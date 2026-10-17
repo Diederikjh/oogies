@@ -3,10 +3,12 @@
 Reviewed: 17 October 2026 (Africa/Johannesburg).
 Baseline: `480c85c`. The owner reviewed the detailed target-1 plan and approved
 implementation after committing it on 17 October 2026 as `19d12bf`. Target 1 is
-**implemented, verified and committed as `0f3bf9f`**. Target 2 has a
-[detailed plan awaiting review](stream-budget-refactor-plan.md); targets 3-9
-remain backlog proposals. Target 1's seven new accounting tests, all 25 export tests and the
-complete 107-test backend suite pass. See the
+**implemented, verified and committed as `0f3bf9f`**. Target 2's reviewed plan was
+committed as `900483a`; its implementation, all 127 backend checks and all
+[93 browser/native checks pass](stream-budget-refactor-plan.md). Implementation
+is uncommitted. Targets 3-9 remain backlog proposals. Target 1 passed its seven
+new accounting tests, all 25 export tests and the then-complete 107-test backend
+suite; these regressions remain in the expanded suite. See the
 [target-1 results](export-accounting-refactor-plan.md#implementation-and-verification-result).
 
 Keep the existing Python/C++ split, one SDK login, shared quality-specific
@@ -24,7 +26,7 @@ not a promised runtime speedup.
 | Target | Effort | Expected return | Pressure / evidence |
 | --- | --- | --- | --- |
 | 1. Race-safe export file accounting (implemented) | Estimated 0.5-1 day | High; resolve a demonstrated failure with a small change | Replaced separate existence/size checks with one metadata observation and per-file missing-path handling; deterministic regression and caller/queue tests pass. |
-| 2. Shared stream-budget manager and independent export/playback ownership (planned) | 2-4 days | Very high; explicit ownership and isolated contention tests | Playback and exports mutate live-session reservation counts and call private reconciliation. Plan covers neutral helpers, playback expiry and fixture wiring as well as budget extraction. |
+| 2. Shared stream-budget manager and independent export/playback ownership (implemented and verified) | Estimated 2-4 days | Very high; explicit ownership and isolated contention tests | Identified shared reservations replace live-counter mutations; helper/maintenance ownership and fixtures migrated. Backend contention, failure and cleanup checks pass. |
 | 3. Faster logic tests below the browser layer | 1-3 days initially | Very high; more combinations, faster feedback | The last complete 90-case browser/native run took about 14 minutes. Clip bounds, date/range calculations, state transitions and response ordering can be exercised independently. |
 | 4. Separate playback state from rendering | 2-4 days | High; simpler reasoning about overlapping controls | `PlaybackControls` combines leases, requests, seeks, rates, JPEG rendering, downloads and DOM state. Epoch/generation/control guards solve real races but are spread through the controller. |
 | 5. Shorter shared-lock critical sections | 2-4 days | High; reduce opportunities for unrelated work to stall | Export manifest writes, `fsync`, directory cleanup and frame packet construction use the worker's shared condition lock. Actual contention needs measurement before claiming a speedup. |
@@ -88,8 +90,9 @@ viewer, but each viewer still receives and renders media. Browser aspect sizing
 already avoids server-side image resizing. A compressed-video transport should
 be a separately measured investigation if JPEG costs become limiting.
 
-Recommended order: target 1, then review targets 2 and 3; use the resulting test
-seams to support targets 4-6. Schedule larger media changes after profiling.
+Targets 1 and 2 provide initial ownership/test seams. Review target 3 next, then
+use the resulting logic tests to support targets 4-6. Schedule larger media
+changes after profiling.
 
 ## Relevant code and existing evidence
 

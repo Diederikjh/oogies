@@ -347,7 +347,7 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(self.fixture.sessions.high_limit,2)
         self.wait_quality(2,"overview"); self.wait_live(channels)
         with self.fixture.worker.condition:
-            self.fixture.sessions.limit=10
+            self.fixture.sessions.budget.limit=10
         self.element(self.tile(2)+" .camera-view").send_keys(Keys.ENTER)
         self.wait.until(lambda _:self.element(self.tile(2)+" .camera-view").get_attribute("aria-expanded")=="false")
         self.element(self.tile(2)+" .camera-view").send_keys(Keys.ENTER)
@@ -375,7 +375,7 @@ class ViewerUITests(unittest.TestCase):
     def test_live_quality_disabled_unsupported_and_offline_are_explicit(self):
         self.wait_live(); self.picture_click()
         self.wait.until(lambda _:"High quality unavailable" in self.element(self.tile()+" .tile-metrics").text)
-        self.fixture.sessions.high_limit=1
+        self.fixture.sessions.budget.high_limit=1
         self.fixture.worker.cameras["camera-2"]["live_qualities"]=["overview"]
         self.picture_click(2)
         self.wait.until(lambda _:"unsupported" in self.element(self.tile(2)+" .tile-metrics").get_attribute("title"))
@@ -1405,6 +1405,40 @@ class ViewerUITests(unittest.TestCase):
         self.element(".export-job button").click()
         self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "expired")
 
+    def test_export_remains_independent_of_history_navigation_and_tab_close(self):
+        self.fixture.worker.export_gate.clear()
+        self.addCleanup(self.fixture.worker.export_gate.set)
+        self.paused_history()
+        self.element("#clip-start").click()
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled())
+        self.element("#clip-end").click(); self.element("#clip-queue").click()
+        self.wait.until(lambda _:self.fixture.server.exports.active is not None)
+        identifier = self.fixture.server.exports.active
+        request = dict(self.fixture.server.exports.jobs[identifier]["request"])
+        self.wait.until(lambda _:bool(self.fixture.worker.export_commands))
+        capture = self.fixture.worker.export_commands[0]
+        self.element('#history-steps button[data-seconds="30"]').click()
+        self.wait.until(lambda _:self.element('#history-steps button[data-seconds="30"]').is_enabled())
+        Select(self.element("#history-camera")).select_by_value("camera-2")
+        self.wait.until(lambda _:self.element("#history-recordings").get_attribute("data-state")=="ready")
+        self.driver.find_elements(By.CSS_SELECTOR,"#history-events button")[0].click()
+        self.history_playing()
+        self.assertEqual(self.fixture.server.exports.jobs[identifier]["request"],request)
+        first=self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url)
+        self.element("#exports-tab").click()
+        second=self.driver.current_window_handle
+        self.driver.switch_to.window(first); self.driver.close(); self.driver.switch_to.window(second)
+        self.wait.until(lambda _:not self.fixture.worker.playbacks)
+        self.assertEqual(self.fixture.server.exports.get(identifier)["state"],"running")
+        self.assertEqual(self.fixture.worker.export_commands,[capture])
+        self.assertEqual(self.fixture.server.exports.jobs[identifier]["request"],request)
+        self.fixture.worker.export_gate.set()
+        self.wait.until(lambda _:self.fixture.server.exports.get(identifier)["state"]=="ready" and
+                        self.fixture.sessions.budget.snapshot().reserved==0)
+        self.assertEqual(self.fixture.sessions.budget.snapshot().reserved,0)
+
     def test_history_exports_keep_newest_first_on_return_and_refresh(self):
         self.mark_clip(10); self.element("#clip-queue").click()
         self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
@@ -1589,7 +1623,7 @@ class ViewerUITests(unittest.TestCase):
         self.element("#exports-tab").click()
         self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="running"] button'))
         self.element(".export-job button").click()
-        self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "cancelled" and self.fixture.sessions.reserved_sources == 0)
+        self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "cancelled" and self.fixture.sessions.budget.snapshot().reserved == 0)
         self.assertFalse(self.element('[role="progressbar"]').is_displayed())
         self.assertEqual(list(self.fixture.server.exports.directory.glob("*/clip*.mp4")),[])
 
@@ -1599,13 +1633,13 @@ class ViewerUITests(unittest.TestCase):
         self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click(); self.element("#clip-queue").click()
         self.wait.until(lambda _:any(job["state"]=="failed" for job in self.fixture.server.exports.list()["jobs"]))
         self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"],"paused")
-        self.assertEqual(self.fixture.sessions.reserved_sources,1)
+        self.assertEqual(self.fixture.sessions.budget.snapshot().reserved,1)
         self.assertEqual(list(self.fixture.server.exports.directory.glob("*/clip*.mp4")),[])
         self.fixture.server.exports.encoder.max_bytes=256*1024**2
         self.wait.until(lambda _:self.element("#clip-queue").is_enabled()); self.element("#clip-queue").click()
         self.element("#exports-tab").click()
         self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
-        self.assertEqual(self.fixture.sessions.reserved_sources,0)
+        self.assertEqual(self.fixture.sessions.budget.snapshot().reserved,0)
 
     def date_value(self, days=1):
         return (datetime.now(ZoneInfo("Africa/Johannesburg")) - timedelta(days=days)).replace(
@@ -1659,7 +1693,7 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(list(self.fixture.worker.playbacks), [identifier])
         self.assertEqual(self.fixture.worker.playbacks[identifier]["generation"], 2)
         self.assertEqual(self.fixture.worker.playbacks[identifier]["rate"], 4)
-        self.assertEqual(self.fixture.sessions.reserved_sources, 1)
+        self.assertEqual(self.fixture.sessions.budget.snapshot().reserved, 1)
         self.assertEqual(len(self.fixture.sessions.wanted), 7)
         self.assertEqual(dict(self.fixture.worker.started), started)
         self.assertEqual(dict(self.fixture.worker.stopped), stopped)
