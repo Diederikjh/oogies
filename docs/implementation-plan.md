@@ -44,6 +44,9 @@ maintenance/testability proposals separately from the feature milestones below.
 The [export-accounting plan](export-accounting-refactor-plan.md) was committed as
 `19d12bf` after review; target 1 is implemented with seven new regressions and
 passing focused/full backend checks on 17 October 2026.
+It is committed as `0f3bf9f`. The
+[target-2 plan](stream-budget-refactor-plan.md) proposes separating export and
+interactive playback ownership from shared stream capacity; it awaits review.
 
 ### Live overview
 

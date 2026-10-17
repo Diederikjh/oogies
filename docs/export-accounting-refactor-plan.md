@@ -1,6 +1,6 @@
 # Target 1: race-safe export file accounting
 
-Status: **implemented and verified on 17 October 2026; implementation uncommitted**.
+Status: **implemented, verified and committed as `0f3bf9f` on 17 October 2026**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `480c85c`. Estimated effort: 0.5-1 focused developer day, including tests.
 Parent: [architecture refactoring targets](refactoring-targets.md).

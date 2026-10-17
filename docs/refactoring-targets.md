@@ -3,8 +3,9 @@
 Reviewed: 17 October 2026 (Africa/Johannesburg).
 Baseline: `480c85c`. The owner reviewed the detailed target-1 plan and approved
 implementation after committing it on 17 October 2026 as `19d12bf`. Target 1 is
-**implemented and verified; implementation uncommitted**; targets 2-9 remain
-backlog proposals. Its seven new accounting tests, all 25 export tests and the
+**implemented, verified and committed as `0f3bf9f`**. Target 2 has a
+[detailed plan awaiting review](stream-budget-refactor-plan.md); targets 3-9
+remain backlog proposals. Target 1's seven new accounting tests, all 25 export tests and the
 complete 107-test backend suite pass. See the
 [target-1 results](export-accounting-refactor-plan.md#implementation-and-verification-result).
 
@@ -23,7 +24,7 @@ not a promised runtime speedup.
 | Target | Effort | Expected return | Pressure / evidence |
 | --- | --- | --- | --- |
 | 1. Race-safe export file accounting (implemented) | Estimated 0.5-1 day | High; resolve a demonstrated failure with a small change | Replaced separate existence/size checks with one metadata observation and per-file missing-path handling; deterministic regression and caller/queue tests pass. |
-| 2. Shared stream-budget manager | 1-3 days | Very high; explicit ownership and isolated contention tests | Playback and exports mutate live-session reservation counts and call private reconciliation. Seven overviews plus two mains exhausted an eight-slot total budget despite an HQ cap of two. |
+| 2. Shared stream-budget manager and independent export/playback ownership (planned) | 2-4 days | Very high; explicit ownership and isolated contention tests | Playback and exports mutate live-session reservation counts and call private reconciliation. Plan covers neutral helpers, playback expiry and fixture wiring as well as budget extraction. |
 | 3. Faster logic tests below the browser layer | 1-3 days initially | Very high; more combinations, faster feedback | The last complete 90-case browser/native run took about 14 minutes. Clip bounds, date/range calculations, state transitions and response ordering can be exercised independently. |
 | 4. Separate playback state from rendering | 2-4 days | High; simpler reasoning about overlapping controls | `PlaybackControls` combines leases, requests, seeks, rates, JPEG rendering, downloads and DOM state. Epoch/generation/control guards solve real races but are spread through the controller. |
 | 5. Shorter shared-lock critical sections | 2-4 days | High; reduce opportunities for unrelated work to stall | Export manifest writes, `fsync`, directory cleanup and frame packet construction use the worker's shared condition lock. Actual contention needs measurement before claiming a speedup. |
@@ -42,6 +43,8 @@ not a promised runtime speedup.
    releases and capacity snapshots. Preserve source sharing, existing admission
    priority, delayed-live-stop accounting and explicit retry behavior. Test
    simultaneous live/History/export requests, repeated release and stale events.
+   See the [detailed target-2 plan](stream-budget-refactor-plan.md), including
+   independent feature state/lifetimes and concrete required tests.
 3. **Test structure:** extract logic with explicit clock/timer inputs. Partition
    the large UI suite by feature for navigation, while retaining representative
    browser interaction, layout and integration cases. Moving files alone does

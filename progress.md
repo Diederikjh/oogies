@@ -6,6 +6,23 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 2 planned: independent export/playback ownership and shared capacity
+
+Committed target 1 as `0f3bf9f` after review. The
+[detailed target-2 plan](docs/stream-budget-refactor-plan.md) addresses History
+playback and exports mutating live-session counters/private reconciliation,
+playback expiry owned by live maintenance, and shared error/time utilities
+located inside feature modules. It keeps export jobs and interactive playback
+as independent state owners and proposes a neutral stream budget with identified
+reservations, read-only live occupancy, explicit release and compatible status.
+
+The plan spells out ownership/lifetimes, initialization order for restored
+exports, immediate overview recovery, delayed live-stop acknowledgement,
+independent cancellation, concurrency/failure tests, helper migration and neutral
+maintenance wiring. Estimated effort is refined to 2-4 days including testing.
+Documentation only; implementation awaits owner review. No service restart,
+configuration change or recorder probe was performed for this planning work.
+
 ## Target 1 implemented: race-safe export accounting
 
 Committed the reviewed architecture targets and seven-test implementation plan
@@ -30,7 +47,7 @@ The [target-1 plan](docs/export-accounting-refactor-plan.md) and
 [architecture backlog](docs/refactoring-targets.md) reflect completion. Production
 changes are confined to export file accounting. The browser/native suite was
 not rerun; no live service restart or recorder requests were needed. Target-1
-implementation is ready for review and remains uncommitted.
+implementation was subsequently reviewed and committed as `0f3bf9f`.
 
 ## Architecture refactoring review and target-1 plan
 
