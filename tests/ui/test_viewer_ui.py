@@ -150,6 +150,14 @@ class ViewerUITests(unittest.TestCase):
     def close_settings(self):
         self.driver.find_element(By.ID, "settings-close").click()
 
+    def live_page_state(self):
+        return self.driver.execute_script("""
+            return {summary:document.getElementById('grid-summary').textContent,
+                stopDisabled:document.getElementById('stop').disabled,
+                animating:document.querySelectorAll('.camera-tile.is-animating').length,
+                scrollY:window.scrollY};
+        """)
+
     def wait_counts(self, viewers, sources):
         latest = None
         def reached(_):
@@ -159,21 +167,20 @@ class ViewerUITests(unittest.TestCase):
         try:
             self.wait.until(reached)
         except TimeoutException as error:
-            page = self.driver.execute_script("""
-                return {summary:document.getElementById('grid-summary').textContent,
-                    stopDisabled:document.getElementById('stop').disabled,
-                    animating:document.querySelectorAll('.camera-tile.is-animating').length,
-                    scrollY:window.scrollY};
-            """)
+            page = self.live_page_state()
             error.msg += f" Expected viewers={viewers}, sources={sources}; last backend snapshot={latest}; page={page}"
             raise
 
     def pause_live_view(self):
         # Ownership tests must not depend on pointer coordinates during focus scrolling.
         self.element("#stop").send_keys(Keys.ENTER)
-        self.wait.until(lambda _:self.element("#grid-summary").text == "View paused" and
-                        not self.element("#stop").is_enabled(),
-                        "Stop action did not reach a paused page with its Stop button disabled.")
+        try:
+            self.wait.until(lambda _:self.element("#grid-summary").text == "View paused" and
+                            not self.element("#stop").is_enabled(),
+                            "Stop action did not reach a paused page with its Stop button disabled.")
+        except TimeoutException as error:
+            error.msg += f" Backend={self.fixture.snapshot()}; page={self.live_page_state()}"
+            raise
 
     def test_eight_moving_cameras_have_correct_identity_and_offline_tile(self):
         self.wait_live()
@@ -441,8 +448,12 @@ class ViewerUITests(unittest.TestCase):
         self.wait_live(); self.fixture.worker.high_gate.clear(); self.hold_quality_reply()
         first=next(iter(self.fixture.sessions.sessions))
         self.picture_click(); self.wait.until(lambda _:self.driver.execute_script("return window.qualityHeld"))
-        self.element("#stop").click(); self.wait_counts(0,0)
-        self.picture_click(); self.element("#start").click(); self.wait_live(); self.wait_counts(1,8)
+        # The reply gate is independent of expansion/focus scrolling. Keep the
+        # stale-response race active while using controls without pointer geometry.
+        self.pause_live_view(); self.wait_counts(0,0)
+        self.element(self.tile()+" .camera-view").send_keys(Keys.ENTER)
+        self.assertEqual(self.element(self.tile()+" .camera-view").get_attribute("aria-expanded"),"false")
+        self.element("#start").send_keys(Keys.ENTER); self.wait_live(); self.wait_counts(1,8)
         second=next(iter(self.fixture.sessions.sessions)); self.assertNotEqual(first,second)
         self.driver.execute_script("window.releaseQuality()"); self.fixture.worker.high_gate.set()
         self.wait_live(); self.wait_quality(quality="overview"); self.wait_counts(1,8)
@@ -543,7 +554,7 @@ class ViewerUITests(unittest.TestCase):
         self.wait_live(); self.picture_click(); self.wait_quality()
         self.driver.execute_script("mediaFault.next='empty';mediaFault.active('eof')")
         self.wait.until(lambda _:self.state(1)=="stale")
-        self.element("#stop").click(); self.wait_counts(0,0)
+        self.pause_live_view(); self.wait_counts(0,0)
         attempts=self.driver.execute_script("return mediaFault.attempts")
         self.driver.execute_async_script("const done=arguments[0];setTimeout(done,1400)")
         self.assertEqual(self.driver.execute_script("return mediaFault.attempts"),attempts)

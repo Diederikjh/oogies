@@ -7,6 +7,60 @@ private configuration or previous camera footage is needed. The container has
 networking disabled and publishes no ports; tests use only its internal loopback.
 The owner's running viewer and recorder are not used.
 
+## Pending-reply Stop timeout and input timing
+
+The later failure in
+`test_live_quality_pending_reply_cannot_modify_replacement_lease` has the same
+interaction pattern as the two-main failure below: change a tile's expansion,
+wait for network/media state, then click Stop with a pointer. Neither wait
+guarantees that animation/focus scrolling has finished. The earlier adjustment
+covered the two-main tests but left this Stop click unchanged. Frontend source
+is unchanged between the passing `900483a` and this investigation; a single
+passing CI run does not rule out a timing race.
+
+Three unmodified reruns passed in 19.0 seconds. Their event traces show Stop
+activation during animation, with scrolling between the action request and
+pointer press. A controlled probe with early polling and a 400 ms pause between
+pointer movement and press reproduced the timeout: Stop moved up 148 pixels,
+the click landed on a camera button, no DELETE was issued, and the fixture
+retained one viewer/nine sources with no native stops. This demonstrates a
+concrete input-timing mechanism with the reported backend signature. The exact
+CI event sequence remains unconfirmed because that run did not record inputs.
+The `animating:0` in its timeout diagnostic describes the page twelve seconds
+after the action, not its state when the click was attempted.
+
+The pending-reply test now uses the existing native Enter/pause-acknowledgement
+helper. Collapse and Resume also use native Enter, retaining the held response
+until after the replacement lease is established. The media-reconnect pause
+case uses the same pause helper. Assertions for cleanup, new lease identity and
+rejection of the old reply remain; dedicated mouse/animation tests retain their
+pointer coverage. No application code, retries, sleeps or timeouts changed.
+
+A private probe passed three times in 26.5 seconds with 20-times-lengthened
+animation and early polling. It asserts that Stop's native keyboard click and
+the successful DELETE occur during active animation, and that viewer/source
+counts reach zero before resuming with the old reply still held. Logs/traces:
+`.local/stop-pending-baseline.log`, `.local/stop-pending-delayed.log`,
+`.local/stop-pending-keyboard-motion.log` and
+`.local/stop-click-investigation/pending-*.json`.
+
+The final focused run passed all 12 executions in 102.0 seconds: three reruns of
+the reported replacement-lease test, both two-main capacity/ownership cases,
+delayed reply/decode cases, media pause/reconnect, and four pointer/animation
+cases. Log: `.local/stop-pending-focused-ui.log`; report:
+`.local/stop-pending-focused-ui-report.json`. Input artifacts were also checked
+for bounded records, native Enter activation, a successful DELETE and creation
+of the replacement session. The full suite was not repeated for this test-only
+change; the preceding full result remains recorded below.
+
+Temporary input/request tracing helped establish the mechanism above. It has
+now been removed from test setup, teardown and CI artifacts; keyboard interaction
+fixes and compact backend/page timeout diagnostics remain. The design and steps
+for using it again are preserved in [UI input tracing](ui-input-tracing.md).
+After removal, the replacement-lease, two-main sharing and media-pause cases
+passed again (three tests in 31.6 seconds). Log:
+`.local/stop-trace-removal-ui.log`.
+
 ## Two-main Stop timeout in CI
 
 CI at `0f3bf9f` timed out waiting for zero viewers/sources after the final Stop

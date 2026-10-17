@@ -6,6 +6,44 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Pending-reply CI timeout: shared input-timing mechanism
+
+Compared the new pending-quality-reply timeout with the previous two-main Stop
+failure. Both use pointer activation after a tile expansion/collapse while their
+preceding network/media waits do not synchronize animation or focus scrolling.
+The frontend is unchanged since the passing `900483a`; that pass alone cannot
+exclude intermittent input timing. The new CI snapshot retained a live page,
+one viewer/nine sources and no native stops.
+
+Three ordinary reruns passed. A controlled early-polling/pointer-delay probe
+reproduced that backend signature: the page scrolled 148 pixels between pointer
+movement and press, the click hit a camera button, and no DELETE was sent. This
+proves a timing mechanism, but the exact CI click sequence was not recorded.
+Use native Enter/pause acknowledgement in the pending-reply and media-pause
+ownership tests, and keyboard collapse/Resume in the replacement-lease case.
+The held response, cleanup and stale-lease assertions remain in place. A slowed
+animation/early-polling probe passed three times, confirming Stop activation and
+successful deletion during animation, with zero resources before replacement.
+
+Used temporary bounded offline input/live-request traces and per-test JSON
+diagnostics to distinguish input failures from backend cleanup. At the owner's
+request, removed the tracing script, setup/teardown hooks and extra CI artifacts
+after investigation. Retained keyboard interactions and compact backend/page
+timeout diagnostics. The reusable approach is documented in
+[UI input tracing](docs/ui-input-tracing.md).
+No application, recorder, running-service or timeout/retry policy change.
+Evidence is in `.local/stop-pending-*.log` and
+`.local/stop-click-investigation/pending-*.json`.
+See [UI testing](docs/ui-testing.md) for reproduction and verification details.
+Final verification passed 12 focused executions in 102.0 seconds, including
+three reruns of the reported test, the prior failure and unchanged pointer/
+animation checks. Report: `.local/stop-pending-focused-ui-report.json`.
+The separate three-run slowed-animation probe passed in 26.5 seconds.
+After trace removal, the replacement-lease, two-main sharing and media-pause
+tests passed again (three tests in 31.6 seconds). Log:
+`.local/stop-trace-removal-ui.log`. Publication/history and whitespace checks
+passed. The full suite was not repeated.
+
 ## Two-main Stop timeout investigated
 
 Committed the reviewed task-2 refactor as `3021d42` before investigating the
@@ -28,7 +66,7 @@ animation and zero final resource counts; it also verified timeout diagnostics
 by deliberately waiting for impossible counts. Log:
 `.local/stop-keyboard-motion.log`.
 The preceding task-2 full suite passed 93 cases; it was not repeated for this
-test-only adjustment. Changes remain uncommitted.
+test-only adjustment. Those changes were subsequently committed as `67618d1`.
 
 ## Target 2 implementation: independent capacity ownership
 
