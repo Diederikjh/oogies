@@ -1,10 +1,32 @@
 # Camera viewing investigation progress
 
-Updated: 2026-10-16 (South Africa time).
+Updated: 2026-10-17 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
+
+## Architecture refactoring review and target-1 plan
+
+The two-HQ rollout, total-budget fix, refusal labels and regressions were
+committed as `480c85c`. The [refactoring targets](docs/refactoring-targets.md)
+record nine proposed improvements, rough effort/return, code evidence and test
+opportunities. Existing SDK/source-sharing and synthetic-test seams remain the
+foundation; proposals focus on ownership, asynchronous state and test speed.
+
+The [target-1 plan](docs/export-accounting-refactor-plan.md) details the observed
+export-accounting check/read race, the proposed single-metadata-read behavior,
+normal-disappearance versus other-I/O-error handling, deterministic reproduction,
+caller/queue verification and completion criteria. Concurrent directory scans
+remain best-effort; stronger transactional quota accounting and shared-lock
+restructuring are separate work. Documentation only: implementation is awaiting
+owner review, and the existing race has not been fixed by this planning work.
+Following review feedback, the plan now leads with seven explicit required
+backend test cases, including how each fault is triggered and what it asserts.
+They cover rename/removal, surviving-file accounting, file selection, unexpected
+I/O errors, real HTTP listing, storage admission and background queue progress.
+They are planned additions, not implemented tests; implementation still awaits
+review.
 
 ## Second high-quality stream refused by total budget
 

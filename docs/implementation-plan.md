@@ -39,6 +39,11 @@ unverified. Keep the shared high-quality cap at one.
 
 ## Primary use cases
 
+The subsequent [architecture refactoring targets](refactoring-targets.md) track
+maintenance/testability proposals separately from the feature milestones below.
+The [export-accounting plan](export-accounting-refactor-plan.md) is the first
+detailed proposal, reviewed and approved for implementation on 17 October 2026.
+
 ### Live overview
 
 Opening the overview automatically displays configured cameras together in a
