@@ -426,6 +426,27 @@ stay in ignored `.local/live-reliability-check/`; do not publish footage or repo
 The check's CPU snapshots are samples, and Docker network counters exclude
 loopback browser delivery. See [the reliability notes](docs/live-grid.md#reliability-and-resource-checks).
 
+To explicitly compare one versus two distinct high-quality sources:
+
+```sh
+python3 tools/run_live_capacity_check.py --dual-seconds 180
+```
+
+This restarts the local viewer, temporarily sets only `max_high_quality_sources`
+to two, and restores the original config bytes/permissions and normal service
+afterwards. Finish History/exports first and leave the browser paused until the
+experiment ends. It keeps the existing total source budget and requires room for
+the whole reported online grid plus two mains. By default it selects the first
+two online SDK channels; use `--cameras camera-1 camera-6` to select a known pair.
+It compares overview, one main, two mains, short History coexistence when a slot
+is available, then one main and overview again. Existing container limits stay
+2 CPUs/2 GiB/512 PIDs. Service and browser statistics are separate; host CPU,
+available memory and memory pressure are also sampled. Resource-pressure stops
+and configuration restoration are part of the runner. The browser receives only
+tools and a dedicated private output directory; the config backup stays outside
+that mount. Reports/footage/backups remain in ignored `.local/live-capacity-check/`.
+This diagnostic is never run by CI and does not raise the default operating cap.
+
 ### Check Docker-to-recorder connectivity without authentication
 
 After building the runtime, an agent can check one TCP connection to the

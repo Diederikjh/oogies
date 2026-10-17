@@ -7,8 +7,10 @@ implemented; verification and device evidence are recorded in
 [live grid](live-grid.md) and [progress](../progress.md).
 Milestone 2 was committed as `6312fca`. The subsequently approved milestone 3
 is implemented with offline recovery checks and a successful 302.6-second
-real-browser workload check; the owner approved committing it before testing
-two concurrent high-quality sources.
+real-browser workload check, committed as `a05a2dc`. A subsequent bounded
+experiment passed with two concurrent high-quality sources and History;
+[measurements and scope](live-grid.md#two-main-stream-capacity-experiment) are
+recorded separately. The original operating limit of one was restored.
 
 ## Intended behavior
 

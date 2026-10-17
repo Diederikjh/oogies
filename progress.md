@@ -6,6 +6,41 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Two-high-stream load experiment
+
+The reviewed reliability work and character replacement were committed as
+`a05a2dc` before this experiment. No production stream code is being changed:
+the existing private high-quality capacity setting already accepts two.
+A new backend regression checks two distinct admitted sources, independent
+sharing/release and explicit retry after refusing a third. A synthetic-browser
+case paints both larger renditions in two sharing tabs and independently releases
+one. The complete backend/monitor suite passes 100 cases, and the focused browser
+case passed; the expanded 91-case browser/native suite has not been run in full.
+
+The explicit capacity runner temporarily reloads the high cap as two, measures
+the full online grid with one/two mains, optionally adds a historical viewer,
+then measures recovery and restores the original config/service. It records
+service/browser/host resource use with stop thresholds and private evidence.
+An initial attempt aborted on Docker's diagnostic-container creation race before
+collecting samples; original cap one and the normal service were restored. The
+monitor now retains service statistics while the browser container is absent;
+two host regressions and a real Docker check cover this.
+
+The repeated experiment passed: camera-1 and camera-6 each supplied a 960x1088
+main stream alongside all four online overview streams for 183.9 seconds,
+followed by 30.9 seconds with History playback too. Mean backend CPU rose from
+38.1% of one core with one main to 49.2% with two; peak container memory rose
+from 118.7 to 148.4 MiB. With History, these were 58.3% and 205.1 MiB. Browser
+peak memory rose from 404.8 to 505.7 MiB for the second main. Available host memory
+stayed above 4.36 GiB. No stream failure, unexpected restart or additional SDK
+login was detected, and final viewer/source/feed counts were zero.
+
+Original private configuration bytes and permissions were restored exactly;
+the normal service is running again with the high-quality cap of one. These
+measurements support two mains for this pair, rather than establishing the NVR's
+maximum capacity or long-term resource behavior. The protocol, full comparison
+and private evidence locations are in [live grid](docs/live-grid.md#two-main-stream-capacity-experiment).
+
 ## Character replacement validation
 
 After the owner's repository-wide replacement of en dashes with ASCII hyphens,
@@ -77,7 +112,7 @@ progress, with failure-state capture; its repeat passed. Final private evidence
 is `.local/live-reliability-check/20261016-212301/`; full details are in
 [live grid](docs/live-grid.md#device-evidence--16-october-2026).
 The updated service is running at `http://localhost:8088/`. Milestone 3 was
-reviewed and approved for commit before the two-high-stream capacity experiment.
+reviewed and committed as `a05a2dc` before the two-high-stream capacity experiment.
 
 ## Expansion-driven quality: milestone 2
 

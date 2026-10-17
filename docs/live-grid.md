@@ -386,6 +386,90 @@ Private final evidence is under
 `.local/live-reliability-check/20261016-212301/`: `resource-check.json`,
 `reliability-check.json`, `grid-check.json`, `browser.log` and screenshots.
 
+## Two-main-stream capacity experiment
+
+[run_live_capacity_check.py](../tools/run_live_capacity_check.py) explicitly
+compares the same online grid with zero, one and two distinct main streams.
+It temporarily reloads the private high-quality cap as two, preserving the total
+source limit and all recorder settings. The original config bytes/permissions
+are backed up privately and restored afterwards; the normal viewer is restarted.
+Live browser tabs need Resume/refresh after this reload. Active History or
+exports prevent the initial reload. Keep other viewer tabs paused during the
+measurements so their delivery load does not change the workload.
+
+The restricted Docker browser runs
+[check_live_capacity.py](../tools/check_live_capacity.py) against the actual UI,
+checking painted pixel hashes, native generations, effective qualities, source
+counts, frame ages, upgrade failures and one SDK login throughout all phases.
+The default pair is the first two online SDK channels, with an explicit
+`--cameras` override. Stages include 20-second overview baselines, 45-second
+single-main samples before/after, a configurable 60-600-second dual-main sample
+(default 180), and 30 seconds of History alongside both mains when capacity
+allows. Each measurement follows a five-second settling period.
+
+Host monitoring tags Docker CPU/memory/PID/network samples with each stable phase,
+separating service and browser costs. Container stop thresholds remain >75% of
+the 2 GiB memory cap, >450 PIDs or >180% of one CPU core for 30 seconds. Host
+available memory below 1 GiB or sustained memory-pressure full avg10 above 1%
+also stops the check. Host CPU includes other applications. Chrome is headless
+with GPU acceleration disabled, so its measured software rendering cost can
+differ from a desktop browser. Docker network counters exclude loopback media;
+the browser separately counts delivered JPEG/feed bytes.
+
+Private reports, config backups and screenshots stay under
+`.local/live-capacity-check/`; the browser mounts only its output subdirectory,
+without SDK, credentials or the config backup. The initial diagnostic-container
+creation race is covered by host monitor regressions: service statistics remain
+available while Docker has not yet created, or has just removed, the browser.
+The offline worker/browser seam separately verifies two admitted main streams,
+two viewers sharing them, independent release and refusal of a third main until
+an explicit new request. Production defaults remain one main/eight total sources.
+
+The 16 October 2026 experiment passed with camera-1 and camera-6, each at native
+960x1088. All four online overview streams remained running. Mean CPU below is
+the average of Docker snapshots, as a percentage of one CPU core; memory is peak
+Docker-reported container usage in MiB. Each container was capped at two cores
+and 2 GiB. Short phases have only three to six host samples; the dual-main phase
+has 26. This is a practical workload comparison, not an integrated CPU benchmark.
+
+| Workload | Seconds | Backend CPU | Backend memory | Browser CPU | Browser memory |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Overview before | 20.3 | 35.7% | 90.6 | 70.5% | 388.6 |
+| One main before | 45.8 | 38.1% | 118.7 | 67.0% | 404.8 |
+| Two mains | 183.9 | 49.2% | 148.4 | 56.5% | 505.7 |
+| Two mains + History | 30.9 | 58.3% | 205.1 | 58.2% | 585.7 |
+| One main after | 45.9 | 43.9% | 153.5 | 64.0% | 508.2 |
+| Overview after | 20.5 | 35.1% | 130.4 | 75.8% | 484.0 |
+
+For the initial one-main versus two-main comparison, the extra main added about
+11 percentage points of one CPU core, 30 MiB backend peak memory and 101 MiB
+browser peak memory. Live media delivery rose from 1.195 to 1.736 MiB/s. This
+delivery counter excludes History media. Both Docker containers share a network
+namespace, so their Docker network counters must not be added together. Browser
+CPU varies with layout, visible tiles, content and warmup: the lower dual-main
+sample does not establish lower rendering cost. Memory stayed higher after
+release within the same process; this short check cannot establish long-term
+memory behavior.
+
+Host CPU averaged 21-27% overall across phases, including other applications.
+Available memory stayed above 4.36 GiB; peak memory-pressure full avg10 was
+0.49%. Peak service/browser PID counts were 170/138. No stop threshold fired.
+Live frames kept changing, generations stayed stable within each measurement,
+and one SDK login served the whole workload. History's SDK frame count advanced
+alongside both mains; History pixel hashes were not sampled. No upgrade failure
+or unexpected restart occurred. All experiment viewers, sources, playback and
+media feeds were released at completion.
+
+The private config was restored byte-for-byte with its original permissions,
+and the normal service was restarted at the original high cap of one. Two mains
+look comfortable for this tested pair and duration. The recorder's internal CPU
+was not measured, and this does not establish capacity for higher-resolution
+cameras or overnight operation. Private evidence is in
+`.local/live-capacity-check/20261016-220831/`: host `resource-check.json`,
+`summary.json`, browser `browser/capacity-check.json`, screenshots and
+`browser.log`. Offline test logs are `.local/two-high-backend-tests.log` and
+`.local/two-high-ui-tests.log`.
+
 ## Offline display-control check
 
 [check_display_controls.py](../tools/check_display_controls.py) injects a fake

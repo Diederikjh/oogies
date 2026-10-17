@@ -43,6 +43,7 @@ class ViewerUITests(unittest.TestCase):
         "test_live_media_forbidden_response_stops_without_retrying_auth": {"limit":9},
         "test_history_media_reconnect_preserves_high_live_view_and_pause": {"limit":10},
         "test_live_quality_api_shares_main_stream_without_changing_overview": {"limit":9},
+        "test_two_distinct_high_streams_share_and_release_independently": {"limit":10,"high_limit":2},
         "test_capacity_limit_keeps_admitted_cameras_live": {"limit": 2},
         "test_camera_start_failure_is_local_to_its_tile": {"failed_camera": "camera-2"},
         "test_recorder_rejection_has_no_automatic_retries": {"failure": True},
@@ -311,6 +312,26 @@ class ViewerUITests(unittest.TestCase):
         click(3); self.wait_counts(1,8)
         click(2); click(2); self.wait_quality(2)
         self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
+
+    def test_two_distinct_high_streams_share_and_release_independently(self):
+        def expand(channel):
+            self.element(self.tile(channel)+" .camera-view").send_keys(Keys.ENTER)
+            self.wait_quality(channel)
+        self.wait_live(); expand(1); expand(2); self.wait_counts(1,10)
+        self.assertIn("2 high quality",self.element("#view-note").text)
+        first=self.driver.current_window_handle
+        self.driver.switch_to.new_window("tab"); self.driver.get(self.fixture.url)
+        self.wait_live(); expand(1); expand(2); self.wait_counts(2,10)
+        self.assertEqual(self.fixture.worker.started["camera-1-high"],1)
+        self.assertEqual(self.fixture.worker.started["camera-2-high"],1)
+        self.element("#stop").click(); self.wait_counts(1,10)
+        self.driver.close(); self.driver.switch_to.window(first)
+        self.wait_quality(1); self.wait_quality(2)
+        before=self.pixels(2); self.wait.until(lambda _:self.pixels(2)!=before)
+        self.element(self.tile(1)+" .camera-view").send_keys(Keys.ENTER)
+        self.wait_quality(1,"overview"); self.wait_counts(1,9); self.wait_quality(2)
+        self.assertEqual(self.fixture.worker.stopped["camera-2-high"],0)
+        self.element("#stop").click(); self.wait_counts(0,0)
 
     def test_live_quality_decoder_failure_and_stall_keep_overview_moving(self):
         self.wait_live(); self.fixture.worker.failed_camera="camera-1-high"

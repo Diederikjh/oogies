@@ -163,6 +163,29 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(sum(key.endswith("-high") for key in self.live.wanted),1)
         self.assertEqual(sorted(self.camera(view)["upgrade_state"] for view in views),["capacity_limited","pending"])
 
+    def test_two_high_sources_share_independently_and_third_requires_explicit_retry(self):
+        self.live.high_limit=2
+        first=self.create(); second=self.create("camera-2"); shared=self.create()
+        self.worker.frame(quality="high"); self.worker.frame("camera-2",quality="high")
+        self.assertEqual(self.camera(first)["quality"],"high")
+        self.assertEqual(self.camera(second)["quality"],"high")
+        self.assertEqual(self.camera(shared)["quality"],"high")
+        self.assertEqual(self.live.quality_status()["sources_by_quality"],dict(overview=2,high=2))
+        refused=self.create("camera-3")
+        self.assertEqual(self.camera(refused)["quality_reason"]["code"],"high_quality_limit")
+        self.live.delete(first["id"])
+        self.assertIn("camera-1-high",self.live.wanted)
+        self.live.delete(second["id"])
+        self.assertEqual(self.live.quality_status()["sources_by_quality"],dict(overview=2,high=1))
+        self.live.maintain(); self.assertNotIn("camera-3-high",self.live.wanted)
+        self.live.patch(refused["id"],selection(("camera-3","high")))
+        self.worker.frame("camera-3",quality="high")
+        self.assertEqual(self.camera(refused)["quality"],"high")
+        self.assertEqual(self.camera(shared)["quality"],"high")
+        self.assertEqual(self.worker.commands.count("start 1 high 1"),1)
+        self.live.delete(shared["id"]); self.live.delete(refused["id"])
+        self.assertEqual(self.live.used_sources(),0)
+
     def test_total_budget_and_existing_playback_reservation_win_over_upgrade(self):
         self.live.limit = 2
         playback = PlaybackSessions(self.worker,self.live)

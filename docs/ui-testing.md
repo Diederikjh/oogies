@@ -28,6 +28,11 @@ now waits for settled geometry and verifies its click; three consecutive reruns
 passed. All six final reliability cases passed targeted runs, including paused
 reconnection, a response-header timeout and terminal History cleanup; all also
 passed the subsequent full rerun. The separate backend suite passed all 97 cases.
+The subsequent two-main experiment adds a browser case covering distinct high
+sources, sharing across tabs and independent release; its focused run passed.
+The expanded suite has 91 browser/native cases and has not been rerun in full.
+The complete backend/monitor suite now passes 100 cases, including two-source
+admission and Docker monitor startup/exit races.
 Confirmation feedback coverage samples the real browser animation for its fade,
 vertical bounce and settled state, then checks repeated saves, cancellation on
 Clear marks, reduced motion and keyboard navigation to export jobs.
