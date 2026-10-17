@@ -6,6 +6,36 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Target 3 milestone 3: export submission and feedback state
+
+Committed the reviewed milestone 2 as `72f8d87`. Extracted `ClipExportState` from
+`ClipSelection`: the pending guard, frozen request, idempotency retry key,
+feedback generation and 60-second timer now have explicit dependencies. The DOM
+controller still renders the confirmation link, bounce and reduced-motion state.
+Clear marks, camera changes and History hide invalidate feedback without
+cancelling jobs or releasing a pending request. Late completion releases the
+guard but cannot restore dismissed feedback.
+
+Added 21 direct cases using deferred promises and a small manual scheduler,
+including exactly 59,999/60,000 ms, immutable request data, retries, repeated saves,
+late errors/successes and timer callbacks already queued before cancellation.
+All 125 JavaScript cases pass in native Node and pinned offline Docker
+(335.4/545.1 ms Node time); all 134 Python cases pass in 8.5 s. Seven retained
+browser cases pass in 93.8 s, then four final checks in 31.1 s: ten distinct cases
+cover API/header wiring, held replies, animation, navigation/downloads, camera
+reset, independent jobs, progress and compact/mobile/configured-limit controls.
+
+Removed the browser timer matrix and redundant delayed-navigation case only
+after their direct replacements and retained browser checks passed. The held
+POST regression now waits for Save to re-enable rather than sleeping 100 ms.
+The migration inventory preserves 87 browser/four native cases; the full updated
+suite was not repeated. The [milestone-3 results](docs/frontend-test-layer-plan.md#milestone-3-submission-and-feedback-ownership)
+record coverage and `.local/js-m3-*` evidence. Restarted the viewer and verified
+HTTP 200 plus current source/MIME types for the page and export modules; no
+recorder probe was needed. Evidence: `.local/js-m3-service.log`. Milestone 3
+remains uncommitted for review. Next is milestone 4: organize browser tests by feature, run all test
+layers and record the final coverage/timing comparison.
+
 ## Target 3 milestone 2: directly tested clip, timeline and range calculations
 
 Committed milestone 1 as `ab2dd80` before implementation. Extracted pure

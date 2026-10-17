@@ -1128,9 +1128,13 @@ class ViewerUITests(unittest.TestCase):
         self.assertEqual(next(iter(self.fixture.worker.playbacks.values()))["state"], "paused")
         self.element("#live-tab").click(); self.wait_live(); self.open_history()
         self.assertEqual(self.element("#clip-duration").text, "30 seconds")
+        self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
         Select(self.element("#history-camera")).select_by_value("camera-2"); self.history_ready()
         self.assertIn("Start: Not set · End: Not set", self.element("#clip-range").text)
         self.assertFalse(self.element("#clip-queue").is_enabled())
+        self.assertEqual(self.element("#clip-message").text, "")
+        self.wait.until(lambda _:self.fixture.server.exports.list()["jobs"][0]["state"] == "ready")
 
     def test_history_frame_download_is_png_with_saved_aspect_and_no_job(self):
         self.paused_history()
@@ -1523,47 +1527,15 @@ class ViewerUITests(unittest.TestCase):
         self.wait.until(lambda _:self.element("#exports-panel").is_displayed())
         self.assertEqual(self.element("#clip-message").get_attribute("textContent"),"")
 
-    def test_history_export_confirmation_clear_and_one_minute_expiry(self):
-        self.mark_clip(10)
-        # Control just the confirmation timers; playback and HTTP clocks stay real.
-        self.driver.execute_script("""
-            const schedule=window.setTimeout.bind(window), cancel=window.clearTimeout.bind(window);
-            window.confirmations=[]; window.cancelledConfirmations=[];
-            window.setTimeout=(callback,delay,...args)=>{
-              const id=schedule(callback,delay,...args);
-              if(delay===60000) window.confirmations.push({callback,id,delay});
-              return id;
-            };
-            window.clearTimeout=id=>{window.cancelledConfirmations.push(id);cancel(id);};
-        """)
-        self.element("#clip-queue").click()
-        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
-        self.assertEqual(self.driver.execute_script("return confirmations[0].delay"),60000)
-        self.element("#clip-clear").click()
-        self.assertEqual(self.element("#clip-message").text,"")
-        self.assertTrue(self.driver.execute_script("return cancelledConfirmations.includes(confirmations[0].id)"))
-        self.assertFalse(self.element("#clip-queue").is_enabled())
-        self.element("#clip-start").click()
-        self.element('#history-steps button[data-seconds="10"]').click()
-        self.wait.until(lambda _:self.element("#clip-end").is_enabled()); self.element("#clip-end").click()
-        self.element("#clip-queue").click()
-        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
-        self.assertEqual(self.driver.execute_script("return confirmations.length"),2)
-        self.driver.execute_script("confirmations[0].callback()")
-        self.assertIn("Export queued",self.element("#clip-message").text)
-        self.driver.execute_script("confirmations[1].callback()")
-        self.assertEqual(self.element("#clip-message").text,"")
-        self.assertTrue(self.element("#clip-queue").is_enabled())
-        self.wait.until(lambda _:len(self.fixture.server.exports.list()["jobs"]) == 2 and
-            all(job["state"] == "ready" for job in self.fixture.server.exports.list()["jobs"]))
-
     def hold_export_response(self):
         self.driver.execute_script("""
             const original=window.fetch;
             window.fetch=async (...args)=>{
               const response=await original(...args);
-              if(String(args[0])==='/api/exports' && args[1]?.method==='POST')
+              if(String(args[0])==='/api/exports' && args[1]?.method==='POST'){
+                window.heldExportKey=args[1].headers['Idempotency-Key'];
                 await new Promise(resolve=>window.releaseExport=resolve);
+              }
               return response;
             };
         """)
@@ -1573,19 +1545,23 @@ class ViewerUITests(unittest.TestCase):
 
     def test_history_export_confirmation_clear_ignores_delayed_response(self):
         self.mark_clip(10); self.hold_export_response()
+        job = self.fixture.server.exports.list()["jobs"][0]
+        key = self.driver.execute_script("return window.heldExportKey")
+        self.assertTrue(key)
+        self.assertEqual(self.fixture.server.exports.jobs[job["id"]]["key"], key)
         self.element("#clip-clear").click()
-        self.driver.execute_async_script("""
-            const done=arguments[arguments.length-1];window.releaseExport();setTimeout(done,100);
-        """)
-        self.assertEqual(self.element("#clip-message").text,"")
-        self.wait.until(lambda _:self.fixture.server.exports.list()["jobs"][0]["state"] == "ready")
-
-    def test_history_export_confirmation_navigation_ignores_delayed_response(self):
-        self.mark_clip(10); self.hold_export_response()
-        self.element("#live-tab").click(); self.wait_live()
+        self.assertEqual(self.element("#clip-message").text, "")
+        # New valid marks must not bypass the outstanding submission guard.
+        self.element("#clip-start").click()
+        self.element('#history-steps button[data-seconds="10"]').click()
+        self.wait.until(lambda _:self.element("#clip-end").is_enabled())
+        self.element("#clip-end").click()
+        self.assertFalse(self.element("#clip-queue").is_enabled())
         self.driver.execute_script("window.releaseExport()")
-        self.open_history()
+        # The enabled button acknowledges completion; no arbitrary callback sleep.
+        self.wait.until(lambda _:self.element("#clip-queue").is_enabled())
         self.assertEqual(self.element("#clip-message").text,"")
+        self.assertEqual(len(self.fixture.server.exports.list()["jobs"]), 1)
         self.wait.until(lambda _:self.fixture.server.exports.list()["jobs"][0]["state"] == "ready")
 
     def test_history_export_circular_progress_tracks_capture_and_completion(self):

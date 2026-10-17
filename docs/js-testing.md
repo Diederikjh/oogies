@@ -2,7 +2,7 @@
 
 These tests import production frontend functions directly into Node. They run
 without a browser, server, recorder, SDK, npm dependencies or private configuration.
-The 104 cases cover these production modules:
+The 125 cases cover these production modules:
 
 | Module | Logic covered |
 | --- | --- |
@@ -10,9 +10,9 @@ The 104 cases cover these production modules:
 | [clip-model.js](../web/history/clip-model.js) | Mark rounding, validity, configured duration limits, edit bounds and keyboard targets |
 | [timeline-model.js](../web/history/timeline-model.js) | Selection, loaded/visible/seek domains, slider offsets and zoom bounds |
 | [history-range.js](../web/history/history-range.js) | Recent/fixed windows, calendar/minute boundaries, Earlier/Later and motion navigation |
+| [clip-export-state.js](../web/history/clip-export-state.js) | Pending guard, immutable requests, retry keys, exact confirmation expiry, invalidated replies and already-queued timer callbacks |
 
-This follows milestone 2 of the [frontend test-layer plan](frontend-test-layer-plan.md).
-Submission/confirmation state remains for milestone 3. Unit tests own the logic
+This follows milestones 1-3 of the [frontend test-layer plan](frontend-test-layer-plan.md). Unit tests own the logic
 rules; browser tests verify wiring and browser-specific behavior.
 
 ## Run with existing native Node
@@ -24,6 +24,7 @@ node --version
 python3 tools/run_js_tests.py
 python3 tools/run_js_tests.py tests/js/frame-download.test.mjs
 python3 tools/run_js_tests.py tests/js/clip-model.test.mjs
+python3 tools/run_js_tests.py tests/js/clip-export-state.test.mjs
 ```
 
 The launcher checks the Node major version. It does not install or change Node.
@@ -83,7 +84,10 @@ files without a bundler or source rewriting. No npm install is needed.
 Keep DOM rendering, canvas conversion, native events and layout in browser
 coverage. Extract rules with plain input/output boundaries when needed; do not
 create a simulated browser just to load a controller. Supply clocks and deferred
-responses explicitly when the later asynchronous-state milestone begins.
+responses explicitly. The small helpers in `tests/js/support/manual-time.mjs`
+advance only the injected export clock; `takeDue()` lets tests dispatch callbacks
+that were already queued when cancellation happened. No global timer, fetch or
+Date replacement is needed.
 
 The launcher's selection, runtime and failure/reporting safeguards have Python
 regressions in [test_js_test_runner.py](../tests/test_js_test_runner.py). Those

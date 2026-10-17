@@ -9,16 +9,29 @@ The owner's running viewer and recorder are not used.
 
 The [frontend test-layer plan](frontend-test-layer-plan.md) describes moving
 logic matrices into JavaScript unit tests while preserving browser wiring,
-input, layout and API/media integration coverage. Milestone 2 adds
-[104 JavaScript logic tests](js-testing.md) for filenames and clip/timeline/range
-calculations. Five browser cases now focus on wiring and presentation instead
-of repeating those rule matrices; all 89 browser/four native case IDs remain.
+input, layout and API/media integration coverage. Milestones 1-3 now provide
+[125 JavaScript logic tests](js-testing.md) for filenames, clip/timeline/range
+calculations and export submission/feedback state. Browser tests verify how the
+UI reaches those rules and displays their results.
+
+Milestone 3 removes two redundant browser cases after direct expiry/response-order
+coverage and retained wiring checks pass. There are now **87 browser/four native
+cases**. The real animation/reduced-motion, queue/link/download, camera reset,
+pending POST/Clear marks, progress and independent-job checks remain. The held
+POST case acknowledges completion through the enabled Save button instead of a
+fixed 100 ms delay. Browser-global confirmation timer replacement is removed;
+exact 60-second expiry and already-queued callbacks use an injected manual clock
+in Node.
 
 The full pre-extraction `ab2dd80` baseline passed 93 cases in 943.3 seconds from
-an immutable source snapshot. After extraction, 15 focused browser cases passed
-in 143.1 seconds. The complete updated browser suite was not repeated; see the
-[milestone-2 results](frontend-test-layer-plan.md#milestone-2-extraction-and-coverage)
-for exact coverage, evidence and the limits of the timing comparison.
+an immutable source snapshot. Milestone 2's 15 focused browser cases passed in
+143.1 seconds. Milestone 3's seven retained export/history checks passed in
+93.8 seconds, followed by four final checks in 31.1 seconds (ten distinct cases
+across both runs). All 125 JavaScript and 134 Python cases pass. The complete
+updated 91-case browser/native suite has not been repeated; that measurement
+and feature-file organization remain milestone 4. See the
+[milestone-3 results](frontend-test-layer-plan.md#milestone-3-submission-and-feedback-ownership)
+for the assertion migration and local evidence.
 
 ## Pending-reply Stop timeout and input timing
 

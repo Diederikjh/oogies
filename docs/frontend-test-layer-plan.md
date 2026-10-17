@@ -1,6 +1,6 @@
 # Target 3: faster frontend logic tests below the browser layer
 
-Status: **milestone 2 implemented and verified; review before milestone 3**.
+Status: **milestone 3 implemented and verified; review before milestone 4**.
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `9e61f20`.
 Parent: [architecture refactoring targets](refactoring-targets.md).
@@ -36,8 +36,8 @@ access or service restart was performed. The full browser baseline is still
 required before milestone 2 removes/migrates browser assertions.
 
 Milestone 1 was reviewed and committed as `ab2dd80` before milestone 2 started.
-Milestones 3-4 have not started. The approved design below remains the behavioral
-contract.
+Milestone 2 was committed as `72f8d87` before milestone 3 started. The approved
+design below remains the behavioral contract.
 
 ## Milestone 2 extraction and coverage
 
@@ -103,6 +103,65 @@ Milestone 2 was reviewed before proceeding to milestone 3. The viewer was
 subsequently restarted at the user's request; the page and all three new module
 routes returned HTTP 200, with the expected JavaScript MIME types and source
 bytes. No recorder probe was needed for this check.
+
+## Milestone 3 submission and feedback ownership
+
+Committed the reviewed milestone 2 as `72f8d87` before implementation.
+`ClipExportState` now owns the pending guard, retry identity, feedback generation
+and confirmation timer. Its inputs are a flat export body and camera name;
+posting, key generation, scheduling/cancellation and state notifications are
+injected. Production defaults still use browser UUIDs/timers. `ClipSelection`
+validates the marks, reads display preferences and renders the published state,
+including the link, bounce animation and reduced-motion policy. A guard-only
+update retains the feedback object's identity, avoiding a second animation.
+
+The submitted camera/range/aspect/name are captured before awaiting the request.
+Clearing feedback invalidates responses and timers without releasing a pending
+submission or cancelling a backend job. Success clears retry identity even if
+its feedback was invalidated; failure keeps the key for an identical retry.
+Errors retain their existing non-expiring behavior.
+
+Twenty-one direct cases in `clip-export-state.test.mjs` cover pending duplicate
+suppression, immutable request data, retry keys for unchanged/changed requests,
+repeat saves, synchronous/asynchronous errors, exact 59,999/60,000 ms expiry,
+late success/error after clearing and stale callbacks facing pending/success/
+error/cleared feedback. The small manual scheduler can remove a due callback
+from its queue before invoking it, reproducing cancellation after dispatch was
+already queued. Tests use no real sleeps or global timer/fetch/Date replacement.
+
+| Browser coverage change | Direct replacement | Retained integration |
+| --- | --- | --- |
+| Remove `test_history_export_confirmation_clear_and_one_minute_expiry` | Exact expiry, cancellation, queued callback and repeat-save cases | Queue/link/download flow and animation case cover successful rendering, Clear marks and repeated saves |
+| Remove `test_history_export_confirmation_navigation_ignores_delayed_response` | Late success/error invalidation and pending guard | History hide dismisses feedback through the Exports link; one held POST/Clear marks regression remains |
+| Tighten `test_history_export_confirmation_clear_ignores_delayed_response` | Response order matrix belongs to Node | Real POST carries the idempotency key into the backend; new marks cannot enable Save while pending; releasing the reply enables Save without restoring feedback or duplicating the job |
+| Extend `test_history_clip_marks_steps_and_camera_reset` | State invalidation belongs to Node | Selecting another camera clears successful feedback and marks while the export completes |
+
+The held-reply browser case now waits for the enabled Save button to acknowledge
+completion instead of sleeping 100 ms. Animation/reduced-motion checks, actual
+MP4 downloads, export progress, cross-tab job independence and mobile layouts
+remain browser coverage. The migration inventory records exactly two removed
+browser IDs: 87 browser/four native cases remain, with no new skips or retries.
+
+Verification:
+
+- All 125 JavaScript cases pass in native Node and the pinned offline Docker
+  runtime (21 added cases); Node-reported durations are 335.4/545.1 ms.
+- All 134 Python tests pass in 8.5 seconds with localhost socket access. The
+  initial sandbox-only attempt could not create sockets for seven HTTP cases;
+  rerunning with socket access passed without changing tests.
+- Seven retained export/history browser cases pass in 93.8 seconds before
+  removing the duplicate timer/navigation cases. A final four-case run passes
+  in 31.1 seconds, covering the updated idempotency-header/held-reply case plus
+  compact workspace, mobile bounds and API-configured duration limits. This is
+  11 executions of ten distinct browser cases.
+- The full remaining 91-case browser/native suite was not repeated. Milestone 4
+  still owns that run, feature-file organization and complete timing comparison.
+
+Evidence: `.local/js-m3-{native,docker,backend}.log`,
+`.local/js-m3-docker.tap`, `.local/js-m3-focused-browser{.log,-report.json}`,
+`.local/js-m3-final-browser{.log,-report.json}` and
+`.local/js-m3-migration-inventory.json`. Milestone 3 remains uncommitted for
+review. The service restart/static readiness check is recorded in `progress.md`.
 
 ## Goal and boundaries
 

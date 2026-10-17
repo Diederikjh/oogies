@@ -1,13 +1,18 @@
 import {api} from "/shared/api.js";
 import {readAspect} from "/shared/display-preferences.js";
 import {clipMark, clipStatus, clipBounds, editClipMark} from "./clip-model.js";
+import {ClipExportState} from "./clip-export-state.js";
 
 export class ClipSelection {
   constructor(panel, player, timeline, onExports) {
     this.panel = panel; this.player = player; this.timeline = timeline; this.onExports = onExports;
     this.start = panel.querySelector("#clip-start"); this.end = panel.querySelector("#clip-end");
     this.queue = panel.querySelector("#clip-queue"); this.message = panel.querySelector("#clip-message");
-    this.maxSeconds = 600; this.messageGeneration = 0;
+    this.maxSeconds = 600;
+    this.exports = new ClipExportState({
+      post:(body, key) => api("/api/exports", "POST", body, {"Idempotency-Key":key}),
+      onChange:state => this.renderExport(state)
+    });
     timeline.onClipEdit = (name, value) => this.edit(name, value);
     timeline.clipBounds = name => this.bounds(name);
     for (const [name, button] of [["from", this.start], ["to", this.end]]) button.addEventListener("click", () => {
@@ -28,10 +33,7 @@ export class ClipSelection {
     this.camera = camera; this.paint();
   }
   clearMessage() {
-    ++this.messageGeneration; clearTimeout(this.messageTimer);
-    this.messageAnimation?.cancel(); this.messageAnimation = null;
-    this.message.classList.remove("clip-confirmation");
-    this.messageTimer = undefined; this.message.replaceChildren();
+    this.exports.clearFeedback();
   }
   bounds(name) {
     return clipBounds(name, {from:this.from, to:this.to, begin:this.timeline.begin,
@@ -46,7 +48,7 @@ export class ClipSelection {
     this.start.disabled = this.end.disabled = !frame || frame.cameraId !== this.camera?.id;
     const {duration, valid} = clipStatus(this.from, this.to, this.maxSeconds);
     this.valid = valid;
-    this.queue.disabled = !this.valid || this.submitting;
+    this.queue.disabled = !this.valid || this.exports.state.submitting;
     const label = value => value === undefined ? "Not set" : this.timeline.time(value, true);
     this.panel.querySelector("#clip-range").textContent = `Start: ${label(this.from)} · End: ${label(this.to)}`;
     this.panel.querySelector("#clip-duration").textContent = Number.isFinite(duration) ?
@@ -54,22 +56,26 @@ export class ClipSelection {
     this.timeline.maxClipSeconds = this.maxSeconds;
     this.timeline.setClip(this.from, this.to);
   }
-  async submit() {
-    if (!this.valid || this.submitting) return;
+  submit() {
+    if (!this.valid || this.exports.state.submitting) return;
     const body = {camera_id:this.camera.id, from:new Date(this.from).toISOString(), to:new Date(this.to).toISOString(),
       aspect_ratio:readAspect(this.camera.id, this.camera.aspect_ratio)};
-    const serialized = JSON.stringify(body), cameraName = this.camera.name;
-    if (this.submission?.body !== serialized) this.submission = {body:serialized, key:crypto.randomUUID()};
-    this.clearMessage(); const generation = this.messageGeneration;
-    this.submitting = true; this.paint(); this.message.textContent = "Queueing export…";
-    try {
-      await api("/api/exports", "POST", body, {"Idempotency-Key":this.submission.key});
-      this.submission = null;
-      if (generation !== this.messageGeneration) return;
+    return this.exports.submit({body, cameraName:this.camera.name});
+  }
+  renderExport({feedback}) {
+    this.paint();
+    // Releasing the request guard must not restart the same confirmation animation.
+    if (feedback === this.feedback) return;
+    this.feedback = feedback;
+    this.messageAnimation?.cancel(); this.messageAnimation = null;
+    this.message.classList.remove("clip-confirmation"); this.message.replaceChildren();
+    if (feedback?.kind === "pending") this.message.textContent = "Queueing export…";
+    else if (feedback?.kind === "error") this.message.textContent = feedback.message;
+    else if (feedback?.kind === "success") {
       const link = document.createElement("a");
       link.href = "#exports-panel"; link.textContent = "Export"; link.setAttribute("aria-label", "View export jobs");
       link.addEventListener("click", event => { event.preventDefault(); this.onExports(); });
-      this.message.replaceChildren(link, document.createTextNode(` queued for ${cameraName}. You can continue watching.`));
+      this.message.replaceChildren(link, document.createTextNode(` queued for ${feedback.cameraName}. You can continue watching.`));
       this.message.classList.add("clip-confirmation");
       if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         this.messageAnimation = this.message.animate([
@@ -79,10 +85,6 @@ export class ClipSelection {
           {opacity:1, transform:"translateY(0)", offset:1}
         ], {duration:480});
       }
-      this.messageTimer = setTimeout(() => {
-        if (generation === this.messageGeneration) this.clearMessage();
-      }, 60000);
-    } catch (error) { if (generation === this.messageGeneration) this.message.textContent = error.message; }
-    finally { this.submitting = false; this.paint(); }
+    }
   }
 }
