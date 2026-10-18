@@ -1,8 +1,9 @@
 # Local release images
 
 The [release plan](release-plan.md) starts with a self-contained local image.
-This is milestone 1 tooling for contributors. Host installation/Compose,
-publication and installing from a published image follow in later milestones.
+This is local build tooling for contributors. [Host installation with Compose](host-release.md)
+is available for local images. Publication and installing from a published image
+follow in later milestones.
 
 ## Prerequisites
 
@@ -92,5 +93,6 @@ digest will be recorded separately when publishing is implemented. Pinned base
 images and a fixed artifact do not imply byte-identical rebuilds against mutable
 package repositories.
 
-Use [the release plan](release-plan.md) for the host cutover, publication,
-published-image installation and upgrade/rollback milestones.
+Use [the host release guide](host-release.md) for Compose cutover/operation and
+[the release plan](release-plan.md) for publication, published-image installation
+and upgrade/rollback milestones.

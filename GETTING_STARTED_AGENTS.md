@@ -704,8 +704,42 @@ SDK/decoder initialization, bundled-file hashes and graceful shutdown in
 
 These commands leave the owner's running viewer/configuration/exports intact.
 Do not use a successful offline check as evidence of real-device compatibility.
-Host release installation, remote publishing and published-image installation
+Host installation follows below. Remote publishing and published-image installation
 instructions belong to the later [release milestones](docs/release-plan.md).
+
+## Run a fixed local release on the host
+
+Follow [the host release guide](docs/host-release.md). Verify `docker info` and
+`docker compose version` as the normal user without sudo (Compose 2.20+).
+Build/check the image as above, then run `python3 tools/check_host_release.py`.
+Expect `.local/releases/last-host-check.json` to report `passed: true`, zero
+logins, crash recovery, persisted export download and graceful stop/start.
+The check uses synthetic state and disabled networking; it leaves production alone.
+
+For a cutover, first check `/api/status` and `/api/exports` without requesting
+cameras. Require no active/queued/running exports. Stop the development launcher,
+then run `python3 tools/install_release.py` from the checkout. It refuses running
+containers mounting the source state, existing destinations and pending jobs;
+copies private config/credentials/exports; verifies ready clip hashes; and pins
+the image ID in the installation's `.env`. Default destination:
+`$HOME/.local/share/oogies`, outside the development checkout. Never print
+credentials or the owner's recorder address in a public report.
+
+From that directory run `docker compose config --quiet`, then
+`docker compose up -d --wait --wait-timeout 60`. Require a healthy container,
+loopback-only published port, four private state mounts, non-root UID/GID,
+bounded resources/logs and no application-source/SDK host mounts. Verify the
+prior ready clip hashes/entries and lazy startup with zero SDK logins. Then
+perform one bounded live-view check, delete its session and verify source/feed
+cleanup. Do not retry authentication rejection automatically.
+
+Run future Compose commands from the installation directory. Verify restart,
+stop/start and state persistence offline first; do not interrupt real exports
+to repeat those checks. On startup failure, run `docker compose down` and
+restart the development launcher, whose original state remains intact. Retain
+any new release-only exports/settings and reconcile with both services stopped
+before reverting state. Record image ID/version, install location privately,
+health/live-check results and any limits in `progress.md`.
 
 ## Maintaining this guide
 

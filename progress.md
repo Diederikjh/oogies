@@ -11,9 +11,55 @@ and historical use cases incrementally.
 Committed the [release plan](docs/release-plan.md) as `0454528`: first build a self-contained
 local image, then add host Compose operation, remote versioned publishing,
 installation instructions for the published image, and upgrades/rollback.
-Milestone 1 is implemented; review before starting host installation. Later published-image
+Milestones 1 and 2 are implemented; review before remote publication. Later published-image
 instructions must support an empty installation directory without SDK extraction,
 Git LFS, Node or a compiler on the installing machine.
+
+## Release milestone 2: independent host installation
+
+Committed milestone 1 as `17fef5d`, then built its clean
+`oogies:dev-17fef5dc6c84` image. Fixed local image ID:
+`sha256:0be7129df0ea897e46cd8179992b3f03cf54d09cf9e56450d34bcce4c681c0f3`.
+Added the [host release guide](docs/host-release.md), `docker/release/compose.yaml`,
+`tools/install_release.py` and `tools/check_host_release.py`, with links/steps
+in both getting-started guides. The installer prepares a separate directory
+outside the checkout, copies private `.local/` configuration/credentials/export
+state, verifies ready clip hashes and pins the local image ID. It refuses
+existing installations, containers mounting source state, queued/running jobs,
+missing ready files, symlinks and SDK/platform mismatches. Preparation failures
+leave the source intact and clean up staging.
+
+Compose supplies four state mounts, a read-only root filesystem, host UID/GID,
+loopback-only HTTP, two CPUs, 2 GiB/no extra swap, bounded PIDs/logs, a temporary
+`/tmp`, 30-second shutdown and `unless-stopped` recovery. Readiness only queries
+`/api/status`; it does not request cameras or retry recorder authentication.
+Source code and extracted SDK directories are not mounted.
+
+All 156 Python tests pass (9.0 s). The clean artifact passes SDK/decoder,
+asset/backend hashes and synthetic H.264 checks. The offline Compose check
+passes contract validation, readiness with zero logins, deliberate application
+crash/automatic restart, synthetic ready-export download and persistence through
+graceful stop/start. Networking is disabled for that check. The check tolerates
+the deliberate crash terminating its exec command with 137, and verifies actual
+restart count/health/state rather than inferring recovery from command success.
+
+Cut over the idle owner service to the independent user-data installation
+(`$HOME/.local/share/oogies`). Its one current ready export is byte-for-byte
+unchanged. Startup was healthy with zero logins. One bounded overview check
+received three advancing JPEG frames using one SDK login; session deletion
+released all viewer/source/feed/reservation slots. The rollback drill verified
+clean release shutdown, development startup with zero logins and its preserved
+export, then returned the host to the healthy release with no active streams.
+Docker is already enabled for boot; an actual host reboot was not performed.
+
+Evidence: `.local/release-m2-{build.log,artifact.log,backend.log,host-check.log,
+cutover.json}` and `.local/releases/{last-build.json,last-check.json,
+last-host-check.json,last-host-check.log}`. The development state remains intact
+as the cutover snapshot. Future exports/configuration belong to the installation;
+keep them when reverting and reconcile state only with both services stopped.
+The full browser suite was not repeated because frontend/controller behavior
+did not change. Remote build/publication is the next milestone; no image was
+published and no Git push was performed.
 
 ## Release milestone 1: local self-contained image
 
@@ -44,7 +90,7 @@ last-http-check.log,last-check-container.log}` and
 Human/agent setup guides link the new commands. The running development service
 and its state were not changed, and no image was published. The full browser
 suite was not repeated because frontend/controller behavior did not change;
-real-recorder operation and host Compose cutover remain milestone 2.
+real-recorder operation and host Compose cutover were deferred to milestone 2.
 
 ## Users can remove failed and cancelled export entries
 

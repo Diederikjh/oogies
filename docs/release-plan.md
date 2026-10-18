@@ -1,6 +1,6 @@
 # Versioned releases and host installation
 
-Status: milestone 1 implemented and verified locally; review before milestone 2.
+Status: milestones 1 and 2 implemented and verified; review before milestone 3.
 Prepared: 18 October 2026 (Africa/Johannesburg).
 
 ## Goal and chosen approach
@@ -84,8 +84,8 @@ were supplied. Artifact identity and detailed results are recorded privately in
 The initial HTTP check caught an import of the legacy development probe helper.
 That import now stays inside the standalone legacy viewer entry point, so the
 grid runtime does not depend on diagnostic tooling. The rebuilt artifact passes.
-The owner's existing service and exports were not changed. No image was
-published; Compose installation and real-device verification remain milestone 2.
+Milestone 1 did not change the owner's service or exports, or publish an image.
+Host operation and real-device verification are covered by milestone 2 below.
 
 ## Milestone 2: run a release on this host
 
@@ -103,6 +103,28 @@ published; Compose installation and real-device verification remain milestone 2.
 
 **Review gate:** the host runs the fixed release independently of source edits,
 with existing state preserved and a verified stop/revert procedure.
+
+### Milestone 2 results
+
+Added the [host release guide](host-release.md), copied-installation Compose file,
+`tools/install_release.py` and `tools/check_host_release.py`. Installation pins
+the local image ID outside the checkout, copies private configuration/credentials
+and export state with ready-clip hash verification, and rejects existing
+destinations, active source mounts, pending exports and SDK/platform mismatches.
+Compose supplies bounded resources/logs, non-root state mounts, loopback HTTP,
+30-second shutdown, lazy status readiness and `unless-stopped` recovery.
+
+All 156 Python tests pass. Offline artifact and Compose checks pass, including
+automatic recovery from an application crash and persisted export downloads
+through stop/start, with networking disabled and zero logins. The owner was
+cut over to the clean `dev-17fef5dc6c84` image; the ready export is unchanged.
+One bounded real-camera check received advancing JPEG frames using one login;
+deleting the session released all viewer/source/feed/reservation slots.
+A rollback drill verified clean release shutdown, lazy development restart,
+preserved exports and return to a healthy release. Docker is enabled at boot;
+an actual host reboot was not performed. The full browser suite was not repeated
+because frontend behavior is unchanged. Evidence is private under
+`.local/releases/` and `.local/release-m2-cutover.json`. No image was published.
 
 ## Milestone 3: remote build and image publication
 
