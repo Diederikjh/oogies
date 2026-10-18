@@ -1,10 +1,43 @@
 # Camera viewing investigation progress
 
-Updated: 2026-10-17 (South Africa time).
+Updated: 2026-10-18 (South Africa time).
 
 Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
+
+## Target 3 milestone 4: browser feature modules and full verification
+
+Committed milestone 3 as `d2b0ab0`. Split the remaining 87 browser cases into
+36 live, 31 History and 20 clip/export cases, with setup/assertions in
+`browser_support.py`. The base class has no tests. An AST comparison preserves
+all test/helper bodies, options and window sizes; Docker collection confirms
+91 unique IDs including the four unchanged native cases. The local migration
+inventory maps every old full browser ID to its new module/class.
+
+The runner explicitly generates synthetic input media once per browser run,
+keeps each browser/server/worker isolated, and removes media at exit. Reports now
+include media generation count and separate setup/suite/total seconds.
+Native-only selection skips media generation. Updated both setup guides, module
+selectors and test/tracing documentation; production code is unchanged here.
+
+All CI-command suites pass: 134 Python cases in 8.1 s, 125 JavaScript cases in
+native Node 22.14.0 and pinned Docker Node 22.23.3 (329.5/547.4 ms Node time;
+4.234 s warm Docker launcher), and all 91 browser/native cases. The full rebuilt
+browser run takes 894.911 s in the suite, 895.336 s including the single 0.400 s
+media setup and cleanup. Native-only selection separately passes four cases with
+zero media generations. No new skips, retries, longer waits or tracing were added.
+
+The pre-extraction `ab2dd80` baseline took 943.285 s for 93 cases. The only two
+removed cases are the milestone-3 expiry/navigation matrices now covered in
+Node. Different order and host activity limit this single timing comparison;
+there is no hosted-CI or causal speedup claim. The direct rule/state feedback now
+runs in seconds without a browser. See [milestone-4 results](docs/frontend-test-layer-plan.md#milestone-4-browser-organization-and-final-measurement)
+and `.local/js-m4-{full-browser.log,full-browser-report.json,comparison.json}`
+for complete results, environment and the ID migration. All target-3 milestones
+are complete; milestone 4 was reviewed on 18 October 2026. Hosted Actions
+execution awaits a push. The next proposed refactor is target 4, separating
+playback state from rendering; it has not started.
 
 ## Target 3 milestone 3: export submission and feedback state
 
@@ -33,8 +66,8 @@ suite was not repeated. The [milestone-3 results](docs/frontend-test-layer-plan.
 record coverage and `.local/js-m3-*` evidence. Restarted the viewer and verified
 HTTP 200 plus current source/MIME types for the page and export modules; no
 recorder probe was needed. Evidence: `.local/js-m3-service.log`. Milestone 3
-remains uncommitted for review. Next is milestone 4: organize browser tests by feature, run all test
-layers and record the final coverage/timing comparison.
+was reviewed and committed as `d2b0ab0` before milestone 4 organized browser
+tests by feature and completed full verification.
 
 ## Target 3 milestone 2: directly tested clip, timeline and range calculations
 

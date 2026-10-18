@@ -72,7 +72,9 @@ The independent **JavaScript logic tests** GitHub Actions job uses the same
 Docker commands, skips Git LFS retrieval and has a five-minute job timeout. It
 attempts to upload the TAP report as **js-test-results**, even after a failure,
 with 14-day retention. A setup failure before execution may have no report.
-Python and browser/native jobs remain separate.
+Python and browser/native jobs remain separate. The browser suite is organized
+into live, History and export features; see [UI testing](ui-testing.md) for
+feature selectors and the final multi-layer measurements.
 
 ## Add logic coverage
 

@@ -14,7 +14,7 @@ IMAGE = "cam-hik-sdk-browser:local"
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", action="store_true", help="Build the browser image first")
-    parser.add_argument("tests", nargs="*", help="Optional unittest names, e.g. test_viewer_ui.ViewerUITests.test_fresh_install_without_a_recording")
+    parser.add_argument("tests", nargs="*", help="Optional unittest names, e.g. test_live.LiveUITests.test_fresh_install_without_a_recording")
     args = parser.parse_args()
     if args.build:
         subprocess.run(["docker", "build", "--target", "download-browser", "--tag", IMAGE,

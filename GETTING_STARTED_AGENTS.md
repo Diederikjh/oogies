@@ -662,8 +662,20 @@ Run `python3 tools/run_ui_tests.py --build` to build the browser image and run t
 UI suite, then omit `--build` on later runs. This can be done before SDK/NVR setup:
 synthetic media and a fake worker exercise the actual browser/API/session layers
 with container networking disabled. No credentials, SDK archive or saved footage
-are mounted. See [UI testing](docs/ui-testing.md). UI success establishes browser
-behavior and does not establish compatibility with the owner's recorder.
+are mounted. Expect 91 cases: 87 browser and four native. A full pass must report
+`passed: true` and 91 distinct case IDs in `.local/ui-test-results/ui-tests.json`.
+The runner generates media once (`media_generations: 1`) while keeping each
+browser/server/worker isolated. Its timing fields separate media setup from the
+suite and total time.
+
+Select a feature with `python3 tools/run_ui_tests.py test_live`, `test_history`
+or `test_exports`, or a case such as
+`test_exports.ExportUITests.test_history_export_queue_download_and_delete`.
+Native-only selection is `test_native_playback` and reports zero media generations.
+The former `test_viewer_ui.ViewerUITests` selectors no longer apply. Use the
+launcher for both full and targeted runs. See [UI testing](docs/ui-testing.md).
+UI success establishes browser behavior and does not establish compatibility
+with the owner's recorder.
 
 The [GitHub workflow](.github/workflows/ci.yml) runs Python unit, JavaScript logic
 and UI suites on pushes and pull requests without recorder setup or Git LFS

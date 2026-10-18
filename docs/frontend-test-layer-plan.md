@@ -1,6 +1,7 @@
 # Target 3: faster frontend logic tests below the browser layer
 
-Status: **milestone 3 implemented and verified; review before milestone 4**.
+Status: **milestones 1-4 implemented, verified and reviewed; target 3 complete**.
+Reviewed: 18 October 2026 (Africa/Johannesburg).
 Prepared: 17 October 2026 (Africa/Johannesburg).
 Baseline: `9e61f20`.
 Parent: [architecture refactoring targets](refactoring-targets.md).
@@ -160,8 +161,72 @@ Verification:
 Evidence: `.local/js-m3-{native,docker,backend}.log`,
 `.local/js-m3-docker.tap`, `.local/js-m3-focused-browser{.log,-report.json}`,
 `.local/js-m3-final-browser{.log,-report.json}` and
-`.local/js-m3-migration-inventory.json`. Milestone 3 remains uncommitted for
-review. The service restart/static readiness check is recorded in `progress.md`.
+`.local/js-m3-migration-inventory.json`. Milestone 3 was reviewed and committed as `d2b0ab0` before milestone 4. The service restart/static readiness check is recorded in `progress.md`.
+
+## Milestone 4 browser organization and final measurement
+
+Committed milestone 3 as `d2b0ab0` before this mechanical split. The remaining
+87 browser method bodies, all retained helper bodies, fixture options and
+initial window sizes match that commit structurally. The four native cases are
+unchanged. No assertions moved or disappeared in this milestone; milestones 2-3
+above account for the earlier rule migration and two removed browser cases.
+
+| Feature module/class | Cases |
+| --- | --- |
+| `test_live.LiveUITests` | 36 |
+| `test_history.HistoryUITests` | 31 |
+| `test_exports.ExportUITests` | 20 |
+| `test_native_playback.NativePlaybackTests` | 4 |
+
+`browser_support.py` contains setup, fixture options and shared helpers with no
+test methods. Docker discovery yields exactly 91 unique IDs matching
+`.local/js-m4-migration-inventory.json`; there are no inherited duplicate cases.
+`run.py` explicitly owns one temporary `SyntheticMedia` generation for the
+selected browser cases and removes it at runner exit. Each browser profile,
+server and worker remains fresh per case. Native-only selection skips that
+media setup. This preserves the previous single media generation without a
+persistent cache or recorder/browser state shared across tests.
+
+The JSON report now separates media setup, suite execution and total seconds,
+and records browser count and media generations. Total includes media cleanup;
+the terminal unittest duration excludes the media preparation now owned by the
+runner. The comparison below uses total time against the pre-extraction full
+baseline, not per-case sums alone. Docker limits remain two CPUs, 2 GiB, 512 PIDs
+and no network. The rebuilt local image uses Chromium/ChromeDriver 154.0.8037.92,
+Python 3.11.2, FFmpeg 5.1.9 and x86-64; host Docker is 29.9.0. Exact image/version
+metadata is under `.local/js-m4-environment.json`.
+
+Final local verification uses the same commands as CI:
+
+| Layer / command | Cases | Result and time |
+| --- | --- | --- |
+| `python3 -m unittest discover -s tests -v` | 134 | Pass, 8.1 s (host Python 3.12.3) |
+| `python3 tools/run_js_tests.py` | 125 | Pass, 329.5 ms of Node time (native 22.14.0) |
+| `python3 tools/run_js_tests.py --docker` | 125 | Pass, 547.4 ms of Node time; 4.234 s warm launcher (pinned Node 22.23.3) |
+| `python3 tools/run_ui_tests.py --build` | 87 browser + 4 native | Pass, 894.911 s suite; 895.336 s total |
+
+The media inputs are generated once in 0.400 s. A native-only selector separately
+passes all four cases with zero media generations. All 91 executed IDs match
+the discovery/migration inventory, are unique and report success. The only IDs
+removed since the 93-case `ab2dd80` baseline are the two milestone-3 cases whose
+rules now have direct JavaScript coverage.
+
+The baseline took 943.285 s versus 895.336 s including setup now. These are single
+local observations with different case order and host activity; they do not
+establish a causal speedup or hosted pipeline duration. Browser startup and
+integration costs remain. The concrete feedback improvement is 125 direct rule/
+state cases executable in under a second of Node time (under five seconds through
+the warm Docker launcher in this run). Image retrieval/build time is excluded
+from that JavaScript measurement. Hosted Actions execution awaits a push.
+
+Evidence: `.local/js-m4-{backend,native,docker,full-browser}.log`,
+`.local/js-m4-docker.tap`, `.local/js-m4-full-browser-report.json`,
+`.local/js-m4-native-only{.log,-report.json}`, `.local/js-m4-collected.json`,
+`.local/js-m4-migration-inventory.json`, `.local/js-m4-environment.json` and
+`.local/js-m4-comparison.json`. There are no new skips, retries, longer waits,
+runtime tracing, host dependencies or recorder-dependent CI. Milestone 4 was
+reviewed on 18 October 2026; all four milestones of target 3 are complete. Playback
+ownership/rendering separation and deeper live/feed extraction remain deferred.
 
 ## Goal and boundaries
 
@@ -213,8 +278,7 @@ web/history/timeline-model.js          # view/seek domains and zoom arithmetic
 web/history/history-range.js           # recent/fixed windows, event navigation
 web/history/clip-export-state.js        # submission and feedback lifetime
 tests/js/*.test.mjs                     # import the production modules directly
-tests/js/helpers/manual-clock.mjs       # only the timer operations needed here
-tests/js/helpers/deferred.mjs           # explicitly resolve/reject a Promise
+tests/js/support/manual-time.mjs        # small clock and deferred-promise helpers
 tools/run_js_tests.py                   # native runner; explicit Docker option
 ```
 
@@ -338,8 +402,10 @@ timer advances and promise resolution; no sleeps or arbitrary retry loops.
 
 ## Browser coverage migration map
 
-All names below currently live in `tests/ui/test_viewer_ui.py`. Record each moved
-logic assertion and its new unit test before removing it from the browser suite.
+The names below refer to the original `test_viewer_ui.ViewerUITests` baseline.
+Milestones 2-3 above record the completed logic migration. Milestone 4 preserves
+remaining method names in `test_live.LiveUITests`, `test_history.HistoryUITests`
+and `test_exports.ExportUITests`; its migration inventory maps full case IDs.
 The retained browser checks cover wiring and browser-specific behavior, without
 repeating the unit-tested rule matrix.
 

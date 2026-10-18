@@ -3,7 +3,8 @@
 Input/request tracing is a temporary investigation technique, not part of the
 normal UI suite. The former `tests/ui/live_action_trace.js` and its hooks have
 been removed. Keep the native keyboard interactions, pause acknowledgement and
-backend cleanup assertions in `tests/ui/test_viewer_ui.py`.
+backend cleanup assertions in [test_live.py](../tests/ui/test_live.py) and
+[browser_support.py](../tests/ui/browser_support.py).
 
 ## Why capture the input itself?
 
@@ -39,7 +40,8 @@ Label intercepted/simulated requests when a fault wrapper bypasses actual fetch.
 ## How to bring it back for an investigation
 
 1. Add a temporary browser script in `tests/ui/` and load it before navigation
-   with Selenium's `Page.addScriptToEvaluateOnNewDocument`. Attach input listeners
+   from `browser_support.py` with Selenium's
+   `Page.addScriptToEvaluateOnNewDocument`. Attach input listeners
    and wrap `window.fetch` to append the fields above to a bounded buffer.
 2. Instrument each relevant tab separately. Registration on the initial tab
    does not automatically cover new tabs; navigation also creates a new trace.

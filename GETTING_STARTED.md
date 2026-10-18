@@ -96,7 +96,7 @@ for live plus playback.
 
 In History, use **Back/Forward 10s/30s** for finer seeking. **Download current
 frame** saves a PNG directly, with your chosen picture proportions.
-Use **Mark start**, **Mark end**, then **Queue export** to save a clip of up to
+Use **Mark start**, **Mark end**, then **Save clip** to save a clip of up to
 ten minutes. Setting both marks zooms the timeline around them. Drag either
 Start/End handle to adjust the range; it cannot cross the other handle or exceed
 the limit. Arrow keys also work. **Full range** restores the complete timeline.
@@ -121,7 +121,9 @@ Both getting-started guides will be updated as setup and behavior change.
 
 Contributors can start with [the Python SDK adapter seam](docs/sdk-adapter-seam.md).
 
-Developers can run [offline UI tests](docs/ui-testing.md) in Docker without a
-recorder or private configuration.
-Fast [JavaScript logic tests](docs/js-testing.md) use existing Node 22 or a small
-Docker runtime; Node is not needed to run the viewer.
+Developer checks run at three layers: Python backend unit tests, fast
+[JavaScript logic tests](docs/js-testing.md), and [offline browser/native tests](docs/ui-testing.md).
+The browser suite is organized into live, History and export features. None of
+these tests needs a recorder or private configuration. Browser/native tools run
+in Docker; JavaScript uses existing Node 22 or Docker. Node is optional for
+contributors and is not needed to run the viewer.

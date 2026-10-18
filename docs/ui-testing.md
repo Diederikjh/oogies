@@ -28,10 +28,18 @@ an immutable source snapshot. Milestone 2's 15 focused browser cases passed in
 143.1 seconds. Milestone 3's seven retained export/history checks passed in
 93.8 seconds, followed by four final checks in 31.1 seconds (ten distinct cases
 across both runs). All 125 JavaScript and 134 Python cases pass. The complete
-updated 91-case browser/native suite has not been repeated; that measurement
-and feature-file organization remain milestone 4. See the
-[milestone-3 results](frontend-test-layer-plan.md#milestone-3-submission-and-feedback-ownership)
-for the assertion migration and local evidence.
+updated 91-case browser/native suite now passes under the same `--build`
+command as CI: 894.911 seconds of suite time and 895.336 seconds including the
+single 0.400-second media setup and cleanup. The run has 87 browser/four native
+cases and no retries/skips. Native-only selection separately passes with zero
+media generations. The earlier baseline took 943.285 seconds; this single local
+comparison differs in order/host activity and is not a causal speedup claim.
+The 125 JavaScript cases take 329.5/547.4 ms of Node time in native/Docker modes;
+the warm Docker launcher takes 4.234 seconds. Python's 134 cases pass in 8.1 s.
+Hosted Actions execution awaits a push. See the
+[milestone-3 migration](frontend-test-layer-plan.md#milestone-3-submission-and-feedback-ownership)
+and [milestone-4 results](frontend-test-layer-plan.md#milestone-4-browser-organization-and-final-measurement)
+for coverage, environment and local evidence.
 
 ## Pending-reply Stop timeout and input timing
 
@@ -263,13 +271,24 @@ python3 tools/run_ui_tests.py
 Run one case while developing:
 
 ```sh
-python3 tools/run_ui_tests.py test_viewer_ui.ViewerUITests.test_mobile_settings_and_expanded_picture_fit
+python3 tools/run_ui_tests.py test_live.LiveUITests.test_mobile_settings_and_expanded_picture_fit
+python3 tools/run_ui_tests.py test_history.HistoryUITests.test_history_camera_ranges_include_offline_inputs
+python3 tools/run_ui_tests.py test_exports.ExportUITests.test_history_export_queue_download_and_delete
 ```
+
+To run a whole feature, select `test_live`, `test_history` or `test_exports`.
+The old `test_viewer_ui.ViewerUITests` selectors have moved; method names remain
+unchanged. Default selection runs all three features and `test_native_playback`.
+Use the launcher above so runner-scoped media setup is performed.
 
 A failing case returns a nonzero exit code and a traceback. Test outcomes and
 screenshots are written to ignored `.local/ui-test-results/`, including
 `ui-tests.json`. Screenshots are synthetic images. Results are overwritten on
-subsequent runs. Host prerequisites are Docker and Python; browser libraries,
+subsequent runs. The JSON includes per-case seconds, browser count, number of
+media generations and `seconds.media_setup`, `seconds.suite` and `seconds.total`.
+Total includes media setup and cleanup; the unittest terminal summary measures
+only the suite itself. Native-only selections skip media generation.
+Host prerequisites are Docker and Python; browser libraries,
 Selenium and FFmpeg remain in Docker. No Node.js, host pip packages or NVR setup
 is needed. Existing unit tests remain separate:
 
@@ -314,9 +333,22 @@ new recorder framework.
 
 [fixture.py](../tests/ui/fixture.py) generates distinct colors and alternating
 patterns, provides controllable worker states and uses the real live-session
-manager. [test_viewer_ui.py](../tests/ui/test_viewer_ui.py) drives the browser;
-[run.py](../tests/ui/run.py) records results. Each case uses a new browser profile,
-server and worker; cleanup closes feeds, views, fixture threads and the browser.
+manager. The browser cases live in three feature modules:
+
+| Module | Cases | Owns |
+| --- | --- | --- |
+| [test_live.py](../tests/ui/test_live.py) | 36 | Live grid, quality, reconnects, sharing, expansion and settings |
+| [test_history.py](../tests/ui/test_history.py) | 31 | Timeline, dates, playback, seeking/speed and History layout |
+| [test_exports.py](../tests/ui/test_exports.py) | 20 | Clip marks/editing, frame downloads, submission feedback and export jobs |
+
+[browser_support.py](../tests/ui/browser_support.py) contains the shared base,
+fixture options and assertions; it has no test methods. Method names, fixture
+options and initial window sizes are preserved. [run.py](../tests/ui/run.py)
+loads each module once and explicitly generates media once for the selected
+browser cases. Only generated input media is shared across classes within that
+run; each case still uses a new browser profile, server and worker. Cleanup closes
+feeds, views, fixture threads and the browser; runner exit removes the media.
+Native-only selection needs no generated media.
 
 The fake worker substitutes at the Python worker boundary. The browser cases do not
 exercise C++ callbacks, SDK authentication, decryption, discovery compatibility,
