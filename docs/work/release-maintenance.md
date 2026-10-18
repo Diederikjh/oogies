@@ -11,13 +11,17 @@ The [release plan](../release-plan.md) contains the milestone scope and gates.
 
 ## Current state
 
+- The installation guide now selects `0.0.2`, including matching versioned
+  setup-file downloads and image pull. This documentation update does not
+  establish that `0.0.2` has been published or installed.
 - Local image builds, independent host Compose operation, version-tag GHCR
   publication and installation from public `0.0.1` are verified.
 - The host runs the public image with preserved settings and clips. Docker and
   containerd are enabled; `unless-stopped` provides automatic startup. The owner
   confirmed Oogies remained available after the requested reboot.
-- Current Compose binds IPv4 and IPv6 loopback. The immutable `v0.0.1` setup
-  download predates that fix, so its install instructions use `127.0.0.1`.
+- Current Compose binds IPv4 and IPv6 loopback; the installation guide uses
+  `localhost` with `127.0.0.1` as an alternative. The immutable `v0.0.1` setup
+  download predates that fix and binds IPv4 only.
 - Implementation and installation results through commit `9e932f3` are preserved
   in the [archive](archive/2026-10-18-progress.md#release-build-and-host-installation-plan).
 
@@ -48,8 +52,8 @@ Before implementation, review the upgrade/rollback procedure from
 
 ## Follow-ups and related guides
 
-- Include the dual-loopback Compose fix in a future version's setup download;
-  published `v0.0.1` remains unchanged.
+- Verify the `0.0.2` setup downloads include dual-loopback Compose when checking
+  that release; published `v0.0.1` remains unchanged.
 - Alternate host ports require a separate fix: the HTTP Host allowlist currently
   follows the internal port. Only the documented port 8088 is verified.
 - [Image installation](../../INSTALL.md), [host operation](../host-release.md),

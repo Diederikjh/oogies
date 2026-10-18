@@ -2,8 +2,8 @@
 
 This is the milestone-2 path for an owner already running the development
 viewer. It uses a locally built, checked Linux amd64 image. New users of a
-published image should use [INSTALL.md](../INSTALL.md), verified with the public
-`0.0.1` release. See the
+published image should use [INSTALL.md](../INSTALL.md), which selects `0.0.2`.
+End-to-end installation was previously verified with public `0.0.1`. See the
 [release plan](release-plan.md).
 
 Already using a Compose installation? Keep its directory and private `.local/`

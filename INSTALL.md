@@ -4,7 +4,8 @@ For a new installation on a Linux x86-64 computer that can reach your NVR.
 You need Docker Engine, Docker Compose 2.20+ and `curl`. Git, Git LFS, Python,
 Node, compilers and a separate SDK download are not needed.
 
-Version **0.0.1** is public and can be pulled without signing in to GitHub.
+These instructions select version **0.0.2** from the public image registry;
+no GitHub sign-in is needed.
 Existing local-build users should follow [the host release guide](docs/host-release.md)
 to preserve their settings and exports.
 
@@ -19,7 +20,7 @@ Choose a published version and download its matching setup files. Use a new
 directory; do not overwrite an existing installation's configuration:
 
 ```sh
-OOGIES_VERSION=0.0.1
+OOGIES_VERSION=0.0.2
 umask 077
 mkdir -p "$HOME/.local/share/oogies/.local/exports" "$HOME/.local/share/oogies/.local/output"
 cd "$HOME/.local/share/oogies"
@@ -81,9 +82,8 @@ EOF
 docker compose up -d --wait --wait-timeout 60
 ```
 
-Open **http://127.0.0.1:8088** on this computer. Confirm the live images move.
-The `v0.0.1` Compose file binds IPv4 loopback only; use this address if your
-browser resolves `localhost` to IPv6.
+Open **http://localhost:8088** (or **http://127.0.0.1:8088**) on this computer.
+Confirm the live images move. The Compose file binds both IPv4 and IPv6 loopback.
 The published port is local to this computer. A healthy container means the
 web service is ready; recorder login/video still depends on your settings.
 Images are not automatically upgraded when you restart the computer.

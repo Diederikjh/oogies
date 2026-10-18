@@ -2,6 +2,8 @@
 
 Status: milestones 1–4 verified through public `0.0.1` installation.
 Upgrade/rollback maintenance remains milestone 5.
+Current installation instructions select `0.0.2`; recorded verification results
+below refer to the versions actually tested.
 Prepared: 18 October 2026 (Africa/Johannesburg).
 
 ## Goal and chosen approach
