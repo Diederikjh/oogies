@@ -662,8 +662,8 @@ Run `python3 tools/run_ui_tests.py --build` to build the browser image and run t
 UI suite, then omit `--build` on later runs. This can be done before SDK/NVR setup:
 synthetic media and a fake worker exercise the actual browser/API/session layers
 with container networking disabled. No credentials, SDK archive or saved footage
-are mounted. Expect 91 cases: 87 browser and four native. A full pass must report
-`passed: true` and 91 distinct case IDs in `.local/ui-test-results/ui-tests.json`.
+are mounted. Expect 92 cases: 88 browser and four native. A full pass must report
+`passed: true` and 92 distinct case IDs in `.local/ui-test-results/ui-tests.json`.
 The runner generates media once (`media_generations: 1`) while keeping each
 browser/server/worker isolated. Its timing fields separate media setup from the
 suite and total time.

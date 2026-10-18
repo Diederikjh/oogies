@@ -102,7 +102,8 @@ Start/End handle to adjust the range; it cannot cross the other handle or exceed
 the limit. Arrow keys also work. **Full range** restores the complete timeline.
 The **Exports** tab lists shared
 jobs and offers cancellation, MP4 download and deletion. Jobs keep running when
-you close the browser; downloads are retained for 24 hours by default. An active
+you close the browser; downloads are retained for 24 hours by default. Expiry or
+**Delete clip** removes both the file and its export entry. An active
 export needs one additional recorder stream slot. See [clip downloads](docs/clip-exports.md).
 
 To stop the service:

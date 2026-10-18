@@ -66,13 +66,16 @@ class ExportJobs:
 
     def _expire(self):
         changed = False
-        for identifier, job in self.jobs.items():
+        for identifier, job in list(self.jobs.items()):
             if job["state"] == "ready" and (job["expires_at"] <= self.clock() or not self._clip(identifier).is_file()):
                 job.update(state="expired", error="Export expired or file is missing."); changed = True
             if job["state"] in ("expired", "failed", "cancelled") and identifier != self.active and not self.readers.get(identifier):
                 directory = self.directory / identifier
                 if directory.exists(): shutil.rmtree(directory)
-        # Keep ready/queued jobs, plus a bounded recent terminal history.
+                if job["state"] == "expired":
+                    del self.jobs[identifier]; changed = True
+        # Failed/cancelled jobs retain bounded diagnostics; expired clips and
+        # their manifest entries are removed together after the last reader.
         terminal = [job for job in self.jobs.values() if job["state"] in ("expired", "failed", "cancelled")]
         excess = max(0, len(terminal) - 50, len(self.jobs) - 99)
         for job in sorted(terminal, key=lambda item:item["created_at"])[:excess]:
@@ -155,13 +158,14 @@ class ExportJobs:
     def list(self):
         with self.lock:
             self._expire()
-            return dict(jobs=[self._public(job) for job in sorted(self.jobs.values(), key=lambda item:item["created_at"], reverse=True)],
+            return dict(jobs=[self._public(job) for job in sorted(self.jobs.values(), key=lambda item:item["created_at"], reverse=True)
+                              if job["state"] != "expired"],
                         limits={**self.limits, "active_workers":1}, storage_used_bytes=self._used_bytes())
 
     def get(self, identifier):
         with self.lock:
             self._expire()
-            if identifier not in self.jobs: raise SessionError("Export not found.", 404)
+            if identifier not in self.jobs or self.jobs[identifier]["state"] == "expired": raise SessionError("Export not found.", 404)
             return self._public(self.jobs[identifier])
 
     def delete(self, identifier):

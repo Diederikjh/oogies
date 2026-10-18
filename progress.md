@@ -6,6 +6,28 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Export files and entries expire together
+
+Removed retained expired entries when their MP4/directory is removed, covering
+retention expiry, Delete clip and missing files. Older expired manifest entries
+are pruned during restore. The existing frontend polling removes absent rows
+without a page refresh. Active downloads finish normally; expired entries are
+hidden immediately and final file/manifest cleanup waits for the last reader.
+Failed/cancelled diagnostic history keeps its existing bounded policy.
+
+All 138 Python tests pass (8.3 s). Added exact-expiry, concurrent-reader,
+legacy-manifest and cleanup-error regressions; existing missing-file, delete,
+idempotency, HTTP, accounting and capacity checks pass. Four focused browser
+cases pass (62.2 s), including a new polling expiry case, manual deletion,
+newest-first listing and cancellation. There are now 88 browser/four native
+cases; the complete updated 92-case suite was not repeated. Evidence is in
+`.local/export-entry-cleanup-{backend.log,browser.log,browser-report.json}`.
+Restarted the viewer after confirming no queued/running exports. The restart
+pruned 14 old expired entries; both remaining ready clips still exist. HTTP
+checks confirm the live API and persisted manifest contain no expired rows.
+No recorder probe was needed; service evidence is
+`.local/export-entry-cleanup-service.json`.
+
 ## Target 3 milestone 4: browser feature modules and full verification
 
 Committed milestone 3 as `d2b0ab0`. Split the remaining 87 browser cases into

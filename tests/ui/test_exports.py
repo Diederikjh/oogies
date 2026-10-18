@@ -233,7 +233,23 @@ class ExportUITests(BrowserTestCase):
         self.element(".export-download").click(); self.wait.until(lambda _:list(self.downloads.glob("*.mp4")))
         self.assertEqual(next(self.downloads.glob("*.mp4")).stat().st_size,job["bytes"])
         self.element(".export-job button").click()
-        self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "expired")
+        self.wait.until(lambda _:not self.driver.find_elements(By.CSS_SELECTOR,".export-job"))
+        self.assertFalse((self.fixture.server.exports.directory / job["id"]).exists())
+        self.assertNotIn(job["id"], self.fixture.server.exports.jobs)
+
+    def test_history_expired_clip_disappears_from_exports_on_poll(self):
+        self.mark_clip(10); self.element("#clip-queue").click()
+        self.wait.until(lambda _:"Export queued" in self.element("#clip-message").text)
+        self.element("#exports-tab").click()
+        self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
+        exports = self.fixture.server.exports
+        job = exports.list()["jobs"][0]
+        with exports.lock:
+            exports.jobs[job["id"]]["expires_at"] = exports.clock() - 1
+        # Routine polling must remove the entry without a page refresh.
+        self.wait.until(lambda _:not self.driver.find_elements(By.CSS_SELECTOR,".export-job"))
+        self.assertFalse((exports.directory / job["id"]).exists())
+        self.assertNotIn(job["id"], exports.jobs)
 
     def test_export_remains_independent_of_history_navigation_and_tab_close(self):
         self.fixture.worker.export_gate.clear()

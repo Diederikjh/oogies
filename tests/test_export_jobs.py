@@ -68,6 +68,14 @@ class ExportTests(unittest.TestCase):
         self.wait(lambda:self.live.budget.snapshot().reserved == 0)
         return job["id"]
 
+    def assert_removed(self, identifier):
+        self.assertFalse((self.jobs.directory / identifier).exists())
+        self.assertNotIn(identifier, self.jobs.jobs)
+        self.assertNotIn(identifier, [job["id"] for job in self.jobs.list()["jobs"]])
+        self.assertNotIn(identifier, [job["id"] for job in json.loads(self.jobs.manifest.read_text())["jobs"]])
+        with self.assertRaises(SessionError) as error: self.jobs.get(identifier)
+        self.assertEqual(error.exception.status, 404)
+
     def test_invalid_ranges_options_and_future_dates_do_not_touch_sdk(self):
         cases = [{**self.body,"to":self.body["from"]}, {**self.body,"to":"2026-10-11T10:10:01Z"},
                  {**self.body,"from":"2026-10-11T10:00:00.1Z"}, {**self.body,"aspect_ratio":"bad"},
@@ -140,12 +148,72 @@ class ExportTests(unittest.TestCase):
             self.assertTrue(name.endswith("10s.mp4")); self.jobs.delete(identifier)
             self.assertEqual(file.read(), b"synthetic-mp4")
             self.assertEqual(self.jobs.list()["storage_used_bytes"],13)
+            self.assertEqual(self.jobs.list()["jobs"], [])
+            self.assertTrue(self.jobs._clip(identifier).is_file())
             with self.assertRaises(SessionError) as error:
                 with self.jobs.download(identifier): pass
             self.assertEqual(error.exception.status, 410)
         self.assertEqual(self.jobs.list()["storage_used_bytes"],0)
+        self.assert_removed(identifier)
         other = self.ready(); self.now += 24*3600
-        self.assertEqual(self.jobs.get(other)["state"], "expired")
+        self.assertEqual(self.jobs.list()["jobs"], [])
+        self.assert_removed(other)
+
+    def test_retention_removes_file_and_manifest_entry_at_exact_expiry(self):
+        identifier = self.ready()
+        expires_at = self.jobs.jobs[identifier]["expires_at"]
+        self.now = expires_at - .001
+        self.assertEqual(self.jobs.get(identifier)["state"], "ready")
+        self.assertTrue(self.jobs._clip(identifier).is_file())
+        self.now = expires_at
+        self.assertEqual(self.jobs.list()["jobs"], [])
+        self.assert_removed(identifier)
+        self.assertEqual(self.jobs.list()["storage_used_bytes"], 0)
+
+    def test_expiry_defers_cleanup_until_last_download_finishes(self):
+        identifier = self.ready()
+        with self.jobs.download(identifier) as (first, _):
+            with self.jobs.download(identifier) as (second, _):
+                self.now = self.jobs.jobs[identifier]["expires_at"]
+                self.assertEqual(self.jobs.list()["jobs"], [])
+                self.assertEqual(first.read(), b"synthetic-mp4")
+                self.assertEqual(second.read(), b"synthetic-mp4")
+                with self.assertRaises(SessionError) as error:
+                    with self.jobs.download(identifier): pass
+                self.assertEqual(error.exception.status, 410)
+            self.assertTrue(self.jobs._clip(identifier).is_file())
+            self.assertIn(identifier, self.jobs.jobs)
+            self.assertEqual(self.jobs.list()["storage_used_bytes"], 13)
+        self.assert_removed(identifier)
+
+    def test_restart_removes_old_expired_missing_and_overdue_entries(self):
+        identifier = self.ready(); self.jobs.close()
+        data = json.loads(self.jobs.manifest.read_text()); ready = data["jobs"][0]
+        legacy, missing, overdue = "a"*32, "b"*32, "c"*32
+        data["jobs"].extend([{**ready, "id":legacy, "state":"expired"},
+                             {**ready, "id":missing},
+                             {**ready, "id":overdue, "expires_at":self.now}])
+        for value in (legacy, overdue):
+            path = self.jobs.directory / value; path.mkdir()
+            (path / "clip.mp4").write_bytes(b"old-clip")
+        self.jobs.manifest.write_text(json.dumps(data))
+        recovered = ExportJobs(self.worker, self.live.budget, self.temporary.name,
+                               start=False, clock=lambda:self.now)
+        self.addCleanup(recovered.close)
+        self.assertEqual([job["id"] for job in recovered.list()["jobs"]], [identifier])
+        self.assertEqual([job["id"] for job in json.loads(recovered.manifest.read_text())["jobs"]], [identifier])
+        for value in (legacy, missing, overdue):
+            self.assertNotIn(value, recovered.jobs)
+            self.assertFalse((recovered.directory / value).exists())
+
+    def test_failed_file_cleanup_keeps_entry_until_cleanup_can_complete(self):
+        identifier = self.ready(); self.jobs.close()
+        with patch("export_jobs.shutil.rmtree", side_effect=PermissionError("Cannot remove clip")):
+            with self.assertRaises(PermissionError): self.jobs.delete(identifier)
+        self.assertIn(identifier, self.jobs.jobs)
+        self.assertTrue(self.jobs._clip(identifier).is_file())
+        self.jobs.list()
+        self.assert_removed(identifier)
 
     def test_storage_limit_keeps_completed_clip_and_rejects_admission(self):
         identifier = self.ready(); self.jobs.limits["storage_bytes"] = 2*self.jobs.limits["max_file_bytes"]
@@ -154,7 +222,8 @@ class ExportTests(unittest.TestCase):
 
     def test_missing_file_and_pruned_download_are_gone(self):
         identifier = self.ready(); self.jobs._clip(identifier).unlink()
-        self.assertEqual(self.jobs.get(identifier)["state"],"expired")
+        self.assertEqual(self.jobs.list()["jobs"], [])
+        self.assert_removed(identifier)
         for value in (identifier,"f"*32):
             with self.assertRaises(SessionError) as error:
                 with self.jobs.download(value): pass
@@ -198,6 +267,11 @@ class ExportTests(unittest.TestCase):
             urlopen(Request(base+f"/api/exports/{identifier}",method="DELETE",headers={"Origin":"https://example.com"}),timeout=3)
         self.assertEqual(error.exception.code,403)
         with urlopen(Request(base+f"/api/exports/{identifier}",method="DELETE"),timeout=3) as response: self.assertEqual(response.status,204)
+        with urlopen(base+"/api/exports",timeout=3) as response: self.assertEqual(json.load(response)["jobs"], [])
+        with self.assertRaises(HTTPError) as error: urlopen(base+f"/api/exports/{identifier}",timeout=3)
+        self.assertEqual(error.exception.code,404)
+        with urlopen(Request(base+f"/api/exports/{identifier}",method="DELETE"),timeout=3) as response: self.assertEqual(response.status,204)
+        self.assert_removed(identifier)
         with self.assertRaises(HTTPError) as error: urlopen(url,timeout=3)
         self.assertEqual(error.exception.code,410)
 

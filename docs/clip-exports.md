@@ -24,7 +24,7 @@ success message links to the Exports tab. The confirmation disappears after 60
 seconds, on **Clear marks**, or when
 leaving History (including changing camera). Dismissing it does not cancel the
 queued job. Continue viewing, or open **Exports** to monitor progress, cancel
-work, download a ready MP4, or delete its file. Marks stay in this browser's
+work, download a ready MP4, or delete a ready clip and its entry. Marks stay in this browser's
 memory across tab changes; changing camera clears them and reloading clears them.
 
 Setting both marks automatically zooms around them, including an overlong or
@@ -69,7 +69,9 @@ as well as path separators on Unix. No controls or letterboxing are included.
 | `DELETE /api/exports/{id}` | Cancel queued/running work or delete a ready clip; repeat safely |
 | `GET /media/exports/{id}.mp4` | Ready attachment, single byte ranges; 409 pending/failed, 410 expired/deleted |
 
-States are `queued`, `running`, `ready`, `failed`, `cancelled`, `expired`.
+Visible states are `queued`, `running`, `ready`, `failed` and `cancelled`.
+Expired/deleted clips disappear from the list; lookup returns 404 and downloads
+return 410. Internally, `expired` can temporarily protect an open download.
 The list stays newest first when returning from History, refreshing, or receiving
 updates from another browser. Existing rows and their controls are reused.
 Running jobs show a circular progress indicator with the backend's percentage
@@ -86,9 +88,14 @@ continue after browser closure; they do not use viewing leases.
 Jobs and files live in ignored `.local/exports/`, mounted writable at `/exports`.
 A versioned manifest is atomically replaced. Ready and queued jobs survive a
 service restart; interrupted captures fail and partial files are removed. Ready
-files expire after 24 hours. Delete/expiry closes new downloads immediately and
-defers unlinking an already-open download until it finishes. Recent terminal
-history is bounded; idempotency keys remain valid while their jobs are retained.
+files expire after 24 hours. Expiry, Delete clip or a missing MP4 removes both
+the clip directory and its manifest entry. Restoring an older manifest also
+removes leftover expired entries. Existing browsers remove the row on their next
+poll without a page refresh. New downloads close immediately; an already-open
+download may finish, with physical cleanup and removal of its internal entry
+deferred until the last reader closes. Such entries are hidden from the list
+immediately. Failed/cancelled diagnostics retain their bounded recent history;
+idempotency keys remain valid while their jobs are retained.
 
 `ExportJobs` and `PlaybackSessions` own separate state and receive the same
 neutral `StreamBudget`. Queued exports hold no handle; an active export owns one

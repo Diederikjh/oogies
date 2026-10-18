@@ -15,7 +15,7 @@ calculations and export submission/feedback state. Browser tests verify how the
 UI reaches those rules and displays their results.
 
 Milestone 3 removes two redundant browser cases after direct expiry/response-order
-coverage and retained wiring checks pass. There are now **87 browser/four native
+coverage and retained wiring checks pass. There are now **88 browser/four native
 cases**. The real animation/reduced-motion, queue/link/download, camera reset,
 pending POST/Clear marks, progress and independent-job checks remain. The held
 POST case acknowledges completion through the enabled Save button instead of a
@@ -27,8 +27,8 @@ The full pre-extraction `ab2dd80` baseline passed 93 cases in 943.3 seconds from
 an immutable source snapshot. Milestone 2's 15 focused browser cases passed in
 143.1 seconds. Milestone 3's seven retained export/history checks passed in
 93.8 seconds, followed by four final checks in 31.1 seconds (ten distinct cases
-across both runs). All 125 JavaScript and 134 Python cases pass. The complete
-updated 91-case browser/native suite now passes under the same `--build`
+across both runs). At milestone 4, all 125 JavaScript and 134 Python cases
+passed. Its complete 91-case browser/native suite passed under the same `--build`
 command as CI: 894.911 seconds of suite time and 895.336 seconds including the
 single 0.400-second media setup and cleanup. The run has 87 browser/four native
 cases and no retries/skips. Native-only selection separately passes with zero
@@ -40,6 +40,25 @@ Hosted Actions execution awaits a push. See the
 [milestone-3 migration](frontend-test-layer-plan.md#milestone-3-submission-and-feedback-ownership)
 and [milestone-4 results](frontend-test-layer-plan.md#milestone-4-browser-organization-and-final-measurement)
 for coverage, environment and local evidence.
+
+## Export file and entry cleanup, 18 October 2026
+
+Expired, manually deleted and missing MP4s now remove their export entries as
+well as their directories. Existing manifest entries are pruned on restart.
+Already-open downloads can finish; the expired row is hidden immediately and
+physical/internal-entry cleanup waits for the last reader. Failed/cancelled
+status diagnostics remain visible.
+
+All 138 Python tests pass in 8.3 seconds, including exact retention boundaries,
+missing files, old-manifest cleanup, concurrent readers, failed cleanup/retry and
+HTTP 404/410/idempotent deletion. Four focused browser cases pass in 62.2 seconds:
+Delete clip removes its row and file, automatic expiry removes the row on polling
+without a page refresh, newest-first listing remains correct, and cancellation
+still releases its slot. The added expiry case raises the suite to 88 browser/
+four native cases; the complete updated 92-case suite was not repeated.
+Evidence: `.local/export-entry-cleanup-backend.log`,
+`.local/export-entry-cleanup-browser.log` and
+`.local/export-entry-cleanup-browser-report.json`.
 
 ## Pending-reply Stop timeout and input timing
 
@@ -339,7 +358,7 @@ manager. The browser cases live in three feature modules:
 | --- | --- | --- |
 | [test_live.py](../tests/ui/test_live.py) | 36 | Live grid, quality, reconnects, sharing, expansion and settings |
 | [test_history.py](../tests/ui/test_history.py) | 31 | Timeline, dates, playback, seeking/speed and History layout |
-| [test_exports.py](../tests/ui/test_exports.py) | 20 | Clip marks/editing, frame downloads, submission feedback and export jobs |
+| [test_exports.py](../tests/ui/test_exports.py) | 21 | Clip marks/editing, frame downloads, submission feedback and export jobs |
 
 [browser_support.py](../tests/ui/browser_support.py) contains the shared base,
 fixture options and assertions; it has no test methods. Method names, fixture
