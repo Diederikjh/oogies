@@ -3,8 +3,9 @@
 Milestone 3 provides `.github/workflows/release.yml`. Publication is triggered
 by pushing a deliberate version tag after reviewing/committing the workflow.
 Preparing the workflow does not publish an image or change the host installation.
-This guide is for maintainers; end-user installation from the published image
-will be documented after the first remote publication (milestone 4).
+This guide is for maintainers; [INSTALL.md](../INSTALL.md) gives the end-user
+file/configuration/startup steps. It is prepared ahead of the first remote
+publication; real version downloads/pulls still need verification in milestone 4.
 
 ## Release flow
 

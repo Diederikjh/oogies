@@ -161,14 +161,16 @@ checks used disabled networking and zero recorder logins. No release tag was
 created in the owner's repository and no image was pushed to GHCR; the installed
 host release was unchanged.
 
-**Still required:** review/commit this implementation, select/push a new version
+Implementation committed as `d07a7a2`. **Still required:** select/push a new version
 tag and verify the real GitHub run, GHCR package access/visibility, report upload
-and digest pull. Local evidence does not establish those remote results. Add
-published-image installation instructions after that first successful release.
+and digest pull. Local evidence does not establish those remote results.
+Complete published-image installation verification after that first successful release.
 
 ## Milestone 4: install from the published release image
 
-This step follows a successful remote build and publication, as requested.
+Remote installation verification follows a successful build/publication.
+At the owner's subsequent request, the guide and setup examples are prepared
+in advance, so file locations, credentials and reboot startup are reviewable now.
 
 - Add a short human guide and complete agent steps for pulling a chosen release,
   creating private NVR configuration/credentials and writable state, then starting
@@ -183,6 +185,23 @@ This step follows a successful remote build and publication, as requested.
 
 **Review gate:** another owner or setup agent can follow the published-image
 instructions using only release assets and their own private settings.
+
+### Installation guide prepared before the first publication
+
+[INSTALL.md](../INSTALL.md) is the short image-user entry point linked from the
+README and both setup guides. It downloads a selected version's Compose file
+and example JSONs into a new user-data directory; explains the NVR host/SDK port,
+timezone, account credentials and full stream encryption password; pins the
+pulled image with the owner's UID/GID; and shows Docker boot enablement with
+`unless-stopped`. It distinguishes intentional stop from reboot recovery.
+
+The guide explicitly marks the first published-image download as unverified.
+JSON schemas, all shell-block syntax and empty-directory startup passed local
+checks using an existing image, isolated networking and zero recorder logins.
+The empty export manifest initializes successfully and the container has the
+documented restart policy. Finish the real version-download/pull checks after
+the first authorized publication; a host reboot was not performed here.
+Do not replace the owner's running installation merely to verify documentation.
 
 ## Milestone 5: upgrades, rollback and maintenance
 

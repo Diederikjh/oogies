@@ -11,10 +11,39 @@ and historical use cases incrementally.
 Committed the [release plan](docs/release-plan.md) as `0454528`: first build a self-contained
 local image, then add host Compose operation, remote versioned publishing,
 installation instructions for the published image, and upgrades/rollback.
-Milestones 1 and 2 are verified. Milestone 3 is implemented and locally checked;
-review and the first authorized remote publication remain. Later published-image
+Milestones 1 and 2 are verified. Milestone 3 is committed and locally checked;
+the first authorized remote publication remains. Published-image
 instructions must support an empty installation directory without SDK extraction,
 Git LFS, Node or a compiler on the installing machine.
+
+## Simple image installation instructions
+
+Committed milestone 3 as `d07a7a2`. At the owner's request, prepared
+[INSTALL.md](INSTALL.md) ahead of the first remote publication, with versioned
+Compose and JSON example downloads into `$HOME/.local/share/oogies`. It explains
+exact file locations, NVR `host`/SDK port/timezone, account username/password,
+full `verification_code` stream encryption password, private permissions,
+pulling/pinning the image, UID/GID and starting Compose. Startup after reboot
+uses the existing `unless-stopped` policy with Docker enabled through systemd;
+an intentional stop stays stopped until started again. The guide includes
+verification and everyday start/stop/log commands, without host SDK/Git LFS/
+Python/Node setup for image users.
+
+Added `docker/release/nvr-{config,credentials}.example.json` with documentation
+addresses and placeholder credentials only. README, human/agent setup guides,
+host-operation/publication guides and the release plan link the new path.
+The image-only guide is explicitly prepared rather than claimed remotely
+verified: a successful version-tag release must exist before its raw setup
+files/image can be downloaded. First remote download/pull verification remains
+part of milestone 4. The running host installation and boot settings are unchanged.
+
+Verified both JSON examples with the real configuration/credential readers and
+all shell blocks with `bash -n`. A new temporary installation using the copied
+Compose/examples and an existing local image started healthy with networking
+disabled and zero recorder logins, initialized its empty export manifest, used
+the four intended state mounts and had `unless-stopped` configured. Temporary
+state/container cleanup completed. No real reboot or remote release downloads
+were performed. Evidence: `.local/install-guide-check.{json,log}`.
 
 ## Release milestone 3: version-tag workflow and checked publication
 

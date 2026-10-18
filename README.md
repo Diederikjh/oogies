@@ -10,7 +10,7 @@ I din't like the fact that the only way to officially view my camera system on a
 
 ## How
 
-A simple server setup (read [GETTING_STARTED](GETTING_STARTED.md)) contains the IP and username/password for the NVR on your local network. Then you are good to go.
+A simple server setup (read [INSTALL](INSTALL.md)) contains the IP and username/password for the NVR on your local network. Then you are good to go.
 
 ### How as in how is it put togetehr
 
@@ -39,7 +39,7 @@ _______________________
 The viewer supports a live camera grid, historical playback with motion timelines,
 and frame/clip downloads.
 
-- **Setup:** [Getting started](GETTING_STARTED.md), or the detailed [agent guide](GETTING_STARTED_AGENTS.md).
+- **Setup:** [Install a Docker image](INSTALL.md), [source setup](GETTING_STARTED.md), or the detailed [agent guide](GETTING_STARTED_AGENTS.md).
 - **Progress:** [Verified results and investigation notes](progress.md).
 - **Development:** [Implementation plan](docs/implementation-plan.md), [SDK adapter seam](docs/sdk-adapter-seam.md), and [tests/CI](docs/ui-testing.md).
 - **Publishing:** [Privacy and publication checks](docs/publication-checks.md).

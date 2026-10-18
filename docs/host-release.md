@@ -1,9 +1,10 @@
 # Run a local release on the host
 
 This is the milestone-2 path for an owner already running the development
-viewer. It uses a locally built, checked Linux amd64 image. Remote publication
-and instructions for installing from published images are later milestones in
-the [release plan](release-plan.md).
+viewer. It uses a locally built, checked Linux amd64 image. New users of a
+published image should use [INSTALL.md](../INSTALL.md); that guide is prepared
+but awaits verification against the first successful remote release. See the
+[release plan](release-plan.md).
 
 ## Prepare and verify
 

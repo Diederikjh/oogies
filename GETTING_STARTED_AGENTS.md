@@ -6,6 +6,23 @@ checklist for an agent preparing an owner's machine. The shorter
 current limitations. Keep both guides current when configuration, dependencies,
 startup commands or supported behavior changes.
 
+## Choose the installation path first
+
+For an image-only installation, follow [INSTALL.md](INSTALL.md). Verify Docker
+Engine/Compose work without sudo, choose a successfully published version,
+download its Compose/examples into a new installation directory and edit only
+the owner's private `.local/` JSON files. Pin the pulled image in `.env`, use the
+owner's UID/GID and verify HTTP readiness before a real viewing check. Verify
+Docker is enabled at boot and the container policy is `unless-stopped`.
+Do not install Git LFS, Python, Node or extract an SDK for this path. Remote
+download/pull verification remains pending until the first successful release.
+For this path, report the selected image, file locations, readiness and boot
+policy; the source/SDK build checklist does not apply.
+
+The remaining source/SDK setup steps are for contributors and local builds.
+Existing local-build owners should use [the host release guide](docs/host-release.md)
+for cutover, preserving exports rather than overwriting installation state.
+
 ## What works today
 
 The current service displays discovered analog/IP substreams in an automatic live grid.

@@ -1,5 +1,9 @@
 # Getting started
 
+**Want to run a published Docker image?** Use [INSTALL.md](INSTALL.md) for file
+locations, NVR settings, credentials and reboot startup. The steps below are for
+building/running from source; published images do not need Git LFS or an SDK setup.
+
 This project is a local browser viewer for Hikvision cameras. The current
 service automatically shows discovered cameras in a live grid. The History tab
 shows recent recording coverage and motion intervals returned by the SDK.
