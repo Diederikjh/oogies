@@ -161,7 +161,8 @@ Verification:
 Evidence: `.local/js-m3-{native,docker,backend}.log`,
 `.local/js-m3-docker.tap`, `.local/js-m3-focused-browser{.log,-report.json}`,
 `.local/js-m3-final-browser{.log,-report.json}` and
-`.local/js-m3-migration-inventory.json`. Milestone 3 was reviewed and committed as `d2b0ab0` before milestone 4. The service restart/static readiness check is recorded in `progress.md`.
+`.local/js-m3-migration-inventory.json`. Milestone 3 was reviewed and committed as `d2b0ab0` before milestone 4. The service restart/static readiness check is recorded in the
+[progress archive](work/archive/2026-10-18-progress.md#target-3-milestone-3-export-submission-and-feedback-state).
 
 ## Milestone 4 browser organization and final measurement
 
@@ -480,7 +481,7 @@ waiting 60 seconds or using browser-global timer replacement.
   and browser-specific behavior.
 - Run all three test jobs and record counts, durations and environment. Update
   [UI testing](ui-testing.md), both getting-started guides, this plan's results,
-  the target list and `progress.md`.
+  the target list and the relevant [workstream record](work/README.md).
 
 **Completion gate:** Python, JavaScript and remaining browser/native suites pass
 under the same commands CI uses. Documentation distinguishes runtime prerequisites

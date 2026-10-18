@@ -40,6 +40,6 @@ The viewer supports a live camera grid, historical playback with motion timeline
 and frame/clip downloads.
 
 - **Setup:** [Install a Docker image](INSTALL.md), [source setup](GETTING_STARTED.md), or the detailed [agent guide](GETTING_STARTED_AGENTS.md).
-- **Progress:** [Verified results and investigation notes](progress.md).
+- **Work:** [Current status, next steps and completed history](docs/work/README.md).
 - **Development:** [Implementation plan](docs/implementation-plan.md), [SDK adapter seam](docs/sdk-adapter-seam.md), and [tests/CI](docs/ui-testing.md).
 - **Publishing:** [Privacy and publication checks](docs/publication-checks.md).

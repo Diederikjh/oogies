@@ -121,8 +121,8 @@ The viewer is currently available only on the machine running it. A closed or
 killed tab’s subscriptions expire within about 90 seconds of its last renewal;
 the last subscriber leaving stops that camera stream.
 
-See [progress.md](progress.md) for verified results and the
-[implementation plan](docs/implementation-plan.md) for upcoming milestones.
+See [the work index](docs/work/README.md) for current status, next steps and
+archived results.
 Both getting-started guides will be updated as setup and behavior change.
 
 Contributors can start with [the Python SDK adapter seam](docs/sdk-adapter-seam.md).

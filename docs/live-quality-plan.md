@@ -4,7 +4,8 @@ Proposed: 16 October 2026; approved plan committed as `efc4007`.
 Milestone 1's backend was reviewed and committed as `482aa8d` after passing
 94 backend and 73 browser/native cases. Milestone 2's frontend switching is now
 implemented; verification and device evidence are recorded in
-[live grid](live-grid.md) and [progress](../progress.md).
+[live grid](live-grid.md) and the
+[progress archive](work/archive/2026-10-18-progress.md#high-quality-live-backend-milestone-1).
 Milestone 2 was committed as `6312fca`. The subsequently approved milestone 3
 is implemented with offline recovery checks and a successful 302.6-second
 real-browser workload check, committed as `a05a2dc`. A subsequent bounded

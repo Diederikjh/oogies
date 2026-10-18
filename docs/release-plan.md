@@ -63,7 +63,8 @@ eventually install without a compiler, SDK extraction, Node or Git LFS.
    networking disabled and synthetic settings, without the owner's credentials.
 5. Add targeted regressions for bridge selection and build/context safeguards;
    run the backend suite and appropriate artifact/integration checks. Update
-   release instructions, both setup guides and `progress.md` with results.
+   release instructions, both setup guides and the
+   [release work record](work/release-maintenance.md) with results.
 
 **Review gate:** a local release image works from outside the checkout with only
 synthetic configuration/state mounts, no runtime compiler and no recorder login.

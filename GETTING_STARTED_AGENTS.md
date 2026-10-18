@@ -757,7 +757,8 @@ to repeat those checks. On startup failure, run `docker compose down` and
 restart the development launcher, whose original state remains intact. Retain
 any new release-only exports/settings and reconcile with both services stopped
 before reverting state. Record image ID/version, install location privately,
-health/live-check results and any limits in `progress.md`.
+health/live-check results and any limits in the relevant
+[workstream file](docs/work/README.md).
 
 ## Release publication workflow
 
@@ -805,6 +806,13 @@ Each milestone must update these instructions and the
 [human guide](GETTING_STARTED.md) in the same change as any new setup requirement.
 Keep the human guide brief and put installation/verification detail here.
 Keep implemented steps separate from planned behavior.
+
+Record ongoing decisions, results and next steps in one file per workstream
+under `docs/work/`, following [the work index](docs/work/README.md). Update its
+status when work starts or completes. Move completed records into
+`docs/work/archive/` and update links; do not append to the root `progress.md`
+pointer or the historical progress snapshot. Keep detailed design and setup
+instructions in their existing documents and link to them from the work record.
 
 Before claiming a new version is ready for other owners, verify a fresh checkout
 with an empty `.local/` directory: retrieve the SDK through LFS, build the
