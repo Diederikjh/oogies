@@ -15,7 +15,8 @@ the owner's private `.local/` JSON files. Pin the pulled image in `.env`, use th
 owner's UID/GID and verify HTTP readiness before a real viewing check. Verify
 Docker is enabled at boot and the container policy is `unless-stopped`.
 Do not install Git LFS, Python, Node or extract an SDK for this path. Remote
-download/pull verification remains pending until the first successful release.
+download/pull verification has passed for the public `0.0.1` release; users do
+not need to sign in to GHCR.
 For this path, report the selected image, file locations, readiness and boot
 policy; the source/SDK build checklist does not apply.
 
@@ -775,8 +776,8 @@ Do not describe local unit/workflow/loopback-registry checks as proof that GHCR
 permissions, hosted execution, package visibility or artifact upload succeeded.
 Once a real release completes, require `verified_after_pull: true` in its
 `publication.json` and record its digest/source/SDK identity. The host stays on
-its selected image until an explicit upgrade. Installation instructions from
-the published image follow that first successful publication (milestone 4).
+its selected image until an explicit upgrade. Installation instructions for
+the published image are in [INSTALL.md](INSTALL.md), verified with `0.0.1`.
 
 ## Maintaining this guide
 

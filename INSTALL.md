@@ -4,30 +4,22 @@ For a new installation on a Linux x86-64 computer that can reach your NVR.
 You need Docker Engine, Docker Compose 2.20+ and `curl`. Git, Git LFS, Python,
 Node, compilers and a separate SDK download are not needed.
 
-**Release availability:** these instructions are prepared for published images.
-The first GHCR publication has not yet been verified. Choose a version whose
-**Release image** GitHub Actions run succeeded; `0.1.0` below is an example,
-not a claim that this version is available. Existing local-build users should
-follow [the host release guide](docs/host-release.md).
+Version **0.0.1** is public and can be pulled without signing in to GitHub.
+Existing local-build users should follow [the host release guide](docs/host-release.md)
+to preserve their settings and exports.
 
 ## 1. Create the installation directory
 
-Verify Docker works as your normal user, **without sudo**:
-
-```sh
-docker info >/dev/null
-docker compose version
-```
-
-If Docker is missing or access fails, follow [Docker's installation](https://docs.docker.com/engine/install/)
+Run all Docker commands as your normal user, **without sudo**. If Docker is
+missing or access fails, follow [Docker's installation](https://docs.docker.com/engine/install/)
 and [Linux setup instructions](https://docs.docker.com/engine/install/linux-postinstall/),
-then repeat the checks.
+then continue below.
 
 Choose a published version and download its matching setup files. Use a new
 directory; do not overwrite an existing installation's configuration:
 
 ```sh
-OOGIES_VERSION=0.1.0
+OOGIES_VERSION=0.0.1
 umask 077
 mkdir -p "$HOME/.local/share/oogies/.local/exports" "$HOME/.local/share/oogies/.local/output"
 cd "$HOME/.local/share/oogies"
@@ -41,7 +33,7 @@ Files will live here:
 ```text
 ~/.local/share/oogies/
 ├── compose.yaml
-├── .env                        # Image, user IDs and web port; created below
+├── .env                        # Image and user IDs; created below
 └── .local/
     ├── nvr-config.json          # Your NVR address and timezone
     ├── nvr-credentials.json     # Your private login and encryption password
@@ -66,13 +58,8 @@ Edit `.local/nvr-credentials.json`:
 
 Keep the files as valid JSON strings; escape quotes as `\"` and backslashes as
 `\\` inside a password.
-Keep both files private. The downloaded examples contain placeholders, not
-working credentials.
-
-```sh
-chmod 700 .local .local/exports .local/output
-chmod 600 .local/nvr-config.json .local/nvr-credentials.json
-```
+The earlier `umask 077` keeps new files/directories private. The downloaded
+examples contain placeholders, not working credentials.
 
 ## 3. Pull and start
 
@@ -82,11 +69,6 @@ From the same directory and terminal, with `OOGIES_VERSION` still set:
 docker pull "ghcr.io/diederikjh/oogies:${OOGIES_VERSION}"
 ```
 
-For a private package, run `docker login ghcr.io` first using your GitHub
-username and a personal access token (classic) with `read:packages` access.
-Public images need no login.
-See [GitHub's registry instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
-
 Pin the image you just pulled and use your user/group IDs for private files:
 
 ```sh
@@ -95,33 +77,29 @@ cat > .env <<EOF
 OOGIES_IMAGE=$(docker image inspect --format '{{.Id}}' "ghcr.io/diederikjh/oogies:${OOGIES_VERSION}")
 OOGIES_UID=$(id -u)
 OOGIES_GID=$(id -g)
-OOGIES_PORT=8088
-OOGIES_PROJECT=oogies
 EOF
-docker compose config --quiet
 docker compose up -d --wait --wait-timeout 60
-docker compose ps
 ```
 
-Open **http://localhost:8088** on this computer. Confirm the live images move.
+Open **http://127.0.0.1:8088** on this computer. Confirm the live images move.
+The `v0.0.1` Compose file binds IPv4 loopback only; use this address if your
+browser resolves `localhost` to IPv6.
 The published port is local to this computer. A healthy container means the
 web service is ready; recorder login/video still depends on your settings.
 Images are not automatically upgraded when you restart the computer.
 
 ## 4. Start automatically after reboot
 
-On a standard Linux system using systemd, enable Docker at boot:
+The Compose file already sets `restart: unless-stopped`. Docker starts the
+existing container when the host starts, provided Docker itself is enabled at
+boot. On a standard Linux system using systemd, run this once if needed:
 
 ```sh
 sudo systemctl enable --now docker.service containerd.service
-systemctl is-enabled docker.service
-docker inspect "$(docker compose ps -q viewer)" --format '{{.HostConfig.RestartPolicy.Name}}'
 ```
 
-Expect `enabled` and `unless-stopped`. Administrator access is needed for the
-system service command; continue running Docker commands as your normal user.
-The Compose file already sets `restart: unless-stopped`, so Docker starts the
-existing container when the host starts. No separate Oogies systemd unit or
+Administrator access is needed for this system service command; continue running
+Docker commands as your normal user. No separate Oogies systemd unit or
 login script is needed. See [Docker's boot setup](https://docs.docker.com/engine/install/linux-postinstall/#configure-docker-to-start-on-boot-with-systemd)
 and [restart policy](https://docs.docker.com/engine/containers/start-containers-automatically/).
 

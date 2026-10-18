@@ -11,10 +11,87 @@ and historical use cases incrementally.
 Committed the [release plan](docs/release-plan.md) as `0454528`: first build a self-contained
 local image, then add host Compose operation, remote versioned publishing,
 installation instructions for the published image, and upgrades/rollback.
-Milestones 1 and 2 are verified. Milestone 3 is committed and locally checked;
-the first authorized remote publication remains. Published-image
+Milestones 1–4 are verified with public release `0.0.1`. Published-image
 instructions must support an empty installation directory without SDK extraction,
 Git LFS, Node or a compiler on the installing machine.
+
+## Host reboot verified
+
+Docker and containerd were already enabled and active; the installed Oogies
+container used `restart: unless-stopped`. No additional systemd unit was needed.
+Saved a private pre-reboot baseline under `.local/reboot-check/` and scheduled
+the requested host reboot. The owner subsequently confirmed that Oogies was
+still available after restarting. Automatic startup is now owner-verified on
+this machine; the earlier installation checks below preceded that reboot.
+
+## Localhost IPv6 binding
+
+The owner's browser could reach `127.0.0.1:8088` but failed on `localhost`.
+Confirmed that IPv6 `localhost` resolved to `::1`, while the release Compose
+file published IPv4 loopback only. Added an explicit `::1` binding alongside
+`127.0.0.1`; no wildcard interface or application image change is required.
+Updated the host-release check to require exactly these two loopback bindings.
+
+Applied the Compose change to the installed public `0.0.1` service after
+checking no viewers, playback sessions or active/queued exports remained.
+Startup is healthy; HTTP checks returned 200 for IPv4 localhost, IPv6 localhost
+and the IPv4 address. The image, private settings and clip hashes are unchanged,
+and the `unless-stopped` policy remains configured. Deployment backup and
+verification evidence are private under `.local/localhost-loopback/`.
+The immutable `v0.0.1` download still has IPv4-only Compose, so `INSTALL.md`
+uses `127.0.0.1` for that release. Future setup downloads will include the fix
+when a new version is tagged.
+
+Verification passed: seven installation unit tests, the isolated public-image
+host check (Compose contract, crash recovery, graceful stop/start and export
+persistence, zero SDK logins), publication/history audit and `git diff --check`.
+
+## Public 0.0.1 installation verified
+
+The owner published `ghcr.io/diederikjh/oogies:0.0.1` from `v0.0.1` at source
+`5fc689290b6c5ebe1e6ab7b4035027313fd2f29a`.
+[Release run 39137424996](https://github.com/Diederikjh/oogies/actions/runs/39137424996)
+completed successfully. An anonymous pull using an empty temporary Docker
+configuration succeeded, confirming users need no registry login. Immutable
+reference:
+`ghcr.io/diederikjh/oogies@sha256:d0508907cb78ae67f31b87ab1126423c8fe3003faa17536578d42b67afcaa405`.
+The pulled metadata identifies the clean source revision, version and preserved
+HCNetSDK profile/checksum.
+
+Ran the [installation recipe](INSTALL.md) against the real public image and
+downloaded all three matching Compose/example files from the version tag.
+Fresh-directory startup was healthy, initialized empty exports and mounted only
+four state paths. Zero SDK logins occurred with networking disabled. Verified
+the simplified shell blocks, image pin, UID/GID, default port/project and private
+permissions. No Git checkout, SDK extraction, host compiler or new host packages
+were needed to install the image.
+
+Then upgraded the existing host installation to `0.0.1`, preserving its private
+configuration and credentials unchanged and its one ready export byte for byte.
+The public image is now healthy on `http://localhost:8088`. One bounded camera
+check received three advancing JPEG frames with one SDK login; the probe session
+was deleted afterwards. The previous image and deployment-file/manifest backup
+remain available privately for reverting.
+
+Deviations from a first-time install: used a temporary isolated directory for the
+empty-state check while the original viewer was active; retained the real
+installation's private JSON/export storage during cutover; skipped boot-enablement
+commands because Docker and containerd were already enabled. The restart policy
+is `unless-stopped`; the owner subsequently verified availability after an
+actual machine reboot, as recorded above. Only the
+documented default port is verified; source inspection showed that changing only
+the host port would conflict with the server's Host allowlist, so the optional
+alternate-port recommendation was removed rather than expanding this install task.
+
+Simplified `INSTALL.md` to use the verified `0.0.1` version and public downloads,
+removing private-registry authentication, duplicate preflight/Compose commands,
+default port/project variables and chmod commands redundant with `umask 077`.
+Updated the agent/host/build/publication guides and release-plan status to match.
+No application code or full test suite changed; verification was the actual
+published-image installation, a bounded live check and documentation checks.
+Evidence: `.local/published-install-0.0.1/{result.json,pull.log,workflow.json,
+fresh-install.log,upgrade.log,before-upgrade/}`. Milestone 5 upgrade/rollback
+maintenance remains separate work.
 
 ## Simple image installation instructions
 

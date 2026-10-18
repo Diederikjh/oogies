@@ -2,9 +2,17 @@
 
 This is the milestone-2 path for an owner already running the development
 viewer. It uses a locally built, checked Linux amd64 image. New users of a
-published image should use [INSTALL.md](../INSTALL.md); that guide is prepared
-but awaits verification against the first successful remote release. See the
+published image should use [INSTALL.md](../INSTALL.md), verified with the public
+`0.0.1` release. See the
 [release plan](release-plan.md).
+
+Already using a Compose installation? Keep its directory and private `.local/`
+state. Pull the chosen image using [INSTALL.md](../INSTALL.md), replace only
+`OOGIES_IMAGE` in the existing `.env` with the pulled image ID, and run
+`docker compose up -d --wait --wait-timeout 60` after exports finish. Do not
+download example credentials over existing settings or run the new-directory
+preparation command below. This was verified when switching the local build to
+public version `0.0.1`; future schema-changing upgrades need their own procedure.
 
 ## Prepare and verify
 
@@ -45,8 +53,8 @@ python3 tools/install_release.py
 ```
 
 The default installation is `$HOME/.local/share/oogies`, outside the checkout.
-Use `--directory /path/to/oogies` for another location, `--port 8089` for another
-loopback port, or `--image oogies:<local-version>` to select a previously checked
+Use `--directory /path/to/oogies` for another location,
+or `--image oogies:<local-version>` to select a previously checked
 image. The installer resolves the image to its immutable local ID and checks
 its platform/SDK profile. It refuses an existing installation, active source
 containers, pending exports, missing ready clips and symlink state.
@@ -65,7 +73,7 @@ docker compose up -d --wait --wait-timeout 60
 docker compose ps
 ```
 
-Open `http://localhost:8088` (or your selected port). Existing browser tabs should
+Open `http://localhost:8088`. Existing browser tabs should
 be refreshed after cutover. Verify the existing ready exports, then make one
 bounded live-view check and stop viewing. Authentication rejection requires
 investigation; readiness checking must not trigger login retries.
@@ -91,7 +99,10 @@ directory and do not give a second running instance its export manifest.
 The service runs as the installing user, with a read-only root filesystem,
 two CPUs, 2 GiB memory/no additional swap, bounded PIDs and a temporary `/tmp`.
 HTTP is published only on loopback; the container can reach the NVR through its
-ordinary Docker network. Logs rotate at 5 MiB with two files. Shutdown gets
+ordinary Docker network. The current Compose file binds both `127.0.0.1` and
+`::1`, so `localhost` works with IPv4 or IPv6. The published `v0.0.1` Compose
+file binds IPv4 only; use `http://127.0.0.1:8088` with that file.
+Logs rotate at 5 MiB with two files. Shutdown gets
 30 seconds to release sessions/workers and close export state.
 
 Readiness checks `/api/status` over container loopback; it neither starts the SDK

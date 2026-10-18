@@ -81,7 +81,8 @@ def main(argv=None):
             rendered = json.loads(command(["docker", "compose", "config", "--format", "json"], cwd=directory, env=environment))
             viewer = rendered["services"]["viewer"]
             assert viewer["read_only"] and viewer["init"] and viewer["restart"] == "unless-stopped"
-            assert viewer["ports"][0]["host_ip"] == "127.0.0.1"
+            assert len(viewer["ports"]) == 2
+            assert {port["host_ip"] for port in viewer["ports"]} == {"127.0.0.1", "::1"}
             assert viewer["pull_policy"] == "never" and viewer["user"] == f"{os.getuid()}:{os.getgid()}"
             assert len(viewer["volumes"]) == 4 and int(viewer["mem_limit"]) == 2*1024**3 and viewer["cpus"] == 2
             assert viewer["logging"]["options"] == {"max-size":"5m", "max-file":"2"}

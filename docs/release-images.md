@@ -2,8 +2,8 @@
 
 The [release plan](release-plan.md) starts with a self-contained local image.
 This is local build tooling for contributors. [Host installation with Compose](host-release.md)
-is available for local images. Publication and installing from a published image
-follow in later milestones.
+is available for local images. Image users can follow [INSTALL.md](../INSTALL.md)
+for the public `0.0.1` release without building locally.
 
 ## Prerequisites
 

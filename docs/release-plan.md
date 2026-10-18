@@ -1,7 +1,7 @@
 # Versioned releases and host installation
 
-Status: milestones 1 and 2 verified; milestone 3 implemented/locally verified,
-awaiting review and the first authorized remote publication.
+Status: milestones 1–4 verified through public `0.0.1` installation.
+Upgrade/rollback maintenance remains milestone 5.
 Prepared: 18 October 2026 (Africa/Johannesburg).
 
 ## Goal and chosen approach
@@ -161,16 +161,16 @@ checks used disabled networking and zero recorder logins. No release tag was
 created in the owner's repository and no image was pushed to GHCR; the installed
 host release was unchanged.
 
-Implementation committed as `d07a7a2`. **Still required:** select/push a new version
-tag and verify the real GitHub run, GHCR package access/visibility, report upload
-and digest pull. Local evidence does not establish those remote results.
-Complete published-image installation verification after that first successful release.
+Implementation committed as `d07a7a2`. The first remote release is now verified:
+[run 39137424996](https://github.com/Diederikjh/oogies/actions/runs/39137424996)
+succeeded for `v0.0.1` at source `5fc6892`. Pulling the public image with an empty
+Docker credential configuration succeeded. Its source/version metadata match
+that run, and the immutable reference is
+`ghcr.io/diederikjh/oogies@sha256:d0508907cb78ae67f31b87ab1126423c8fe3003faa17536578d42b67afcaa405`.
 
 ## Milestone 4: install from the published release image
 
-Remote installation verification follows a successful build/publication.
-At the owner's subsequent request, the guide and setup examples are prepared
-in advance, so file locations, credentials and reboot startup are reviewable now.
+Published-image installation is verified with public version `0.0.1`.
 
 - Add a short human guide and complete agent steps for pulling a chosen release,
   creating private NVR configuration/credentials and writable state, then starting
@@ -178,15 +178,15 @@ in advance, so file locations, credentials and reboot startup are reviewable now
 - Installing users need Docker/Compose and their recorder settings; they do not
   need Git LFS, SDK extraction, Node, a compiler or a source checkout to run the
   published image. Cloning remains an optional way to obtain deployment files.
-- Explain registry authentication if the package is private, image digest/version
-  verification, user permissions, readiness, logs and stopping the installation.
+- Explain image digest/version selection, user permissions, readiness, reboot
+  startup, logs and stopping the installation. Public image users need no login.
 - Verify from an empty installation directory without development `.local/`
   data. Separate offline readiness from the installing owner's live-device check.
 
 **Review gate:** another owner or setup agent can follow the published-image
 instructions using only release assets and their own private settings.
 
-### Installation guide prepared before the first publication
+### Installation guide and published-image verification
 
 [INSTALL.md](../INSTALL.md) is the short image-user entry point linked from the
 README and both setup guides. It downloads a selected version's Compose file
@@ -195,13 +195,32 @@ timezone, account credentials and full stream encryption password; pins the
 pulled image with the owner's UID/GID; and shows Docker boot enablement with
 `unless-stopped`. It distinguishes intentional stop from reboot recovery.
 
-The guide explicitly marks the first published-image download as unverified.
-JSON schemas, all shell-block syntax and empty-directory startup passed local
-checks using an existing image, isolated networking and zero recorder logins.
-The empty export manifest initializes successfully and the container has the
-documented restart policy. Finish the real version-download/pull checks after
-the first authorized publication; a host reboot was not performed here.
-Do not replace the owner's running installation merely to verify documentation.
+The versioned Compose/examples downloaded anonymously from the `v0.0.1` source
+tag. A new temporary installation using those files and the public image started
+healthy, initialized empty export storage and required only four state mounts.
+Its networking was disabled to isolate it from the existing viewer; zero SDK
+logins occurred. The shortened guide's shell syntax, minimal `.env`, default
+port/project and private file permissions were verified separately.
+
+The existing installation was then switched to that image and downloaded Compose
+file, retaining its private JSON files and its ready export byte for byte. One
+camera delivered three advancing JPEG frames using one SDK login, and deleting
+the probe session released it. Docker/containerd were already enabled at boot,
+so their enable command was unnecessary on this machine. `unless-stopped` is
+configured. A subsequent requested host reboot completed, and the owner
+confirmed Oogies remained available afterwards; automatic startup is now
+owner-verified on this machine without a separate application systemd unit.
+
+Removed private-registry login instructions, the unavailable example version,
+duplicate Compose validation/status commands, explicit default port/project
+variables and redundant permissions commands already covered by `umask 077`.
+The guide remains a new-install recipe; an existing owner must retain private
+settings/exports rather than download example credentials over them.
+
+Only the documented port 8088 was verified. Source inspection found that changing
+only the published host port leaves the server's Host allowlist on its internal
+port, so the unverified alternate-port recommendation was removed from the host
+guide. Correct alternate-port propagation is separate future work.
 
 ## Milestone 5: upgrades, rollback and maintenance
 

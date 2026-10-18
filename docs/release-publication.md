@@ -4,8 +4,7 @@ Milestone 3 provides `.github/workflows/release.yml`. Publication is triggered
 by pushing a deliberate version tag after reviewing/committing the workflow.
 Preparing the workflow does not publish an image or change the host installation.
 This guide is for maintainers; [INSTALL.md](../INSTALL.md) gives the end-user
-file/configuration/startup steps. It is prepared ahead of the first remote
-publication; real version downloads/pulls still need verification in milestone 4.
+file/configuration/startup steps, verified against the public `0.0.1` release.
 
 ## Release flow
 
@@ -35,8 +34,7 @@ publication; real version downloads/pulls still need verification in milestone 4
 The publisher refuses a version already present in the registry. Authentication
 or registry lookup errors fail closed rather than being treated as a missing
 version. Use a fresh version after correcting a failed release that already
-uploaded an image; do not move/reuse an existing version tag. The first remote
-run still needs to establish GHCR permissions and first-package behavior.
+uploaded an image; do not move/reuse an existing version tag.
 
 If upload succeeds but pull/check fails, the image may already be in GHCR.
 `publication.json` retains its digest and `verified_after_pull: false`. A green
@@ -54,7 +52,8 @@ The OCI source label identifies the repository that built the image, including
 forks. When an existing package has separate access rules, grant this repository
 Actions access before publishing. Package visibility is a registry setting;
 this workflow does not make a package public. Confirm the intended visibility
-after the first publication. See [GitHub's Container registry guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+for new packages/forks. The `0.0.1` Oogies package has been verified publicly
+accessible without registry credentials. See [GitHub's Container registry guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 After reviewing and committing the release implementation, choose an unused
 version and push the intended source commit and that tag. For example:

@@ -135,6 +135,6 @@ in Docker; JavaScript uses existing Node 22 or Docker. Node is optional for
 contributors and is not needed to run the viewer.
 
 Contributors can also [build and check a local release image](docs/release-images.md),
-then [run it independently on the host](docs/host-release.md). Installing from a
-published image follows remote publication in the [release plan](docs/release-plan.md).
+then [run it independently on the host](docs/host-release.md). For the verified
+public image setup, use [INSTALL.md](INSTALL.md).
 Maintainers can review the [version-tag publication workflow](docs/release-publication.md).
