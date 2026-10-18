@@ -8,15 +8,43 @@ and historical use cases incrementally.
 
 ## Release build and host installation plan
 
-Approved the [release plan](docs/release-plan.md): first build a self-contained
+Committed the [release plan](docs/release-plan.md) as `0454528`: first build a self-contained
 local image, then add host Compose operation, remote versioned publishing,
 installation instructions for the published image, and upgrades/rollback.
-Milestone 1 is the current scope. Keep source-based development working,
-compile/package the bridge in Docker, bundle runtime dependencies and SDK,
-exclude private files from the build context, and verify the artifact offline
-without changing the running development service. Later published-image
+Milestone 1 is implemented; review before starting host installation. Later published-image
 instructions must support an empty installation directory without SDK extraction,
 Git LFS, Node or a compiler on the installing machine.
+
+## Release milestone 1: local self-contained image
+
+Added `tools/build_release.py`, a dedicated multistage Dockerfile and
+`tools/check_release_image.py`; see [local release instructions](docs/release-images.md).
+The explicit tar context includes only listed application/native/support files,
+served frontend assets and the SHA-256-verified SDK ZIP. Private configuration,
+credentials, exports, Git history and unrelated files are excluded. SDK
+extraction/compilation happen in Docker. The final image contains the precompiled
+bridge, Python, FFmpeg, SDK runtime/components and vendor notices, without a
+compiler, headers or browser test tools. Release startup selects the packaged
+bridge through the Python seam; development keeps startup compilation.
+
+Built `oogies:dev-0454528e6c43-dirty`, honestly labelled with the current revision
+and dirty status. Immutable local image ID:
+`sha256:f98e201c7a0e442ef1f6fae7dc9192a6172e7e44dcf4e327467834ba0e02db4a`.
+All 149 Python tests pass (9.1 s). The exact artifact passed offline checks from
+outside the checkout, with networking disabled, synthetic configuration/state,
+no credentials/source/SDK mounts and zero recorder logins. Verified SDK/decoder
+initialization, all 24 served asset hashes, bundled Python hashes, non-root
+execution, synthetic H.264 encoding, writable external state and graceful stop.
+The first HTTP check identified a legacy CLI import; keeping that dependency
+inside its standalone entry point fixed packaging, and the rebuilt image passes.
+
+Evidence: `.local/releases/{last-build.json,last-check.json,last-native-check.log,
+last-http-check.log,last-check-container.log}` and
+`.local/release-m1-{backend.log,build-final.log,artifact.log}`.
+Human/agent setup guides link the new commands. The running development service
+and its state were not changed, and no image was published. The full browser
+suite was not repeated because frontend/controller behavior did not change;
+real-recorder operation and host Compose cutover remain milestone 2.
 
 ## Users can remove failed and cancelled export entries
 

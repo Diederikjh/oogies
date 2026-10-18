@@ -269,13 +269,14 @@ def create_server(worker, sessions, *, address, web, recording, recording_info=N
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8088)
+    parser.add_argument("--bridge", default=os.environ.get("OOGIES_LIVE_BRIDGE"), help="Use a packaged live bridge instead of compiling")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("invalid HTTP port")
     os.umask(0o077)
     config = load_config("/configuration/nvr.json")
     adapter = get_sdk_adapter(config["sdk_profile"])
-    binary = adapter.compile_live_bridge()
+    binary = adapter.resolve_live_bridge(args.bridge)
     worker = GridWorker(binary, adapter, config, "/output")
     budget = StreamBudget(worker.condition, config["max_live_sources"], config["max_high_quality_sources"])
     sessions = LiveSessions(worker, lease_seconds=config["lease_seconds"], budget=budget)

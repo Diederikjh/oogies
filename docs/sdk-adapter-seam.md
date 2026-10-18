@@ -41,6 +41,7 @@ The concrete implementation supplies:
 | `load_credentials(path=None)` | Read validated credentials and prepare its login password |
 | `compile_bridge()` | Compile the bounded diagnostic bridge inside Docker |
 | `compile_live_bridge()` | Compile the persistent grid worker inside Docker |
+| `resolve_live_bridge(packaged=None)` | Use the packaged release binary without compilation, or compile for source-based development |
 | `invocation(binary, ...)` | Return native command, private stdin, cwd and environment without launching |
 
 Credentials are sent only through stdin; the invocation's representation hides

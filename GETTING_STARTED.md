@@ -129,3 +129,7 @@ The browser suite is organized into live, History and export features. None of
 these tests needs a recorder or private configuration. Browser/native tools run
 in Docker; JavaScript uses existing Node 22 or Docker. Node is optional for
 contributors and is not needed to run the viewer.
+
+Contributors can also [build and check a local release image](docs/release-images.md).
+Host operation and installation from a published image are later steps in the
+[release plan](docs/release-plan.md).

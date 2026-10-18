@@ -16,7 +16,6 @@ from urllib.parse import urlsplit
 import uuid
 
 from sdk_adapters import get_sdk_adapter
-from run_probe import compile_probe
 from nvr_config import load_config
 
 
@@ -343,6 +342,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    # Only the legacy standalone viewer needs the development probe compiler.
+    from run_probe import compile_probe
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8088)
     parser.add_argument("--session-seconds", type=int, default=600)

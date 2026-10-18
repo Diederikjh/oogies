@@ -41,6 +41,14 @@ class HcNetSdk61948:
     def compile_live_bridge(self):
         return self._compile("live_grid.cpp", "/tmp/cam-sdk-grid")
 
+    def resolve_live_bridge(self, packaged=None):
+        if packaged is None:
+            return self.compile_live_bridge()
+        binary = Path(packaged)
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ValueError("Packaged live bridge is missing or not executable; rebuild the release image")
+        return str(binary)
+
     def _compile(self, source, binary):
         headers = (Path("/sdk/incEn/HCNetSDK.h"),
                    Path("/sdk/QtDemo/includeCn/LinuxPlayM4.h"))

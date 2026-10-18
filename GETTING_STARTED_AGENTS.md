@@ -683,6 +683,30 @@ retrieval. It retains the JavaScript TAP report, synthetic UI screenshots and
 the UI JSON report as run artifacts; details are in
 [the CI notes](docs/ui-testing.md#github-actions).
 
+## Optional: local release artifact checks
+
+The [local release guide](docs/release-images.md) covers contributor milestone-1
+tooling. Reuse the host's Python/Git/Docker and the verified SDK ZIP from Git LFS;
+no extracted SDK, credentials, NVR access, Node or host compiler is needed:
+
+```sh
+python3 tools/build_release.py
+python3 tools/check_release_image.py
+```
+
+The build checks the SDK checksum and creates a narrow tar context; it does not
+send `.local/` to Docker. The final image contains runtime libraries and the
+precompiled bridge. The check uses the exact local image ID and synthetic
+configuration with networking disabled, no credentials/source/SDK mounts and
+non-root execution. Verify exit 0, `passed: true`, `login_calls: 0`, successful
+SDK/decoder initialization, bundled-file hashes and graceful shutdown in
+`.local/releases/last-check.json`. Inspect the adjacent private logs on failure.
+
+These commands leave the owner's running viewer/configuration/exports intact.
+Do not use a successful offline check as evidence of real-device compatibility.
+Host release installation, remote publishing and published-image installation
+instructions belong to the later [release milestones](docs/release-plan.md).
+
 ## Maintaining this guide
 
 The setup agent's final report should include this checklist with pass, fail,

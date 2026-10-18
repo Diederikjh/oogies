@@ -1,6 +1,6 @@
 # Versioned releases and host installation
 
-Status: approved direction; implement milestone 1 first and review before 2.
+Status: milestone 1 implemented and verified locally; review before milestone 2.
 Prepared: 18 October 2026 (Africa/Johannesburg).
 
 ## Goal and chosen approach
@@ -68,6 +68,24 @@ eventually install without a compiler, SDK extraction, Node or Git LFS.
 synthetic configuration/state mounts, no runtime compiler and no recorder login.
 Source edits after building do not change its served files. Record limitations
 honestly; real-recorder cutover belongs to milestone 2.
+
+### Milestone 1 results
+
+Implemented the [local build and artifact-check commands](release-images.md).
+All 149 Python tests pass, including context privacy/checksum safeguards and
+packaged/development bridge selection. The local dirty development image passed
+offline verification from outside the checkout: SDK/decoder initialization,
+24 served asset hashes, bundled backend/support hashes, non-root execution,
+synthetic H.264 encoding, external state and graceful stop, with zero logins.
+The final runtime has no compiler or SDK headers; no source/SDK host mounts
+were supplied. Artifact identity and detailed results are recorded privately in
+`.local/releases/last-build.json` and `last-check.json`.
+
+The initial HTTP check caught an import of the legacy development probe helper.
+That import now stays inside the standalone legacy viewer entry point, so the
+grid runtime does not depend on diagnostic tooling. The rebuilt artifact passes.
+The owner's existing service and exports were not changed. No image was
+published; Compose installation and real-device verification remain milestone 2.
 
 ## Milestone 2: run a release on this host
 
