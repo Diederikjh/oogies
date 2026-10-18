@@ -11,9 +11,56 @@ and historical use cases incrementally.
 Committed the [release plan](docs/release-plan.md) as `0454528`: first build a self-contained
 local image, then add host Compose operation, remote versioned publishing,
 installation instructions for the published image, and upgrades/rollback.
-Milestones 1 and 2 are implemented; review before remote publication. Later published-image
+Milestones 1 and 2 are verified. Milestone 3 is implemented and locally checked;
+review and the first authorized remote publication remain. Later published-image
 instructions must support an empty installation directory without SDK extraction,
 Git LFS, Node or a compiler on the installing machine.
+
+## Release milestone 3: version-tag workflow and checked publication
+
+Committed milestone 2 as `c8a704d`. Added `.github/workflows/release.yml` and
+`tools/publish_release.py`; see [the maintainer guide](docs/release-publication.md).
+`v*` tag pushes reuse the existing Python, JavaScript and offline browser/native
+jobs before the release job, avoiding duplicate version-tag test runs. Ordinary
+branch/PR/manual CI continues. Only the release job checks out the SDK through
+Git LFS and requests `packages: write`. Registry login uses the workflow token
+over stdin; logout runs on success/failure. Reports upload an explicit JSON
+allowlist, not raw `.local/`, footage, credentials or SDK logs.
+
+Publication validates the clean SemVer tag, checkout/GitHub revision, source
+repository, SDK checksum/profile and matching successful checks for the exact
+Docker image ID. It refuses stale/failed reports, existing registry versions
+and registry/auth lookup failures. It pushes the tested image without rebuilding,
+records the registry digest, pulls by digest and reruns artifact/Compose checks.
+Post-push failure keeps the published identity with verification marked false.
+The builder now records the repository URL in metadata/OCI labels, including
+forks. There is no `latest` tag or automatic host deployment.
+
+All 169 Python tests pass (9.0 s). Both workflows pass checksum-verified
+standalone actionlint 1.7.12, used only temporarily without host dependency
+installation. Publication tests cover input
+validation, clean-source/tag matching, workflow outputs/context changes,
+report/image/SDK mismatches, failed uploads, version reuse, digest selection,
+post-push failure records and verification of the pulled artifact.
+
+A disposable public-source snapshot with a temporary clean tag exercised the
+actual build/check/push/pull/recheck path against an ephemeral registry bound
+only to loopback. It passed SDK/decoder checks, all 24 frontend asset hashes,
+synthetic H.264 encoding and Compose recovery/persistent-download checks both
+before push and after digest pull, with zero recorder logins. The resulting
+version was refused on a second push attempt. Only the test registry's manifest
+inspection used local HTTP transport; GHCR uses normal TLS. The temporary source
+and registry were removed. No tag was created in the owner's repository, no
+image was uploaded to GHCR and the installed release remained unchanged.
+
+Evidence: `.local/release-m3-{backend.log,actionlint.log,roundtrip.log,registry.json,
+last-build.json,last-check.json,last-host-check.json,publication.json}`.
+The full browser suite was not repeated locally because its code/fixtures did
+not change; the remote release workflow requires those jobs to pass. Actual
+hosted dispatch, Git LFS retrieval, GHCR first-package permissions/visibility,
+artifact upload and remote digest verification await review/commit and the
+first authorized version-tag push. Published-image installation instructions
+follow that successful publication in milestone 4.
 
 ## Release milestone 2: independent host installation
 

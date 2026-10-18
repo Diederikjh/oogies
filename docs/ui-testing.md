@@ -487,8 +487,10 @@ contacted during this work.
 
 ## GitHub Actions
 
-[ci.yml](../.github/workflows/ci.yml) runs on every push, pull-request creation or
-update, and manual dispatch. A local commit triggers GitHub checks when it is
+[ci.yml](../.github/workflows/ci.yml) runs on ordinary pushes, pull-request creation or
+update, and manual dispatch. Version-tag pushes (`v*`) call these exact jobs
+through [release.yml](../.github/workflows/release.yml) before building/publishing;
+the CI workflow is also reusable through `workflow_call`. A local commit triggers GitHub checks when it is
 pushed; a push containing several commits tests the pushed revision. Every push
 gets its own run; newer pushes do not cancel older runs.
 
@@ -499,7 +501,7 @@ Three independent Ubuntu 24.04 jobs use the same local commands:
   then `python3 tools/run_js_tests.py --docker`.
 - **Offline UI tests:** `python3 tools/run_ui_tests.py --build`.
 
-The workflow checks Docker access without sudo and skips Git LFS downloads.
+The test jobs check Docker access without sudo and skip Git LFS downloads.
 The SDK pointer can stay unmaterialized because all suites use source/fixtures.
 It requires no NVR credentials, repository secrets or private `.local/` setup.
 Browser tests run with container networking disabled. The workflow has read-only
@@ -513,7 +515,9 @@ are selected. Hidden-file inclusion is enabled because the output lives under
 The separate JavaScript job uploads `.local/js-test-results/tests.tap` as
 **js-test-results**, also with 14-day retention; see [JavaScript testing](js-testing.md).
 Job timeouts are five minutes for Python/JavaScript tests and twenty minutes for the image
-build plus UI suite. The workflow runs tests; it does not deploy the service.
+build plus UI suite. The test workflow does not deploy the service. See the
+[publication guide](release-publication.md) for the separate gated release job,
+which alone retrieves the SDK, builds/checks its artifact and publishes on tags.
 
 Commit the workflow together with the new UI test suite before pushing it to
 GitHub. The CI configuration needs no additional setup files or LFS objects for

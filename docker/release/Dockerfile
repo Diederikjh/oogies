@@ -21,10 +21,11 @@ RUN g++ -std=c++17 -D_LINUX_ -I/sdk/incEn -I/sdk/QtDemo/includeCn \
 FROM runtime-base AS release
 ARG APP_VERSION
 ARG SOURCE_REVISION
+ARG SOURCE_URL=https://github.com/Diederikjh/oogies
 LABEL org.opencontainers.image.title="Oogies" \
     org.opencontainers.image.version=$APP_VERSION \
     org.opencontainers.image.revision=$SOURCE_REVISION \
-    org.opencontainers.image.source="https://github.com/Diederikjh/oogies" \
+    org.opencontainers.image.source=$SOURCE_URL \
     oogies.sdk-profile="hcnet-6.1.9.48-linux64"
 COPY --from=builder /sdk/lib/ /sdk/lib/
 COPY --from=builder /sdk/doc/*.txt /sdk/notices/

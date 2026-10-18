@@ -87,6 +87,12 @@ class ReleaseBuildTests(unittest.TestCase):
                 self.assertEqual(metadata["dirty"], bool(status))
         with patch.object(release.subprocess, "check_output", side_effect=["a"*40, b""]):
             self.assertEqual(release.build_metadata(self.root, "0.1.0-rc.1")["version"], "0.1.0-rc.1")
+        with patch.object(release.subprocess, "check_output", side_effect=["a"*40, b""]):
+            metadata = release.build_metadata(self.root, source_url="https://github.com/example/oogies")
+            self.assertEqual(metadata["source_url"], "https://github.com/example/oogies")
+        for source_url in ("http://github.com/example/oogies", "https://github.com/example/oogies\nINJECT=value"):
+            with self.subTest(source_url=source_url), patch.object(release.subprocess, "check_output", side_effect=["a"*40, b""]):
+                with self.assertRaises(ValueError): release.build_metadata(self.root, source_url=source_url)
         for version in ("../private", "bad version", "--push", "a"*121):
             with self.subTest(version=version), patch.object(release.subprocess, "check_output", side_effect=["a"*40, b""]):
                 with self.assertRaises(ValueError): release.build_metadata(self.root, version)

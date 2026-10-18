@@ -36,6 +36,9 @@ python3 tools/build_release.py --version 0.1.0-dev --tag oogies:0.1.0-dev
 An explicit version does not hide dirty sources: metadata still records them.
 Do not describe a dirty development build as a published release from a tag.
 The command only builds locally; it does not push or restart a running service.
+`--source-url https://github.com/owner/repository` records the building repository
+in the manifest and OCI source label; the remote workflow supplies its own
+repository URL for correct package association, including forks.
 
 The builder sends an explicit tar context, not the checkout directory. It lists
 backend/support modules, native sources, the verified vendor ZIP and frontend
@@ -96,3 +99,5 @@ package repositories.
 Use [the host release guide](host-release.md) for Compose cutover/operation and
 [the release plan](release-plan.md) for publication, published-image installation
 and upgrade/rollback milestones.
+The [publication guide](release-publication.md) describes the version-tag workflow
+and digest verification; preparing that workflow does not publish an image.

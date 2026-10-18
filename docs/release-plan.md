@@ -1,6 +1,7 @@
 # Versioned releases and host installation
 
-Status: milestones 1 and 2 implemented and verified; review before milestone 3.
+Status: milestones 1 and 2 verified; milestone 3 implemented/locally verified,
+awaiting review and the first authorized remote publication.
 Prepared: 18 October 2026 (Africa/Johannesburg).
 
 ## Goal and chosen approach
@@ -139,6 +140,31 @@ because frontend behavior is unchanged. Evidence is private under
 **Review gate:** a published image can be pulled and verified by digest, with
 checksums/metadata tied to the passing source revision. Publishing is a later
 explicit action after the concrete artifact/workflow is reviewable.
+
+### Milestone 3 implementation and local evidence
+
+Added the [publication workflow/maintainer guide](release-publication.md).
+Version-tag releases reuse the existing CI jobs, retrieve the SDK only in the
+release job, build once and require matching artifact/Compose reports for the
+exact image ID. The publisher checks clean tag/revision/version/SDK identity,
+refuses existing registry versions, pushes the tested image, records its digest,
+pulls that reference and repeats the offline checks. Source repository metadata
+supports forks. JSON-only release reports and the digest summary identify the
+artifact; package write permission is scoped to the publishing job.
+
+Both workflows pass actionlint 1.7.12. All 169 Python tests pass, including publication
+version/context, stale/failed check, registry error, existing version and
+post-push failure regressions. A disposable clean source snapshot and tag passed
+the actual build/check/push/pull/recheck flow against a temporary loopback-only
+registry, including refusal to overwrite the resulting version. SDK/Compose
+checks used disabled networking and zero recorder logins. No release tag was
+created in the owner's repository and no image was pushed to GHCR; the installed
+host release was unchanged.
+
+**Still required:** review/commit this implementation, select/push a new version
+tag and verify the real GitHub run, GHCR package access/visibility, report upload
+and digest pull. Local evidence does not establish those remote results. Add
+published-image installation instructions after that first successful release.
 
 ## Milestone 4: install from the published release image
 

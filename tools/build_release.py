@@ -19,6 +19,7 @@ from sdk_adapters import DEFAULT_SDK_ID
 ROOT = Path(__file__).resolve().parents[1]
 SDK_ARCHIVE = "vendor/hikvision/EN-HCNetSDKV6.1.9.48_build20230410_linux64.zip"
 SDK_SHA256 = "8de553fb2e8dbb0ac441ee1bd73c5ecb73d720c1359396750479a6e169abf93f"
+SOURCE_URL = "https://github.com/Diederikjh/oogies"
 APP_MODULES = (
     "browser_server.py", "export_encoder.py", "export_jobs.py", "grid_server.py", "grid_worker.py",
     "history_timeline.py", "live_sessions.py", "live_sources.py", "maintenance.py",
@@ -55,14 +56,16 @@ def validate_archive(path, expected=SDK_SHA256):
         raise ValueError("SDK archive checksum mismatch; retrieve the verified SDK with git lfs pull")
 
 
-def build_metadata(root, version=None):
+def build_metadata(root, version=None, source_url=SOURCE_URL):
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=root))
     version = version or f"dev-{revision[:12]}" + ("-dirty" if dirty else "")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,119}", version):
         raise ValueError("Use a version containing only letters, digits, dot, underscore and hyphen")
+    if not re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source_url):
+        raise ValueError("Source URL must identify a GitHub repository")
     return dict(version=version, revision=revision, dirty=dirty, sdk_profile=DEFAULT_SDK_ID,
-                platform="linux/amd64", sdk_archive_sha256=SDK_SHA256)
+                platform="linux/amd64", sdk_archive_sha256=SDK_SHA256, source_url=source_url)
 
 
 def context_inputs(root):
@@ -101,9 +104,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", help="Local version; defaults to dev-<revision>[-dirty]")
     parser.add_argument("--tag", help="Local Docker tag; defaults to oogies:<version>")
+    parser.add_argument("--source-url", default=SOURCE_URL, help="GitHub repository recorded in the image and manifest")
     args = parser.parse_args(argv)
     try:
-        metadata = build_metadata(ROOT, args.version)
+        metadata = build_metadata(ROOT, args.version, args.source_url)
         tag = args.tag or "oogies:" + metadata["version"]
         subprocess.run([sys.executable, str(ROOT / "tools/check_publication.py")], check=True)
         output = ROOT / ".local/releases"; output.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -114,6 +118,7 @@ def main(argv=None):
             with context.open("rb") as source:
                 subprocess.run(["docker", "build", "--platform", "linux/amd64", "--tag", tag,
                     "--build-arg", "APP_VERSION="+metadata["version"], "--build-arg", "SOURCE_REVISION="+metadata["revision"],
+                    "--build-arg", "SOURCE_URL="+metadata["source_url"],
                     "--iidfile", str(iid), "-"], stdin=source, check=True)
             image_id = subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", tag], text=True).strip()
             report = {**metadata, "tag":tag, "image_id":image_id, "build_digest":iid.read_text().strip()}

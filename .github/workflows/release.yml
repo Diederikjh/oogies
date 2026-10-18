@@ -1,0 +1,80 @@
+name: Release image
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Release tests
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Build, verify and publish
+    needs: tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out release source and SDK archive
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate clean version tag and source revision
+        id: target
+        run: python3 tools/publish_release.py prepare
+
+      - name: Check publication privacy
+        run: python3 tools/check_publication.py --history
+
+      - name: Build the release image once
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+          IMAGE: ${{ steps.target.outputs.image }}
+          SOURCE_URL: ${{ steps.target.outputs.source_url }}
+        run: python3 tools/build_release.py --version "$VERSION" --tag "$IMAGE:$VERSION" --source-url "$SOURCE_URL"
+
+      - name: Verify the exact release artifact offline
+        run: python3 tools/check_release_image.py
+
+      - name: Verify Compose readiness, recovery and persistence offline
+        run: python3 tools/check_host_release.py
+
+      - name: Authenticate to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish the checked image and verify its pulled digest
+        run: python3 tools/publish_release.py publish
+
+      - name: Remove registry credentials
+        if: always()
+        run: docker logout ghcr.io
+
+      - name: Upload release identity and check reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-reports
+          path: |
+            .local/releases/target.json
+            .local/releases/last-build.json
+            .local/releases/last-check.json
+            .local/releases/last-host-check.json
+            .local/releases/publication.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

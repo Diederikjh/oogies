@@ -741,6 +741,26 @@ any new release-only exports/settings and reconcile with both services stopped
 before reverting state. Record image ID/version, install location privately,
 health/live-check results and any limits in `progress.md`.
 
+## Release publication workflow
+
+Use [the maintainer publication guide](docs/release-publication.md) for milestone 3.
+`.github/workflows/release.yml` runs only on pushed `v*` tags, reusing the same
+Python/JavaScript/browser/native test jobs before its release build. Only that
+build retrieves the SDK through Git LFS. `tools/publish_release.py` validates a
+clean SemVer tag, source revision and matching build/offline check reports,
+then pushes the checked image ID, pulls its reported digest and repeats checks.
+Publication is scoped to `ghcr.io/<lowercase-owner>/<lowercase-repository>` using
+the workflow's built-in token; do not add NVR credentials or personal tokens.
+
+Preparing/reviewing this workflow does not publish anything. Creating and pushing
+a version tag starts publication; use a fresh reviewed version when authorized.
+Do not describe local unit/workflow/loopback-registry checks as proof that GHCR
+permissions, hosted execution, package visibility or artifact upload succeeded.
+Once a real release completes, require `verified_after_pull: true` in its
+`publication.json` and record its digest/source/SDK identity. The host stays on
+its selected image until an explicit upgrade. Installation instructions from
+the published image follow that first successful publication (milestone 4).
+
 ## Maintaining this guide
 
 The setup agent's final report should include this checklist with pass, fail,
