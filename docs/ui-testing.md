@@ -41,6 +41,22 @@ Hosted Actions execution awaits a push. See the
 and [milestone-4 results](frontend-test-layer-plan.md#milestone-4-browser-organization-and-final-measurement)
 for coverage, environment and local evidence.
 
+## Removing failed and cancelled entries, 18 October 2026
+
+Failed/cancelled rows now expose **Remove entry**, using a separate
+`DELETE /api/exports/{id}/entry` action. Cancel export retains its retry behavior;
+the removal endpoint rejects pending/ready jobs. A removed entry cannot return
+when cancellation or a late encoder error completes, and the source reservation
+remains held until worker cleanup finishes.
+
+All 141 Python tests pass in 8.8 seconds, including repeated cancellation,
+queued/ready protection, durable removal and both late-worker outcomes. Three
+focused browser cases pass in 34.8 seconds: failed-row keyboard removal preserves
+a ready download, cancelled-row removal works, and ordinary Delete clip still
+removes its row/file. The suite still contains 88 browser/four native cases; the
+complete 92-case suite was not repeated. Evidence:
+`.local/export-dismiss-{backend.log,browser.log,browser-report.json}`.
+
 ## Export file and entry cleanup, 18 October 2026
 
 Expired, manually deleted and missing MP4s now remove their export entries as

@@ -68,11 +68,15 @@ export class ExportsView {
             const link = document.createElement("a"); link.className = "export-download"; link.textContent = "Download MP4";
             link.href = job.media.url; link.download = job.media.filename; actions.append(link);
           }
-          if (["queued", "running", "ready"].includes(job.state)) {
-            const button = document.createElement("button"); button.textContent = job.state === "ready" ? "Delete clip" : "Cancel export";
+          if (["queued", "running", "ready", "failed", "cancelled"].includes(job.state)) {
+            const button = document.createElement("button");
+            button.textContent = ["failed", "cancelled"].includes(job.state) ? "Remove entry" : job.state === "ready" ? "Delete clip" : "Cancel export";
             button.addEventListener("click", async () => {
               button.disabled = true;
-              try { await api(`/api/exports/${job.id}`, "DELETE"); await this.poll(); }
+              try {
+                const path = `/api/exports/${job.id}` + (["failed", "cancelled"].includes(job.state) ? "/entry" : "");
+                await api(path, "DELETE"); await this.poll();
+              }
               catch (error) { this.message.textContent = error.message; button.disabled = false; }
             }); actions.append(button);
           }

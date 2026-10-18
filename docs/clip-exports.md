@@ -24,8 +24,9 @@ success message links to the Exports tab. The confirmation disappears after 60
 seconds, on **Clear marks**, or when
 leaving History (including changing camera). Dismissing it does not cancel the
 queued job. Continue viewing, or open **Exports** to monitor progress, cancel
-work, download a ready MP4, or delete a ready clip and its entry. Marks stay in this browser's
-memory across tab changes; changing camera clears them and reloading clears them.
+work, download a ready MP4, or delete a ready clip and its entry. Failed and
+cancelled jobs have a **Remove entry** button to dismiss them after reading the
+status. Marks stay in this browser's memory across tab changes; changing camera clears them and reloading clears them.
 
 Setting both marks automatically zooms around them, including an overlong or
 reversed draft. Drag either Start/End handle horizontally to adjust it, using
@@ -67,6 +68,7 @@ as well as path separators on Unix. No controls or letterboxing are included.
 | `GET /api/exports` | Shared recent jobs, limits and current artifact storage use |
 | `GET /api/exports/{id}` | State, progress/wait reason, requested range and verified media details |
 | `DELETE /api/exports/{id}` | Cancel queued/running work or delete a ready clip; repeat safely |
+| `DELETE /api/exports/{id}/entry` | Dismiss a failed/cancelled entry; 204 including repeats, 409 for queued/running/ready jobs |
 | `GET /media/exports/{id}.mp4` | Ready attachment, single byte ranges; 409 pending/failed, 410 expired/deleted |
 
 Visible states are `queued`, `running`, `ready`, `failed` and `cancelled`.
@@ -94,8 +96,12 @@ removes leftover expired entries. Existing browsers remove the row on their next
 poll without a page refresh. New downloads close immediately; an already-open
 download may finish, with physical cleanup and removal of its internal entry
 deferred until the last reader closes. Such entries are hidden from the list
-immediately. Failed/cancelled diagnostics retain their bounded recent history;
-idempotency keys remain valid while their jobs are retained.
+immediately. Failed/cancelled diagnostics retain their bounded recent history
+until **Remove entry** is pressed. Removal uses its own endpoint so a retried
+cancellation cannot accidentally dismiss diagnostics. If capture cancellation
+is still finishing, a dismissed entry stays hidden while the worker cleans up
+and releases its slot. Late worker completion cannot restore the row.
+Idempotency keys remain valid while their jobs are retained.
 
 `ExportJobs` and `PlaybackSessions` own separate state and receive the same
 neutral `StreamBudget`. Queued exports hold no handle; an active export owns one

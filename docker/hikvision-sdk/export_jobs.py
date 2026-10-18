@@ -172,10 +172,21 @@ class ExportJobs:
         with self.lock:
             job = self.jobs.get(identifier)
             if not job: return
-            if identifier == self.active:
+            if identifier == self.active and job["state"] != "expired":
                 self.cancel.set(); job.update(state="cancelled", error=None)
             elif job["state"] == "queued": job.update(state="cancelled", error=None)
             elif job["state"] == "ready": job.update(state="expired", error="Export deleted.")
+            self._expire(); self._save(); self.lock.notify_all()
+
+    def remove_entry(self, identifier):
+        with self.lock:
+            job = self.jobs.get(identifier)
+            if not job: return
+            if job["state"] not in ("failed", "cancelled", "expired"):
+                raise SessionError("Only failed or cancelled export entries can be removed.", 409)
+            # A cancelled capture may still own its slot; hide now and let its
+            # worker finish cleanup without restoring the dismissed entry.
+            job.update(state="expired", error=None)
             self._expire(); self._save(); self.lock.notify_all()
 
     @contextmanager
@@ -225,13 +236,15 @@ class ExportJobs:
                                expires_at=self.clock() + self.limits["retention_hours"] * 3600, **result)
             except ExportCancelled:
                 with self.lock:
-                    interrupted = self.closed and job["state"] != "cancelled"
-                    job.update(state="failed" if interrupted else "cancelled",
-                               error="Export interrupted by service shutdown." if interrupted else None, finished_at=self.clock())
+                    if job["state"] != "expired":
+                        interrupted = self.closed and job["state"] != "cancelled"
+                        job.update(state="failed" if interrupted else "cancelled",
+                                   error="Export interrupted by service shutdown." if interrupted else None, finished_at=self.clock())
             except (ExportFailure, OSError, ValueError) as error:
                 with self.lock:
-                    job.update(state="cancelled" if self.cancel.is_set() else "failed",
-                               error=None if self.cancel.is_set() else str(error) if isinstance(error, ExportFailure) else "Export could not start.", finished_at=self.clock())
+                    if job["state"] != "expired":
+                        job.update(state="cancelled" if self.cancel.is_set() else "failed",
+                                   error=None if self.cancel.is_set() else str(error) if isinstance(error, ExportFailure) else "Export could not start.", finished_at=self.clock())
             finally:
                 with self.lock:
                     self.active = None; self.cancel = None

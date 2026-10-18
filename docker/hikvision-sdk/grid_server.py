@@ -81,13 +81,14 @@ class Handler(BaseHandler):
         match = re.fullmatch(r"/api/live/sessions/([a-f0-9]{32})", path)
         playback = re.fullmatch(r"/api/playback/sessions/([a-f0-9]{32})", path)
         try:
-            export = re.fullmatch(r"/api/exports/([a-f0-9]{32})", path)
+            export = re.fullmatch(r"/api/exports/([a-f0-9]{32})(/entry)?", path)
             if operation == "POST" and path == "/api/exports":
                 self.json_response(self.server.exports.create(self.body(), self.headers.get("Idempotency-Key")), 202)
             elif operation == "DELETE" and export:
                 if self.headers.get("Origin") not in (None, "http://" + self.headers["Host"]):
                     raise SessionError("Invalid origin.", 403)
-                self.server.exports.delete(export[1])
+                if export[2]: self.server.exports.remove_entry(export[1])
+                else: self.server.exports.delete(export[1])
                 self.send_response(204); self.send_header("Content-Length", "0"); self.end_headers()
             elif operation == "POST" and path == "/api/playback/sessions":
                 self.json_response(self.server.playback.create(self.body()), 201)

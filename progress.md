@@ -6,6 +6,27 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Users can remove failed and cancelled export entries
+
+Added **Remove entry** to failed/cancelled export rows. The separate
+`DELETE /api/exports/{id}/entry` endpoint dismisses diagnostics and rejects
+queued/running/ready jobs; existing Cancel export retries retain their behavior.
+Removal is durable and repeatable. When a cancelled capture is still finishing,
+its row is hidden immediately while cleanup keeps the stream reservation until
+the worker finishes. Late cancellation/error completion cannot restore the row.
+
+All 141 Python tests pass (8.8 s). Three focused browser cases pass (34.8 s),
+covering keyboard removal of a failed row while retaining a ready MP4, cancelled
+entry removal and ordinary ready clip deletion. Browser case count stays 88 plus
+four native; the complete 92-case suite was not repeated. Documentation explains
+the new action. Evidence is under
+`.local/export-dismiss-{backend.log,browser.log,browser-report.json}`.
+Restarted the service with no queued/running exports and removed the six old
+failed/cancelled entries through the new API. Both ready MP4s remain. The live
+list and persisted manifest contain only those two ready entries; the served UI
+module matches the checkout. Evidence: `.local/export-dismiss-service.json`.
+Refresh an existing browser page once to load the new button code.
+
 ## Export files and entries expire together
 
 Removed retained expired entries when their MP4/directory is removed, covering

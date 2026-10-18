@@ -428,6 +428,10 @@ class ExportUITests(BrowserTestCase):
         self.wait.until(lambda _:self.element(".export-job").get_attribute("data-state") == "cancelled" and self.fixture.sessions.budget.snapshot().reserved == 0)
         self.assertFalse(self.element('[role="progressbar"]').is_displayed())
         self.assertEqual(list(self.fixture.server.exports.directory.glob("*/clip*.mp4")),[])
+        self.wait.until(lambda _:self.element(".export-job button").text == "Remove entry")
+        self.element(".export-job button").click()
+        self.wait.until(lambda _:not self.driver.find_elements(By.CSS_SELECTOR,".export-job"))
+        self.assertEqual(self.fixture.server.exports.list()["jobs"], [])
 
     def test_history_export_file_limit_failure_keeps_viewer_and_can_retry(self):
         self.paused_history(); self.fixture.server.exports.encoder.max_bytes=1024
@@ -442,3 +446,13 @@ class ExportUITests(BrowserTestCase):
         self.element("#exports-tab").click()
         self.wait.until(lambda _:self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="ready"]'))
         self.assertEqual(self.fixture.sessions.budget.snapshot().reserved,0)
+        failed = self.element('.export-job[data-state="failed"]')
+        self.assertTrue(failed.find_element(By.CSS_SELECTOR,".export-status-label").text)
+        button = failed.find_element(By.CSS_SELECTOR,"button")
+        self.assertEqual(button.text, "Remove entry")
+        button.send_keys(Keys.ENTER)
+        self.wait.until(lambda _:not self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="failed"]'))
+        self.assertEqual([job["state"] for job in self.fixture.server.exports.list()["jobs"]], ["ready"])
+        self.assertTrue(self.element('.export-job[data-state="ready"] .export-download').is_displayed())
+        self.element("#exports-refresh").click()
+        self.assertFalse(self.driver.find_elements(By.CSS_SELECTOR,'.export-job[data-state="failed"]'))

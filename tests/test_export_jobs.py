@@ -128,7 +128,57 @@ class ExportTests(unittest.TestCase):
         self.capture.failure = True; self.capture.gate.set(); first = self.jobs.create(self.body)
         self.wait(lambda:self.jobs.get(first["id"])["state"] == "failed" and self.live.budget.snapshot().reserved == 0)
         self.assertFalse((Path(self.temporary.name) / first["id"]).exists())
-        self.jobs.delete(first["id"]); self.assertEqual(self.live.budget.snapshot().reserved, 0)
+        self.jobs.remove_entry(first["id"]); self.jobs.remove_entry(first["id"])
+        self.assert_removed(first["id"])
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
+
+    def test_cancelled_waiter_can_be_removed_without_starting_capture(self):
+        self.live.wanted = {"camera-1", "camera-2"}
+        job = self.jobs.create(self.body)
+        self.jobs.delete(job["id"])
+        self.assertEqual(self.jobs.get(job["id"])["state"], "cancelled")
+        self.jobs.remove_entry(job["id"])
+        self.assert_removed(job["id"])
+        self.assertEqual(self.capture.calls, [])
+        self.assertEqual(self.live.budget.snapshot().reserved, 0)
+
+    def test_removing_cancelled_capture_cannot_be_restored_by_late_worker_completion(self):
+        for outcome in (ExportCancelled(), ExportFailure("Late encoder error")):
+            with self.subTest(outcome=type(outcome).__name__):
+                entered = threading.Event(); finish = threading.Event()
+                self.addCleanup(finish.set)
+                def delayed_capture(job, directory, cancel, progress):
+                    entered.set()
+                    if not finish.wait(3): raise ExportFailure("Test capture was not released")
+                    raise outcome
+                with patch.object(self.capture, "capture", side_effect=delayed_capture):
+                    job = self.jobs.create(self.body)
+                    self.assertTrue(entered.wait(3))
+                    self.jobs.delete(job["id"])
+                    self.assertEqual(self.jobs.get(job["id"])["state"], "cancelled")
+                    self.jobs.remove_entry(job["id"])
+                    self.jobs.remove_entry(job["id"])
+                    self.jobs.delete(job["id"])  # An old cancellation retry cannot restore the row.
+                    self.assertEqual(self.jobs.list()["jobs"], [])
+                    self.assertEqual(self.live.budget.snapshot().reserved, 1)
+                    finish.set()
+                    self.wait(lambda:job["id"] not in self.jobs.jobs and self.live.budget.snapshot().reserved == 0)
+                self.assert_removed(job["id"])
+
+    def test_remove_entry_rejects_waiting_and_ready_exports(self):
+        self.live.wanted = {"camera-1", "camera-2"}
+        job = self.jobs.create(self.body)
+        with self.assertRaises(SessionError) as error: self.jobs.remove_entry(job["id"])
+        self.assertEqual(error.exception.status, 409)
+        self.assertEqual(self.jobs.get(job["id"])["state"], "queued")
+        self.assertEqual(self.capture.calls, [])
+        self.live.wanted.clear(); self.capture.gate.set()
+        with self.worker.condition: self.worker.condition.notify_all()
+        self.wait(lambda:self.jobs.get(job["id"])["state"] == "ready" and self.live.budget.snapshot().reserved == 0)
+        with self.assertRaises(SessionError) as error: self.jobs.remove_entry(job["id"])
+        self.assertEqual(error.exception.status, 409)
+        self.assertEqual(self.jobs.get(job["id"])["state"], "ready")
+        with self.jobs.download(job["id"]) as (file, _): self.assertEqual(file.read(), b"synthetic-mp4")
 
     def test_restart_keeps_ready_and_queued_and_fails_interrupted_capture(self):
         identifier = self.ready(); self.jobs.close()
