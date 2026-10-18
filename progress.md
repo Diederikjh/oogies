@@ -6,6 +6,18 @@ Goal: establish whether live video from the home Hikvision DS-7108HGHI-K1
 at `192.0.2.10` can be decoded and viewed in a browser, then develop the live
 and historical use cases incrementally.
 
+## Release build and host installation plan
+
+Approved the [release plan](docs/release-plan.md): first build a self-contained
+local image, then add host Compose operation, remote versioned publishing,
+installation instructions for the published image, and upgrades/rollback.
+Milestone 1 is the current scope. Keep source-based development working,
+compile/package the bridge in Docker, bundle runtime dependencies and SDK,
+exclude private files from the build context, and verify the artifact offline
+without changing the running development service. Later published-image
+instructions must support an empty installation directory without SDK extraction,
+Git LFS, Node or a compiler on the installing machine.
+
 ## Users can remove failed and cancelled export entries
 
 Added **Remove entry** to failed/cancelled export rows. The separate
