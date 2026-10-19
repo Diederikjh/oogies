@@ -11,9 +11,10 @@ The [release plan](../release-plan.md) contains the milestone scope and gates.
 
 ## Current state
 
-- The installation guide now selects `0.0.2`, including matching versioned
-  setup-file downloads and image pull. This documentation update does not
-  establish that `0.0.2` has been published or installed.
+- The installation guide selects `0.0.2`, including matching versioned setup-file
+  downloads and image pull. The [security review](archive/2026-10-18-security-review.md)
+  subsequently fetched and scanned that image successfully; installation and
+  live-device verification remain recorded against `0.0.1`.
 - Local image builds, independent host Compose operation, version-tag GHCR
   publication and installation from public `0.0.1` are verified.
 - The host runs the public image with preserved settings and clips. Docker and

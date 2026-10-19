@@ -11,10 +11,15 @@ are complete, including public installation and owner-verified reboot startup.
 
 | Workstream | Status | Next step |
 | --- | --- | --- |
+| [Security hardening](security-hardening.md) | Initial review complete; remediation planned | Fix the confirmed request-boundary/origin-check bypass first. |
 | [Release delivery and maintenance](release-maintenance.md) | Milestones 1–4 complete; milestone 5 planned | Review upgrade/rollback work before starting implementation. |
 | [Architecture refactoring backlog](../refactoring-targets.md) | Targets 1–3 complete; targets 4–9 proposed | Select and detail a target when requested. |
 
 ## Completed work
+
+[Security review, 18 October 2026](archive/2026-10-18-security-review.md) covers
+both release images, dependencies and application checks. Findings remain open
+in the security workstream above.
 
 [Progress archive through 18 October 2026](archive/2026-10-18-progress.md)
 preserves the original investigation and implementation record: authentication,
