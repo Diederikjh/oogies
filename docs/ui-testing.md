@@ -1,5 +1,31 @@
 # Offline UI tests
 
+## HTTP request-boundary regressions
+
+`tests/test_http_security.py` tests the real handler over synthetic loopback
+sockets: rejected Origin/content type, unexpected GET/DELETE bodies, ambiguous
+lengths/transfer encoding, malformed JSON, pipelined actions and normal controls.
+It never starts a native worker. These cases belong to the normal Python suite.
+
+One browser case verifies the cross-origin wiring and return to a working live
+grid, without repeating the complete socket-test matrix:
+
+```sh
+python3 tools/run_ui_tests.py test_live.LiveUITests.test_cross_origin_rejected_body_cannot_create_session
+```
+
+The case waits for the rejected connection to finish before checking for an
+unwanted session; receiving the outer rejection alone is insufficient. It uses
+two origins inside the offline container, with fake cameras and zero SDK logins.
+
+On 19 October 2026, all 177 Python tests and all 93 browser/native cases passed
+with the S1 fix. The latter includes 89 browser/four native cases, one media
+generation and 885.316 seconds of suite time. The packaged backend also passed
+the eight HTTP boundary cases. Evidence and artifact checks are recorded in
+[the security workstream](work/security-hardening.md#s1-implementation-and-verification).
+
+## Browser suite
+
 The browser suite exercises the actual frontend, HTTP handlers, live-session
 sharing/expiry and multiplexed JPEG transport against a simulated recorder worker.
 It uses Docker Chromium and generated JPEG/MP4 fixtures. No SDK archive, account,

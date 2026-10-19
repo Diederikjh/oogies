@@ -53,7 +53,8 @@ def main():
                "--read-only", "--user", f"{os.getuid()}:{os.getgid()}", "--cap-drop=ALL",
                "--security-opt=no-new-privileges", "--cpus=2", "--memory=2g", "--memory-swap=2g",
                "--pids-limit=512", "--tmpfs", "/tmp:rw,exec,nosuid,size=128m",
-               "--publish", f"127.0.0.1:{args.port}:{args.port}", "--env", "PYTHONPATH=/support:/probe",
+               "--publish", f"127.0.0.1:{args.port}:{args.port}",
+               "--publish", f"[::1]:{args.port}:{args.port}", "--env", "PYTHONPATH=/support:/probe",
                "--log-opt", "max-size=5m", "--log-opt", "max-file=2"]
     for source, target, writable in ((sdk, "/sdk", False), (credentials, "/credentials/nvr.json", False),
             (ROOT / "tools/credentials.py", "/support/credentials.py", False),

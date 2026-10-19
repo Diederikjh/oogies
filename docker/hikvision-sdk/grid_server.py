@@ -53,11 +53,26 @@ ASSETS = {"/": ("index.html", "text/html; charset=utf-8"),
 
 class Handler(BaseHandler):
     def end_headers(self):
+        # Each connection carries one request. Rejected/unread bodies must never
+        # become another request; streaming responses still last until feed exit.
+        if not self.close_connection:
+            self.send_header("Connection", "close")
         # Blob URLs hold only JPEGs received from this server's shared feed.
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
         super(BaseHandler, self).end_headers()
+
+    def content_length(self):
+        lengths = self.headers.get_all("Content-Length", [])
+        if self.headers.get_all("Transfer-Encoding") or len(lengths) > 1:
+            raise SessionError("Unsupported request framing.")
+        if not lengths:
+            return 0
+        value = lengths[0].strip()
+        if not re.fullmatch(r"[0-9]{1,10}", value):
+            raise SessionError("Invalid content length.")
+        return int(value)
 
     def body(self):
         if self.headers.get("Origin") not in (None, "http://" + self.headers["Host"]):
@@ -65,13 +80,12 @@ class Handler(BaseHandler):
         if self.headers.get_content_type() != "application/json":
             raise SessionError("JSON request required.", 415)
         try:
-            length = int(self.headers.get("Content-Length", "0"))
+            length = self.content_length()
             if not 0 < length <= 4096:
                 raise ValueError()
             self.connection.settimeout(5)
             return json.loads(self.rfile.read(length))
         except (ValueError, OSError):
-            self.close_connection = True
             raise SessionError("Invalid request body.") from None
 
     def control(self, operation):
@@ -81,6 +95,8 @@ class Handler(BaseHandler):
         match = re.fullmatch(r"/api/live/sessions/([a-f0-9]{32})", path)
         playback = re.fullmatch(r"/api/playback/sessions/([a-f0-9]{32})", path)
         try:
+            if operation == "DELETE" and self.content_length():
+                raise SessionError("DELETE requests must not contain a body.")
             export = re.fullmatch(r"/api/exports/([a-f0-9]{32})(/entry)?", path)
             if operation == "POST" and path == "/api/exports":
                 self.json_response(self.server.exports.create(self.body(), self.headers.get("Idempotency-Key")), 202)
@@ -128,6 +144,8 @@ class Handler(BaseHandler):
         path = urlsplit(self.path).path
         sessions, worker = self.server.sessions, self.server.worker
         try:
+            if self.content_length():
+                raise SessionError("GET requests must not contain a body.")
             if path == "/api/exports":
                 self.json_response(self.server.exports.list())
             elif (match := re.fullmatch(r"/api/exports/([a-f0-9]{32})", path)):

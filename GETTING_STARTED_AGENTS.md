@@ -511,7 +511,8 @@ prove SDK or encryption compatibility.
 python3 tools/run_browser_viewer.py
 ```
 
-The launcher publishes only `127.0.0.1:8088`. Startup compiles the native worker;
+The launcher publishes IPv4 and IPv6 loopback (`127.0.0.1:8088` and `[::1]:8088`).
+Open `http://localhost:8088`. Startup compiles the native worker;
 it does not log in. Readiness can be checked without opening a browser page:
 
 ```sh

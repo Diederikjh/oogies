@@ -6,12 +6,14 @@ remain in the existing guides under `docs/`.
 
 ## Current status
 
-No implementation milestone is currently in progress. Release milestones 1–4
+S1 request-boundary hardening is implemented and verified locally; a fixed
+production release remains to be published/deployed. Release milestones 1–4
 are complete, including public installation and owner-verified reboot startup.
+The release container is currently stopped for development viewing of the S1 fix.
 
 | Workstream | Status | Next step |
 | --- | --- | --- |
-| [Security hardening](security-hardening.md) | Initial review complete; remediation planned | Fix the confirmed request-boundary/origin-check bypass first. |
+| [Security hardening](security-hardening.md) | S1 verified locally; release pending; other fixes planned | Prepare a fixed release from committed source. |
 | [Release delivery and maintenance](release-maintenance.md) | Milestones 1–4 complete; milestone 5 planned | Review upgrade/rollback work before starting implementation. |
 | [Architecture refactoring backlog](../refactoring-targets.md) | Targets 1–3 complete; targets 4–9 proposed | Select and detail a target when requested. |
 

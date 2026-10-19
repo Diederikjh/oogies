@@ -1,6 +1,9 @@
 """Live browser integration against the synthetic recorder."""
 
 import hashlib
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+from urllib.parse import urlsplit
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -11,6 +14,57 @@ from browser_support import BrowserTestCase
 
 
 class LiveUITests(BrowserTestCase):
+    def test_cross_origin_rejected_body_cannot_create_session(self):
+        self.wait_live()
+        self.pause_live_view(); self.wait_counts(0, 0)
+        completed = threading.Event()
+        base_handler = self.fixture.server.RequestHandlerClass
+
+        class ObservedHandler(base_handler):
+            def finish(handler):
+                try: super().finish()
+                finally:
+                    if getattr(handler, "path", None) == "/api/live/sessions": completed.set()
+
+        self.fixture.server.RequestHandlerClass = ObservedHandler
+
+        class OtherOrigin(BaseHTTPRequestHandler):
+            def log_message(handler, *args): pass
+            def do_GET(handler):
+                body = b"<!doctype html><title>Cross-origin security fixture</title>"
+                handler.send_response(200)
+                handler.send_header("Content-Type", "text/html")
+                handler.send_header("Content-Length", str(len(body))); handler.end_headers()
+                handler.wfile.write(body)
+
+        other = HTTPServer(("127.0.0.1", 0), OtherOrigin)
+        thread = threading.Thread(target=lambda: other.serve_forever(poll_interval=.01), daemon=True)
+        thread.start()
+        try:
+            self.driver.get(f"http://127.0.0.1:{other.server_port}/")
+            body = '{"cameras":[]}'
+            nested = (f"POST /api/live/sessions HTTP/1.1\r\nHost: {urlsplit(self.fixture.url).netloc}\r\n"
+                f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n"
+                f"Connection: close\r\n\r\n{body}")
+            outcome = self.driver.execute_async_script("""
+                const [url,body,done]=arguments;
+                fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body})
+                  .then(response=>done(response.status)).catch(error=>done(error.name));
+            """, self.fixture.url + "/api/live/sessions", nested)
+            self.assertEqual(outcome, "TypeError", "Cross-origin responses must remain unreadable")
+            # Wait for the whole HTTP connection, not just the outer response:
+            # the old handler dispatched the nested action before finishing it.
+            self.assertTrue(completed.wait(5), "Rejected connection did not finish")
+            self.assertEqual(self.fixture.snapshot()["viewers"], 0)
+            self.assertEqual(self.fixture.snapshot()["sources"], 0)
+            # Consume the expected CORS diagnostics before checking normal app
+            # operation with the standard tearDown console assertions.
+            self.driver.get_log("browser")
+            self.driver.get(self.fixture.url)
+            self.wait_live()
+        finally:
+            other.shutdown(); other.server_close(); thread.join(timeout=2)
+
     def test_eight_moving_cameras_have_correct_identity_and_offline_tile(self):
         self.wait_live()
         self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, ".camera-tile")), 9)

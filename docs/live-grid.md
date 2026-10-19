@@ -88,6 +88,13 @@ that recovery problem. Hikvision documents the signal/hardware flags in
 
 ## Implemented API
 
+Each HTTP connection serves one request. Ordinary responses close the connection,
+while frame feeds remain open for their streaming lifetime. Rejected
+or unread request bodies cannot become a subsequent API request. JSON controls
+require one valid Content-Length and at most 4,096 body bytes. Transfer-Encoding,
+duplicate Content-Length headers and bodies on GET/DELETE are rejected. See
+[security hardening](work/security-hardening.md) for the S1 regression coverage.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/cameras` | Cached configured inputs; requests availability refresh after 60 seconds through the shared recorder connection; no preview starts |
